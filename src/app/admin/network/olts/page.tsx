@@ -159,6 +159,7 @@ export default function OLTsPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -323,6 +324,36 @@ export default function OLTsPage() {
       showError('Error', 'Failed to test connection');
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  const handleSyncAllToCustomers = async () => {
+    const confirmed = await showConfirm(
+      'Sinkronisasi Modem OLT',
+      'Apakah Anda yakin ingin menyinkronkan seluruh modem ONT dari semua OLT ke akun pelanggan dan inventori aset?'
+    );
+    if (!confirmed) return;
+
+    setIsSyncingAll(true);
+    try {
+      const res = await fetch('/api/olt/sync-all-to-customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showSuccess(
+          'Sinkronisasi Selesai!',
+          `${data.message}\nTotal OLT: ${data.stats.totalOnus} ONU | Baru Tertaut: ${data.stats.newlyMatchedCount} unit | Inventori Baru: ${data.stats.inventoryCreatedCount}`
+        );
+        loadData();
+      } else {
+        showError('Gagal Sinkronisasi', data.error || 'Terjadi kesalahan sistem');
+      }
+    } catch (err: any) {
+      showError('Error', err.message || 'Gagal menghubungi server');
+    } finally {
+      setIsSyncingAll(false);
     }
   };
 
@@ -507,7 +538,16 @@ export default function OLTsPage() {
             {t('olt.subtitle')}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSyncAllToCustomers}
+            disabled={isSyncingAll}
+            className="inline-flex items-center px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-medium disabled:opacity-50 transition-colors shadow-sm"
+            title="Sinkronkan seluruh modem OLT ke profil pelanggan dan inventori aset"
+          >
+            <RefreshCcw className={`h-3 w-3 mr-1.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
+            {isSyncingAll ? 'Menyinkronkan...' : 'Sync ke Pelanggan & Inventori'}
+          </button>
           <button
             onClick={() => setIsImportDialogOpen(true)}
             className="inline-flex items-center px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded"

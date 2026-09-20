@@ -1,6 +1,6 @@
 {
   "name": "EugineBill-radius",
-  "version": "2.40.43",
+  "version": "2.40.44",
   "private": false,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "build": "cross-env NODE_OPTIONS='--max-old-space-size=1536 --max-semi-space-size=64' NEXT_TELEMETRY_DISABLED=1 next build && node scripts/postbuild.js",
     "postinstall": "node scripts/patch-node-routeros.js",
     "sync:readme-changelog": "node scripts/sync-readme-changelog.mjs",
+    "sync:olt-modems": "tsx scripts/sync-olt-modems-to-customers-and-inventory.ts",
     "sync:standalone": "node scripts/postbuild.js",
     "postbuild": "node scripts/postbuild.js",
     "postbuild:vps": "node scripts/postbuild.js",

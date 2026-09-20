@@ -202,7 +202,8 @@ export default function PppoeUserDetailPage({ params }: { params: Promise<{ id: 
 
   const fetchDeviceHistory = async () => {
     try {
-      const res = await fetch(`/api/pppoe/users/${id}/device-history`);
+      const targetId = user?.id || id;
+      const res = await fetch(`/api/pppoe/users/${targetId}/device-history`);
       if (res.ok) {
         const data = await res.json();
         setDeviceHistory(data.histories || []);
@@ -232,7 +233,8 @@ export default function PppoeUserDetailPage({ params }: { params: Promise<{ id: 
     if (!gantiModemSN.trim()) { addToast({ type: 'error', title: 'SN wajib diisi' }); return; }
     setGantiModemLoading(true);
     try {
-      const res = await fetch(`/api/pppoe/users/${id}/replace-device`, {
+      const targetId = user?.id || id;
+      const res = await fetch(`/api/pppoe/users/${targetId}/replace-device`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newSerialNumber: gantiModemSN, reason: gantiModemReason, technicianName: gantiModemTech }),
@@ -264,7 +266,7 @@ export default function PppoeUserDetailPage({ params }: { params: Promise<{ id: 
     try {
       const [pRes, rRes, aRes] = await Promise.all([
         fetch('/api/pppoe/profiles'),
-        fetch('/api/pppoe/routers'),
+        fetch('/api/network/routers'),
         fetch('/api/pppoe/areas'),
       ]);
       if (pRes.ok) setProfiles((await pRes.json()).profiles || []);

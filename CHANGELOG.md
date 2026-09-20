@@ -4,6 +4,53 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.44] — 2026-09-20
+### Fix Ganti Modem (Next.js 15 Promise Params & Flexible ID Resolution), Router Route Alias, /docs Layout, & One-Time OLT Modem Sync
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Fitur **Ganti Modem** gagal dieksekusi dengan rentetan error pada browser console:
+     - `GET /api/pppoe/routers: 404 (Not Found)`
+     - `GET /api/pppoe/users/37383/device-history: 500 (Internal Server Error)`
+     - `POST /api/pppoe/users/37383/replace-device: 500 (Internal Server Error)`
+     - `GET /docs?_rsc=1bpeg: 404 (Not Found)`
+  2. Pada Next.js 15+, parameter route handler `{ params }` merupakan `Promise`. Karena belum di-`await` pada endpoint `device-history` dan `replace-device`, variabel `id` bernilai `undefined`, yang memicu kegagalan validasi Prisma internal (HTTP 500).
+  3. URL detail pelanggan sering diakses menggunakan username/nomor pelanggan seperti `37383` (bukan CUID/UUID). Pencarian langsung pada `where: { id }` gagal dan foreign key constraint pada tabel relasi menolak nilai string non-UUID.
+  4. Pengguna juga meminta sinkronisasi satu-pintu untuk seluruh modem fisik di OLT ke profil pelanggan (kartu Perangkat ONT) dan master inventori aset.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Next.js 15 Promise Params & Flexible ID Resolution**:
+     - Memperbarui signature `device-history/route.ts` dan `replace-device/route.ts` menjadi `{ params }: { params: Promise<{ id: string }> }` dengan `const { id: rawId } = await params`.
+     - Mengimplementasikan pencarian fleksibel `pppoeUser.findFirst({ where: { OR: [{ id: rawId }, { customerId: rawId }, { username: rawId }] } })` sehingga menjamin didapatkannya `customer.id` bertipe UUID asli untuk foreign key database.
+     - Menambahkan fallback otomatis: jika aset modem belum ada di inventori, sistem mengecek tabel `oltOnuStatus` yang terhubung dengan pelanggan dan menyinkronkannya ke inventori secara instan.
+  2. **Router API Endpoint & User Detail Page**:
+     - Memperbarui pemanggilan router pada `src/app/admin/pppoe/users/[id]/page.tsx` ke `/api/network/routers`.
+     - Membuat endpoint alias resmi `src/app/api/pppoe/routers/route.ts` agar pemanggilan legacy tetap sukses dengan status 200 OK.
+     - Menggunakan `user?.id || id` pada fungsi `fetchDeviceHistory` dan `handleGantiModem`.
+  3. **RSC Prefetch Fix untuk /docs**:
+     - Membuat `src/app/docs/layout.tsx` dengan `export const dynamic = 'force-dynamic'` guna mencegah 404 pada dynamic RSC prefetch `?_rsc=...`.
+     - Menyediakan halaman `src/app/admin/docs/page.tsx` agar dokumentasi dapat diakses langsung dari dashboard admin.
+  4. **One-Time OLT Modem to Customers & Inventory Synchronization Engine**:
+     - Mengimplementasikan `syncAllOltsWithCustomersAndInventory` pada `src/server/services/olt-inventory-sync.service.ts` dengan multi-pass matching (Pass 1: SN pada riwayat & SPK, Pass 2: MAC address, Pass 3: Smart Matcher / Dice similarity pada deskripsi OLT).
+     - Menautkan ONU ke `oltOnuStatus.customerId`, mendaftarkannya ke `inventory_assets` (`IN_USE`, `AVAILABLE`, atau `Fasum`), dan mencatat `customer_device_histories` agar langsung tampil di tab "Perangkat ONT".
+     - Membuat skrip CLI `scripts/sync-olt-modems-to-customers-and-inventory.ts` (`npm run sync:olt-modems`) dan endpoint API admin `POST /api/olt/sync-all-to-customers`.
+     - Menambahkan tombol **Sync ke Pelanggan & Inventori** di halaman panel admin `/admin/network/olts`.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `docs/inventory/PANDUAN_SINKRONISASI_MODEM_OLT_DAN_GANTI_MODEM.md`
+  - `src/app/api/pppoe/users/[id]/device-history/route.ts`
+  - `src/app/api/pppoe/users/[id]/replace-device/route.ts`
+  - `src/app/api/pppoe/routers/route.ts`
+  - `src/app/admin/pppoe/users/[id]/page.tsx`
+  - `src/app/docs/layout.tsx`
+  - `src/app/admin/docs/page.tsx`
+  - `src/server/services/olt-inventory-sync.service.ts`
+  - `src/app/api/olt/sync-all-to-customers/route.ts`
+  - `src/app/admin/network/olts/page.tsx`
+  - `scripts/sync-olt-modems-to-customers-and-inventory.ts`
+
 ## [2.40.43] — 2026-09-19
 ### Final Clean Repository Release: Penghapusan Script One-Time Bulk Sync Pasca-Sinkronisasi Sukses
 

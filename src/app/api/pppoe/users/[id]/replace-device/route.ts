@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // POST /api/pppoe/users/[id]/replace-device
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -16,7 +16,11 @@ export async function POST(
   }
 
   try {
-    const { id: customerId } = params;
+    const { id: rawId } = await params;
+    if (!rawId) {
+      return NextResponse.json({ error: 'ID pelanggan tidak valid' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { newSerialNumber, reason, technicianName } = body;
 
@@ -26,11 +30,22 @@ export async function POST(
 
     const cleanSN = newSerialNumber.trim().toUpperCase();
 
-    // 1. Verify customer exists
-    const customer = await prisma.pppoeUser.findUnique({ where: { id: customerId } });
+    // 1. Verify customer exists using flexible lookup (UUID, customerId, or username)
+    const customer = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id: rawId },
+          { customerId: rawId },
+          { username: rawId },
+        ],
+      },
+    });
+
     if (!customer) {
       return NextResponse.json({ error: 'Pelanggan tidak ditemukan' }, { status: 404 });
     }
+
+    const customerId = customer.id; // Primary key UUID of pppoeUser
 
     // 2. Find or auto-create the asset
     let newAsset = await prisma.inventoryAsset.findFirst({
@@ -47,6 +62,7 @@ export async function POST(
       let catalogItem = await prisma.inventoryItem.findFirst({
         where: {
           OR: [
+            { sku: 'EMG-CPE-ONT-GENERIC' },
             { sku: { contains: 'CPE-ONT' } },
             { name: { contains: 'ONT' } },
             { name: { contains: 'Modem' } },
@@ -103,7 +119,7 @@ export async function POST(
 
     if (!newAsset) {
       return NextResponse.json({
-        error: `Gagal mendaftarkan modem SN ${cleanSN}. Pastikan katalog barang tersedia.`
+        error: `Gagal mendaftarkan modem SN ${cleanSN}. Pastikan master katalog barang tersedia.`
       }, { status: 400 });
     }
 
@@ -113,7 +129,7 @@ export async function POST(
 
     if (newAsset.status !== 'AVAILABLE' && newAsset.status !== 'USED_GOOD' && newAsset.currentCustomerId !== customerId) {
       return NextResponse.json({
-        error: `Modem SN ${cleanSN} sedang digunakan pelanggan lain (status: ${newAsset.status}). Pilih modem yang berstatus AVAILABLE.`
+        error: `Modem SN ${cleanSN} sedang digunakan pelanggan lain (status: ${newAsset.status}). Pilih modem yang berstatus AVAILABLE atau hubungi admin inventori.`
       }, { status: 400 });
     }
 

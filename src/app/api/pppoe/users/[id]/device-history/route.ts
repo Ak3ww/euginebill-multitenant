@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
+import { syncOnuToInventory } from '@/server/services/olt-inventory-sync.service';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/pppoe/users/[id]/device-history
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
@@ -16,16 +17,31 @@ export async function GET(
   }
 
   try {
-    const { id } = params;
+    const { id: rawId } = await params;
+    if (!rawId) {
+      return NextResponse.json({ error: 'ID pelanggan tidak valid' }, { status: 400 });
+    }
 
-    // Verify user exists
-    const user = await prisma.pppoeUser.findUnique({ where: { id }, select: { id: true } });
+    // Verify user exists using flexible lookup (UUID, customerId, or username)
+    const user = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id: rawId },
+          { customerId: rawId },
+          { username: rawId },
+        ],
+      },
+      select: { id: true, name: true, username: true, macAddress: true },
+    });
+
     if (!user) {
       return NextResponse.json({ error: 'Pelanggan tidak ditemukan' }, { status: 404 });
     }
 
+    const customerId = user.id;
+
     const histories = await prisma.customerDeviceHistory.findMany({
-      where: { customerId: id },
+      where: { customerId },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: {
@@ -35,19 +51,60 @@ export async function GET(
       },
     });
 
-    // Also get the current active asset (status = IN_USE, currentCustomerId = id)
+    // Also get the current active asset (status = IN_USE, currentCustomerId = customerId)
     let currentAsset = await prisma.inventoryAsset.findFirst({
-      where: { currentCustomerId: id, status: 'IN_USE', assetType: 'MODEM' },
+      where: { currentCustomerId: customerId, status: 'IN_USE', assetType: 'MODEM' },
       include: {
         item: { select: { sku: true, name: true } },
       },
     });
 
-    // Self-healing: if no currentAsset is linked, check if user has a completed workOrder with SN or MAC
+    // Self-healing step A: If no current asset, check if an OLT ONU is assigned or matches customer's MAC
+    if (!currentAsset) {
+      try {
+        const onu = await prisma.oltOnuStatus.findFirst({
+          where: {
+            OR: [
+              { customerId },
+              ...(user.macAddress ? [{ macAddress: user.macAddress }] : []),
+            ],
+          },
+          include: { olt: { select: { id: true, name: true, vendor: true } } },
+        });
+
+        if (onu && (onu.serialNumber || onu.macAddress)) {
+          const cleanOnuSn = (onu.serialNumber || onu.macAddress || '').trim().toUpperCase();
+          if (cleanOnuSn) {
+            const syncRes = await syncOnuToInventory({
+              serialNumber: cleanOnuSn,
+              macAddress: onu.macAddress,
+              customerId,
+              oltVendor: onu.olt?.vendor,
+              oltName: onu.olt?.name,
+              location: `${onu.frame}/${onu.slot}/${onu.port}:${onu.onuId}`,
+              description: onu.description,
+              isOnline: onu.status === 'online',
+              installedAt: onu.updatedAt,
+            });
+
+            if (syncRes) {
+              currentAsset = await prisma.inventoryAsset.findUnique({
+                where: { id: syncRes.assetId },
+                include: { item: { select: { sku: true, name: true } } },
+              });
+            }
+          }
+        }
+      } catch (onuSyncErr) {
+        console.warn('OLT ONU fallback sync warning:', onuSyncErr);
+      }
+    }
+
+    // Self-healing step B: if still no currentAsset, check completed workOrder reportData
     if (!currentAsset) {
       try {
         const userDetail = await prisma.pppoeUser.findUnique({
-          where: { id },
+          where: { id: customerId },
           select: {
             id: true,
             name: true,
@@ -96,7 +153,7 @@ export async function GET(
                 where: { id: foundAsset.id },
                 data: {
                   status: 'IN_USE',
-                  currentCustomerId: id,
+                  currentCustomerId: customerId,
                   macAddress: candidateMac || foundAsset.macAddress,
                   installedAt: foundAsset.installedAt || new Date(),
                 },
@@ -108,6 +165,7 @@ export async function GET(
               let catalogItem = await prisma.inventoryItem.findFirst({
                 where: {
                   OR: [
+                    { sku: 'EMG-CPE-ONT-GENERIC' },
                     { sku: { contains: 'CPE-ONT' } },
                     { name: { contains: 'ONT' } },
                     { name: { contains: 'Modem' } },
@@ -150,7 +208,7 @@ export async function GET(
                     model,
                     condition: 'NEW',
                     status: 'IN_USE',
-                    currentCustomerId: id,
+                    currentCustomerId: customerId,
                     installedAt: new Date(),
                     notes: `Self-healed dari SPK #${matchedWoId}`,
                   },
@@ -160,7 +218,7 @@ export async function GET(
 
                 await prisma.customerDeviceHistory.create({
                   data: {
-                    customerId: id,
+                    customerId,
                     assetId: created.id,
                     serialNumber: candidateSn,
                     vendor,

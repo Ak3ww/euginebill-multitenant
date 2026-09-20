@@ -10,15 +10,33 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.43
+- **Version**: 2.40.44
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
-- **Last Updated**: September 19, 2026
+- **Last Updated**: September 20, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 20, 2026 — v2.40.44: Modem Replacement Hardening, Next.js 15 Promise Params, Flexible ID Resolution, & One-Time OLT Modem Sync)
+
+- **Hard Invariant: Next.js 15 Promise Params in Route Handlers**:
+  - Pada Next.js 15+, dynamic route parameter `params` pada route handler wajib dideklarasikan sebagai `Promise<{ [key: string]: string }>` dan di-`await` (`const { id } = await params;`).
+  - Dilarang membaca `params.id` secara sinkron, karena pada runtime akan menghasilkan `undefined` dan memicu exception validasi Prisma (HTTP 500).
+- **Hard Invariant: Flexible Customer ID Resolution (UUID vs Username/Account Number)**:
+  - Pelanggan pada URL dapat diidentifikasi lewat UUID (`ec349c73-...`), nomor pelanggan (`37383`), atau username (`37383`).
+  - Seluruh endpoint PPPoE user dinamis wajib mencari menggunakan `where: { OR: [{ id: rawId }, { customerId: rawId }, { username: rawId }] }` dan SELALU menggunakan `user.id` (UUID resmi) untuk operasi foreign key (tabel `customer_device_histories`, `inventory_assets`, `olt_onu_status`).
+- **Hard Invariant: Router Route Alias**:
+  - Endpoint `/api/pppoe/routers` disediakan sebagai alias aman ke daftar router untuk menjaga kompatibilitas dengan frontend legacy atau komponen yang belum dimigrasikan ke `/api/network/routers`.
+- **Hard Invariant: Next.js RSC Dynamic Layout for Documentation**:
+  - Seluruh halaman dokumentasi (`/docs`) wajib menyertakan `layout.tsx` dengan `export const dynamic = 'force-dynamic'` guna mencegah 404 pada dynamic RSC prefetch `?_rsc=...`.
+- **Hard Invariant: OLT to Inventory & Customer Reconciliation (1-Pintu)**:
+  - Rekonsiliasi modem OLT memanfaatkan multi-pass matching (Pass 1: SN di riwayat/SPK, Pass 2: MAC address, Pass 3: Smart Matcher / Dice similarity).
+  - Modem pelanggan ditautkan ke `currentCustomerId: user.id` dengan status `IN_USE` dan dicatat di `customer_device_histories` agar langsung muncul di tab "Perangkat ONT".
+  - Fasum dicatat sebagai `IN_USE (Fasum)` dan unit standby dicatat sebagai `AVAILABLE`.
+  - Sinkronisasi dapat dijalankan secara idempoten melalui CLI `npm run sync:olt-modems` atau melalui tombol "Sync ke Pelanggan & Inventori" di panel admin `/admin/network/olts`.
 
 ### Recent Patch Log (September 19, 2026 — v2.40.43: Pure Clean Production State — One-Time Sync Script Removed)
 

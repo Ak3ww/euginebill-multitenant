@@ -7,6 +7,7 @@
 
 import { prisma } from '@/server/db/client';
 import { detectOntVendorAndModel, normalizeSerialNumber } from '@/lib/olt/ont-detector';
+import { findSmartMatchForOnu, CandidateCustomer } from '@/lib/olt/smart-matcher';
 
 export interface SyncOnuInput {
   serialNumber: string;
@@ -493,5 +494,269 @@ export async function syncAllOltsToInventory(): Promise<{
     updatedCount,
     linkedCustomerCount,
     fasumCount,
+  };
+}
+
+export interface FullSyncStats {
+  totalOnus: number;
+  totalCustomers: number;
+  alreadyLinkedCount: number;
+  newlyMatchedCount: number;
+  unassignedCount: number;
+  fasumCount: number;
+  inventoryCreatedCount: number;
+  inventoryUpdatedCount: number;
+  matchedDetails: Array<{
+    onuId: string;
+    oltName: string;
+    location: string;
+    serialNumber: string;
+    macAddress?: string | null;
+    description?: string | null;
+    customerId: string;
+    customerUsername: string;
+    customerName: string;
+    matchReason: string;
+  }>;
+}
+
+/**
+ * Execute full smart reconciliation:
+ * 1. Matches all ONUs in all OLTs to PPPoE Customers via Serial Number, MAC, and Smart Matcher
+ * 2. Links customerId in oltOnuStatus
+ * 3. Registers / updates all modems in inventoryAsset (IN_USE for customers, AVAILABLE for stock, IN_USE for fasum)
+ * 4. Logs customerDeviceHistory so it appears in the customer profile "Perangkat ONT"
+ */
+export async function syncAllOltsWithCustomersAndInventory(minScoreThreshold = 75): Promise<FullSyncStats> {
+  // Auto-heal table schema on MySQL: ensure notes column is TEXT to avoid varchar length limits
+  await prisma.$executeRawUnsafe(`ALTER TABLE inventory_assets MODIFY notes TEXT`).catch(() => {});
+
+  const [olts, rawCustomers] = await Promise.all([
+    prisma.networkOLT.findMany({
+      include: {
+        routers: { select: { routerId: true } },
+        onuStatuses: {
+          include: {
+            customer: { select: { id: true, username: true, name: true, phone: true, status: true, customerId: true, macAddress: true } },
+          },
+          orderBy: [{ port: 'asc' }, { onuId: 'asc' }],
+        },
+      },
+    }),
+    prisma.pppoeUser.findMany({
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        phone: true,
+        customerId: true,
+        status: true,
+        macAddress: true,
+        routerId: true,
+        router: { select: { name: true } },
+        workOrders: {
+          where: { status: 'COMPLETED' },
+          select: { id: true, reportData: true },
+        },
+        deviceHistories: {
+          select: { serialNumber: true, macAddress: true },
+        },
+      },
+    }),
+  ]);
+
+  // Build candidate customers for smart matcher
+  const candidates: CandidateCustomer[] = rawCustomers.map((c) => ({
+    id: c.id,
+    username: c.username,
+    name: c.name,
+    phone: c.phone,
+    customerId: c.customerId,
+    status: c.status,
+    macAddress: c.macAddress,
+    routerId: c.routerId,
+    routerName: c.router?.name ?? null,
+  }));
+
+  // Fast exact lookups
+  const customerById = new Map<string, typeof rawCustomers[0]>();
+  const customerByMac = new Map<string, typeof rawCustomers[0]>();
+  const customerBySn = new Map<string, typeof rawCustomers[0]>();
+
+  for (const c of rawCustomers) {
+    customerById.set(c.id, c);
+
+    if (c.macAddress) {
+      const cleanMac = c.macAddress.toUpperCase().replace(/[:-]/g, '').trim();
+      if (cleanMac) customerByMac.set(cleanMac, c);
+    }
+
+    // Index serial numbers from deviceHistories
+    for (const h of c.deviceHistories) {
+      if (h.serialNumber) {
+        const s = normalizeSerialNumber(h.serialNumber);
+        if (s) customerBySn.set(s, c);
+      }
+      if (h.macAddress) {
+        const m = h.macAddress.toUpperCase().replace(/[:-]/g, '').trim();
+        if (m) customerByMac.set(m, c);
+      }
+    }
+
+    // Index serial numbers from completed work orders
+    for (const wo of c.workOrders) {
+      const rd = (wo.reportData || {}) as any;
+      if (rd.sn) {
+        const s = normalizeSerialNumber(String(rd.sn));
+        if (s) customerBySn.set(s, c);
+      }
+      if (rd.mac) {
+        const m = String(rd.mac).toUpperCase().replace(/[:-]/g, '').trim();
+        if (m) customerByMac.set(m, c);
+      }
+    }
+  }
+
+  let totalOnus = 0;
+  let alreadyLinkedCount = 0;
+  let newlyMatchedCount = 0;
+  let unassignedCount = 0;
+  let fasumCount = 0;
+  let inventoryCreatedCount = 0;
+  let inventoryUpdatedCount = 0;
+  const matchedDetails: FullSyncStats['matchedDetails'] = [];
+
+  for (const olt of olts) {
+    const oltRouterIds = olt.routers.map((r) => r.routerId);
+
+    for (const onu of olt.onuStatuses) {
+      totalOnus++;
+      const cleanSn = normalizeSerialNumber(onu.serialNumber);
+      const cleanMac = onu.macAddress ? onu.macAddress.toUpperCase().replace(/[:-]/g, '').trim() : '';
+      const isFasum = !onu.customerId && isFasumDescription(onu.description);
+
+      let targetCustomerId: string | null = onu.customerId;
+      let matchReason = 'Sudah Tertaut Sebelumnya';
+      let wasNewlyMatched = false;
+
+      if (targetCustomerId) {
+        alreadyLinkedCount++;
+      } else {
+        // Pass 1: Check by SN in SPK or device history
+        if (cleanSn && customerBySn.has(cleanSn)) {
+          const matched = customerBySn.get(cleanSn)!;
+          targetCustomerId = matched.id;
+          matchReason = 'Cocok Serial Number SPK/Riwayat Perangkat';
+          wasNewlyMatched = true;
+        }
+        // Pass 2: Check by MAC Address
+        else if (cleanMac && customerByMac.has(cleanMac)) {
+          const matched = customerByMac.get(cleanMac)!;
+          targetCustomerId = matched.id;
+          matchReason = 'Cocok MAC Address Pelanggan';
+          wasNewlyMatched = true;
+        }
+        // Pass 3: Smart Matcher by description / name / username / customerId
+        else if (onu.description && onu.description.trim()) {
+          const { bestMatch } = findSmartMatchForOnu(
+            {
+              serialNumber: onu.serialNumber,
+              macAddress: onu.macAddress,
+              description: onu.description,
+            },
+            candidates,
+            {
+              oltRouterIds,
+              minScoreThreshold,
+            }
+          );
+
+          if (bestMatch && bestMatch.customer) {
+            targetCustomerId = bestMatch.customer.id;
+            matchReason = `${bestMatch.reason} (Skor: ${bestMatch.score})`;
+            wasNewlyMatched = true;
+          }
+        }
+
+        if (wasNewlyMatched && targetCustomerId) {
+          newlyMatchedCount++;
+          // Persist link to oltOnuStatus
+          await prisma.oltOnuStatus.update({
+            where: { id: onu.id },
+            data: { customerId: targetCustomerId },
+          }).catch((err) => console.error('[Sync OLT] Update onu customerId error:', err));
+        } else if (isFasum) {
+          fasumCount++;
+        } else {
+          unassignedCount++;
+        }
+      }
+
+      // Sync customer's MAC address if user macAddress is missing and ONU has MAC
+      if (targetCustomerId && onu.macAddress) {
+        const cust = customerById.get(targetCustomerId);
+        if (cust && !cust.macAddress) {
+          await prisma.pppoeUser.update({
+            where: { id: targetCustomerId },
+            data: { macAddress: onu.macAddress },
+          }).catch(() => {});
+        }
+      }
+
+      // Record matched detail
+      if (targetCustomerId) {
+        const cust = customerById.get(targetCustomerId);
+        if (cust) {
+          matchedDetails.push({
+            onuId: onu.id,
+            oltName: olt.name,
+            location: `${onu.frame}/${onu.slot}/${onu.port}:${onu.onuId}`,
+            serialNumber: cleanSn || onu.macAddress || 'N/A',
+            macAddress: onu.macAddress,
+            description: onu.description,
+            customerId: cust.id,
+            customerUsername: cust.username,
+            customerName: cust.name,
+            matchReason,
+          });
+        }
+      }
+
+      // Sync to Inventory Assets & Customer Device History
+      if (cleanSn || onu.macAddress) {
+        try {
+          const syncRes = await syncOnuToInventory({
+            serialNumber: cleanSn || onu.macAddress!,
+            macAddress: onu.macAddress,
+            customerId: targetCustomerId,
+            oltVendor: olt.vendor,
+            oltName: olt.name,
+            location: `${onu.frame}/${onu.slot}/${onu.port}:${onu.onuId}`,
+            description: onu.description,
+            isOnline: onu.status === 'online',
+            installedAt: onu.updatedAt,
+          });
+
+          if (syncRes) {
+            if (syncRes.isNew) inventoryCreatedCount++;
+            else inventoryUpdatedCount++;
+          }
+        } catch (syncErr: any) {
+          console.error(`[syncAllOltsWithCustomersAndInventory] Sync error on ${cleanSn || onu.macAddress}:`, syncErr.message);
+        }
+      }
+    }
+  }
+
+  return {
+    totalOnus,
+    totalCustomers: rawCustomers.length,
+    alreadyLinkedCount,
+    newlyMatchedCount,
+    unassignedCount,
+    fasumCount,
+    inventoryCreatedCount,
+    inventoryUpdatedCount,
+    matchedDetails,
   };
 }
