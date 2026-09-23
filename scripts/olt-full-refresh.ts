@@ -111,42 +111,44 @@ async function fetchOntsFromOlt(olt: {
   try {
     let raw: any[] = [];
 
-  // 1. Try SNMP discovery first if SNMP is enabled
-  if (snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {
-    console.log(`  Connecting via SNMP (${snmpConfig.host}:${snmpConfig.port}, community: ${snmpConfig.community}) ke ${olt.name}...`);
-    try {
-      raw = await vendorModule.discoverONUsSNMP(snmpConfig, olt.firmwareVersion, telnetConfig);
-      console.log(`  [SNMP] Ditemukan ${raw.length} ONT dari ${olt.name}`);
-    } catch (snmpErr: any) {
-      console.log(`  [SNMP Fallback] SNMP discovery error: ${snmpErr.message}`);
-    }
-  }
-
-  // 2. If SNMP returned no ONTs, try SSH or Telnet
-  if (raw.length === 0) {
+    // 1. Try SSH discovery first if SSH is configured & enabled (Native OLT CLI = 100% exact Web GUI match)
     if (sshConfig && typeof vendorModule.discoverONUsSSH === 'function') {
       console.log(`  Connecting via SSH (${sshConfig.host}:${sshConfig.port}) ke ${olt.name}...`);
       try {
         raw = await vendorModule.discoverONUsSSH(sshConfig);
         console.log(`  [SSH] Ditemukan ${raw.length} ONT dari ${olt.name}`);
       } catch (sshErr: any) {
-        console.log(`  [SSH Error] ${sshErr.message}`);
+        console.log(`  [SSH Fallback] Error: ${sshErr.message}`);
       }
-    } else if (telnetConfig && typeof vendorModule.discoverONUs === 'function') {
+    }
+
+    // 2. Try Telnet if SSH returned no ONTs or is not enabled
+    if (raw.length === 0 && telnetConfig && typeof vendorModule.discoverONUs === 'function') {
       console.log(`  Connecting via Telnet (${telnetConfig.host}:${telnetConfig.port}) ke ${olt.name}...`);
       try {
         raw = await vendorModule.discoverONUs(telnetConfig);
         console.log(`  [Telnet] Ditemukan ${raw.length} ONT dari ${olt.name}`);
       } catch (tErr: any) {
-        console.log(`  [Telnet Error] ${tErr.message}`);
-      }
-    } else {
-      if (raw.length === 0) {
-        console.log(`  [NOTICE] OLT ${olt.name}: SNMP tidak mengembalikan ONT dan SSH/Telnet tidak aktif atau username kosong.`);
+        console.log(`  [Telnet Fallback] Error: ${tErr.message}`);
       }
     }
-  }
-    console.log(`  Ditemukan ${raw.length} ONT dari ${olt.name}`);
+
+    // 3. Fallback to SNMP if CLI discovery returned no ONTs
+    if (raw.length === 0 && snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {
+      console.log(`  Connecting via SNMP (${snmpConfig.host}:${snmpConfig.port}, community: ${snmpConfig.community}) ke ${olt.name}...`);
+      try {
+        raw = await vendorModule.discoverONUsSNMP(snmpConfig, olt.firmwareVersion, telnetConfig);
+        console.log(`  [SNMP] Ditemukan ${raw.length} ONT dari ${olt.name}`);
+      } catch (snmpErr: any) {
+        console.log(`  [SNMP Fallback Error] ${snmpErr.message}`);
+      }
+    }
+
+    if (raw.length === 0) {
+      console.log(`  [NOTICE] OLT ${olt.name}: Tidak ada ONT yang berhasil ditarik dari SSH/Telnet/SNMP.`);
+    }
+
+    console.log(`  Total ditarik dari ${olt.name}: ${raw.length} ONT`);
     return raw.map(o => ({
       frame:        o.frame  ?? 0,
       slot:         o.slot   ?? 0,
@@ -349,6 +351,23 @@ async function main() {
         } catch (err: any) {
           console.error(`    [ERROR] ONU ${olt.name} ${onu.port}:${onu.onuId}: ${err.message}`);
         }
+      }
+
+      // Clean phantom rows for this OLT that were not in discovered list
+      const validKeys = new Set(onts.map(o => `${o.frame}:${o.slot}:${o.port}:${o.onuId}`));
+      const existingInDb = await prisma.oltOnuStatus.findMany({
+        where: { oltId: olt.id },
+        select: { id: true, frame: true, slot: true, port: true, onuId: true },
+      });
+      const phantomIds = existingInDb
+        .filter(o => !validKeys.has(`${o.frame}:${o.slot}:${o.port}:${o.onuId}`))
+        .map(o => o.id);
+
+      if (phantomIds.length > 0) {
+        await prisma.oltOnuStatus.deleteMany({
+          where: { id: { in: phantomIds } },
+        });
+        console.log(`  [Clean] Menghapus ${phantomIds.length} data ONU phantom/usang dari DB untuk ${olt.name}`);
       }
 
       // Update OLT summary counters

@@ -145,9 +145,19 @@ function normalizeStatus(raw: string): string {
 }
 
 export async function discoverONUs(config: TelnetConfig): Promise<any[]> {
-  const onus: any[] = [];
+  const onusMap = new Map<string, any>();
 
-  // 1. Try global commands first
+  const addOnus = (list: any[]) => {
+    for (const item of list) {
+      const key = `${item.port}:${item.onuId}`;
+      if (!onusMap.has(key)) {
+        onusMap.set(key, item);
+      }
+    }
+  };
+
+  await executeCommand(config, 'terminal length 0').catch(() => {});
+
   const globalCmds = [
     'show gpon onu information',
     'show gpon onu state',
@@ -158,24 +168,37 @@ export async function discoverONUs(config: TelnetConfig): Promise<any[]> {
   for (const cmd of globalCmds) {
     const res = await executeCommand(config, cmd);
     if (res.success && res.output && res.output.length > 30) {
-      const parsed = parseHsgqOnuOutput(res.output);
-      if (parsed.length > 0) return parsed;
+      addOnus(parseHsgqOnuOutput(res.output));
     }
   }
 
-  // 2. Fallback: iterate over PON ports (HSGQ-G02ID has 2 ports, others up to 16)
-  for (let port = 1; port <= 8; port++) {
+  for (let port = 1; port <= 16; port++) {
     const res = await executeCommand(config, `show gpon onu state ${port}`);
     if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('error')) {
-      onus.push(...parseHsgqOnuOutput(res.output, port));
+      addOnus(parseHsgqOnuOutput(res.output, port));
+    }
+    const res2 = await executeCommand(config, `show gpon onu information ${port}`);
+    if (res2.success && res2.output && !res2.output.includes('Invalid') && !res2.output.includes('error')) {
+      addOnus(parseHsgqOnuOutput(res2.output, port));
     }
   }
 
-  return onus;
+  return Array.from(onusMap.values());
 }
 
 export async function discoverONUsSSH(config: SSHConfig): Promise<any[]> {
-  const onus: any[] = [];
+  const onusMap = new Map<string, any>();
+
+  const addOnus = (list: any[]) => {
+    for (const item of list) {
+      const key = `${item.port}:${item.onuId}`;
+      if (!onusMap.has(key)) {
+        onusMap.set(key, item);
+      }
+    }
+  };
+
+  await sshExecute(config, 'terminal length 0').catch(() => {});
 
   const globalCmds = [
     'show gpon onu information',
@@ -187,19 +210,22 @@ export async function discoverONUsSSH(config: SSHConfig): Promise<any[]> {
   for (const cmd of globalCmds) {
     const res = await sshExecute(config, cmd);
     if (res.success && res.output && res.output.length > 30) {
-      const parsed = parseHsgqOnuOutput(res.output);
-      if (parsed.length > 0) return parsed;
+      addOnus(parseHsgqOnuOutput(res.output));
     }
   }
 
-  for (let port = 1; port <= 8; port++) {
+  for (let port = 1; port <= 16; port++) {
     const res = await sshExecute(config, `show gpon onu state ${port}`);
-    if (res.success && res.output && !res.output.includes('Invalid')) {
-      onus.push(...parseHsgqOnuOutput(res.output, port));
+    if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('error')) {
+      addOnus(parseHsgqOnuOutput(res.output, port));
+    }
+    const res2 = await sshExecute(config, `show gpon onu information ${port}`);
+    if (res2.success && res2.output && !res2.output.includes('Invalid') && !res2.output.includes('error')) {
+      addOnus(parseHsgqOnuOutput(res2.output, port));
     }
   }
 
-  return onus;
+  return Array.from(onusMap.values());
 }
 
 function parseOpticalOutput(output: string): any {
@@ -347,6 +373,11 @@ export async function discoverONUsSNMP(
         sn = sVal.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
         if (sn) break;
       }
+    }
+
+    // Skip phantom/unallocated entries without a real serial number
+    if (!sn || sn.length < 6 || /^0+$/.test(sn)) {
+      continue;
     }
 
     // Name / Description
