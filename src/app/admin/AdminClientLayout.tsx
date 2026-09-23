@@ -71,6 +71,7 @@ interface MenuItem {
   requiredPermission?: string;
   requiresRadius?: boolean;
   requiresGenieACS?: boolean;
+  hideWhenGenieACS?: boolean;
 }
 
 interface MenuGroup {
@@ -230,7 +231,6 @@ const menuGroups: MenuGroup[] = [
         titleKey: 'nav.acs',
         icon: <Router className="w-4 h-4" />,
         requiredPermission: 'network.view',
-        requiresGenieACS: true,
         children: [
           { titleKey: 'nav.devices', href: '/admin/acs', requiredPermission: 'network.view' },
         ],
@@ -456,6 +456,7 @@ function CategoryItem({ titleKey, items, pendingCount, manualPaymentsCount, unre
     .filter(item => isSuperAdmin || !item.requiredPermission || userPermissions.includes(item.requiredPermission))
     .filter(item => !(item.requiresRadius && radiusEnabled === false))
     .filter(item => !(item.requiresGenieACS && genieacsEnabled === false))
+    .filter(item => !(item.hideWhenGenieACS && genieacsEnabled === true))
     .map(item => ({
       ...item,
       children: item.children?.filter(child => isSuperAdmin || !child.requiredPermission || userPermissions.includes(child.requiredPermission)),
