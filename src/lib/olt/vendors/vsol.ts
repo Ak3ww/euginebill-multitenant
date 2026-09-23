@@ -301,43 +301,73 @@ export async function discoverONUsSNMP(
     version: '2c' as const, // VSOL uses SNMPv2c
   };
 
-  const [nameRes, rxRes, txRes, snRes] = await Promise.all([
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),
+  const [nameRes, rxRes, txRes, snRes, statusRes] = await Promise.all([
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.11'), // Status
   ]);
 
-  if (!nameRes.success || !nameRes.results || Object.keys(nameRes.results).length === 0) {
-    return [];
-  }
-
-  const names = nameRes.results;
+  const names = nameRes.results || {};
   const rxMap = rxRes.results || {};
   const txMap = txRes.results || {};
   const snMap = snRes.results || {};
+  const statusMap = statusRes.results || {};
+
+  // Build a unique set of OID suffixes from snMap, nameRes, statusRes
+  const keyMap = new Map<string, { port: number; onuId: number }>();
+
+  const processOidDict = (dict: Record<string, string>) => {
+    for (const oid of Object.keys(dict)) {
+      const parts = oid.split('.');
+      if (parts.length >= 2) {
+        const onuIdx = parseInt(parts[parts.length - 1]);
+        const port = parseInt(parts[parts.length - 2]);
+        if (!isNaN(onuIdx) && !isNaN(port)) {
+          const key = `${port}.${onuIdx}`;
+          if (!keyMap.has(key)) {
+            keyMap.set(key, { port, onuId: onuIdx });
+          }
+        }
+      }
+    }
+  };
+
+  processOidDict(snMap);
+  processOidDict(names);
+  processOidDict(statusMap);
+  processOidDict(rxMap);
+
+  if (keyMap.size === 0) {
+    return [];
+  }
 
   const onus: any[] = [];
 
-  for (const [oid, name] of Object.entries(names)) {
-    const parts = oid.split('.');
-    const onuIdx = parts[parts.length - 1];
-    const onuId = parseInt(onuIdx) || 1;
-    const port = parts.length >= 2 ? parseInt(parts[parts.length - 2]) || 1 : 1;
-
+  for (const [key, { port, onuId }] of keyMap.entries()) {
     // SN
     let sn: string | undefined = undefined;
     for (const [sOid, sVal] of Object.entries(snMap)) {
-      if (sOid.endsWith(`.${port}.${onuIdx}`) || sOid.endsWith(`.${onuIdx}`)) {
+      if (sOid.endsWith(`.${key}`) || sOid.endsWith(`.${onuId}`)) {
         sn = sVal.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
-        break;
+        if (sn) break;
+      }
+    }
+
+    // Name / Description
+    let name: string | undefined = undefined;
+    for (const [nOid, nVal] of Object.entries(names)) {
+      if (nOid.endsWith(`.${key}`) || nOid.endsWith(`.${onuId}`)) {
+        name = nVal.trim();
+        if (name) break;
       }
     }
 
     // Rx Power (scale 10: -256 -> -25.6)
     let rxPower: number | undefined = undefined;
     for (const [rOid, rVal] of Object.entries(rxMap)) {
-      if (rOid.endsWith(`.${port}.${onuIdx}`) || rOid.endsWith(`.${onuIdx}`)) {
+      if (rOid.endsWith(`.${key}`) || rOid.endsWith(`.${onuId}`)) {
         const raw = parseFloat(rVal);
         if (!isNaN(raw)) {
           const scaled = raw > 0 || raw < -100 ? raw / 10.0 : raw;
@@ -350,7 +380,7 @@ export async function discoverONUsSNMP(
     // Tx Power (scale 10)
     let txPower: number | undefined = undefined;
     for (const [tOid, tVal] of Object.entries(txMap)) {
-      if (tOid.endsWith(`.${port}.${onuIdx}`) || tOid.endsWith(`.${onuIdx}`)) {
+      if (tOid.endsWith(`.${key}`) || tOid.endsWith(`.${onuId}`)) {
         const raw = parseFloat(tVal);
         if (!isNaN(raw)) {
           const scaled = raw > 50 || raw < -50 ? raw / 10.0 : raw;
@@ -360,7 +390,19 @@ export async function discoverONUsSNMP(
       }
     }
 
-    const status = rxPower !== undefined && rxPower < 0 ? 'online' : 'offline';
+    // Status
+    let rawStatusVal: string | undefined = undefined;
+    for (const [stOid, stVal] of Object.entries(statusMap)) {
+      if (stOid.endsWith(`.${key}`) || stOid.endsWith(`.${onuId}`)) {
+        rawStatusVal = stVal;
+        break;
+      }
+    }
+
+    let status = 'offline';
+    if (rawStatusVal === '1' || rawStatusVal === '11' || (rxPower !== undefined && rxPower < 0)) {
+      status = 'online';
+    }
 
     onus.push({
       frame: 0,
@@ -368,7 +410,7 @@ export async function discoverONUsSNMP(
       port,
       onuId,
       serialNumber: sn || null,
-      description: name.trim() || null,
+      description: name || null,
       status,
       rxPower: rxPower ?? null,
       txPower: txPower ?? null,
