@@ -316,6 +316,32 @@ export async function getTrafficStats(_config: SNMPConfig): Promise<{ rxBytes?: 
 }
 
 /**
+  * Helper to fetch VSOL SNMP OID map using root walk + per-slot/per-PON fallback
+  * to bypass VSOL firmware truncation bug on multi-PON OLTs (e.g. V1600GT).
+  */
+async function fetchVsolOidMap(cfg: SNMPConfig, baseOid: string): Promise<Record<string, string>> {
+  const rootRes = await snmpWalk(cfg, baseOid);
+  const map: Record<string, string> = { ...(rootRes.results || {}) };
+
+  // Always perform per-slot (0 and 1) and per-PON (1..16) walks to ensure all PON ports are captured
+  const ponWalkPromises: Promise<any>[] = [];
+  for (let slot = 0; slot <= 1; slot++) {
+    for (let pon = 1; pon <= 16; pon++) {
+      ponWalkPromises.push(snmpWalk(cfg, `${baseOid}.${slot}.${pon}`));
+    }
+  }
+
+  const ponResults = await Promise.all(ponWalkPromises);
+  for (const res of ponResults) {
+    if (res.success && res.results) {
+      Object.assign(map, res.results);
+    }
+  }
+
+  return map;
+}
+
+/**
  * Native SNMP ONU discovery for VSOL OLTs (Proven OIDs from BotRedaman)
  * Walks:
  *   - Name:   1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7 (Customer description)
@@ -334,42 +360,45 @@ export async function discoverONUsSNMP(
     version: '2c' as const, // VSOL uses SNMPv2c
   };
 
-  const [nameRes, rxRes, txRes, snRes, statusRes] = await Promise.all([
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.11'), // Status
+  const [names, rxMap, txMap, snMap, statusMap] = await Promise.all([
+    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
+    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
+    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
+    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
+    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.11'), // Status
   ]);
 
-  const names = nameRes.results || {};
-  const rxMap = rxRes.results || {};
-  const txMap = txRes.results || {};
-  const snMap = snRes.results || {};
-  const statusMap = statusRes.results || {};
-
-  // Helper to extract VSOL key (PON.onuId) from OID
-  const getVsolKey = (oid: string): { key: string; port: number; onuId: number } | null => {
+  // Helper to extract VSOL unique key (slot.PON.onuId) from OID
+  const getVsolKey = (oid: string): { key: string; slot: number; port: number; onuId: number } | null => {
     const parts = oid.split('.');
-    if (parts.length >= 2) {
+    if (parts.length >= 3) {
+      const onuId = parseInt(parts[parts.length - 1]);
+      const rawPort = parseInt(parts[parts.length - 2]);
+      const rawSlot = parseInt(parts[parts.length - 3]);
+      if (!isNaN(onuId) && !isNaN(rawPort)) {
+        const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
+        const slot = !isNaN(rawSlot) && rawSlot >= 0 && rawSlot <= 15 ? rawSlot : 0;
+        return { key: `${slot}.${port}.${onuId}`, slot, port, onuId };
+      }
+    } else if (parts.length === 2) {
       const onuId = parseInt(parts[parts.length - 1]);
       const rawPort = parseInt(parts[parts.length - 2]);
       if (!isNaN(onuId) && !isNaN(rawPort)) {
         const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
-        return { key: `${rawPort}.${onuId}`, port, onuId };
+        return { key: `0.${port}.${onuId}`, slot: 0, port, onuId };
       }
     }
     return null;
   };
 
   // Build key -> SN map (filtering out empty/zero phantom SNs)
-  const snByKey = new Map<string, { sn: string; port: number; onuId: number }>();
+  const snByKey = new Map<string, { sn: string; slot: number; port: number; onuId: number }>();
   for (const [oid, val] of Object.entries(snMap)) {
     const item = getVsolKey(oid);
     if (item) {
       const sn = val.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
       if (sn && sn.length >= 6 && !/^0+$/.test(sn)) {
-        snByKey.set(item.key, { sn, port: item.port, onuId: item.onuId });
+        snByKey.set(item.key, { sn, slot: item.slot, port: item.port, onuId: item.onuId });
       }
     }
   }
@@ -416,20 +445,20 @@ export async function discoverONUsSNMP(
 
   const onus: any[] = [];
   // Loop strictly over registered SNs (1:1 with BotRedaman)
-  for (const [key, { sn, port, onuId }] of Array.from(snByKey.entries())) {
+  for (const [key, { sn, slot, port, onuId }] of Array.from(snByKey.entries())) {
     const description = nameByKey.get(key) || null;
     const rxPower = rxByKey.get(key) ?? null;
     const txPower = txByKey.get(key) ?? null;
     const rawStatusVal = statusByKey.get(key);
 
     let status = 'offline';
-    if (rawStatusVal === '1' || rawStatusVal === '11' || (rxPower !== null && rxPower < 0)) {
+    if (rawStatusVal === '1' || rawStatusVal === '11' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up'))) {
       status = 'online';
     }
 
     onus.push({
       frame: 0,
-      slot: 0,
+      slot,
       port,
       onuId,
       serialNumber: sn,

@@ -8,22 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fix Presisi Polling SNMP OLT HSGQ & VSOL Berdasarkan Logika BotRedaman (Eliminasi Duplikasi OID)
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
-  1. Pada full-refresh OLT HSGQ-G02ID, hasil SNMP walk membaca 380 ONT padahal jumlah ONT fisik terdaftar hanya 190 unit (terjadi duplikasi 2x lipat).
-  2. Hasil audit mendalam terhadap `C:\BotRedaman\backend\collector.py` menemukan akar masalah:
-     - HSGQ OID MIB `1.3.6.1.4.1.50224.3.12.2.1.<col>.<onuIndex>` menggunakan komponen OID paling akhir (`parts[-1]`) langsung sebagai `<onuIndex>` (1 s/d 200).
-     - Pada implementasi sebelumnya, parser TS mencoba mengekstrak `parts[-2]` sebagai `port` (yang sebenarnya adalah index kolom OID `.15` untuk SN dan `.2` untuk Nama), sehingga 1 unit ONU terbuat 2 key terpisah (`15.N` dan `2.N`) dan terduplikasi menjadi 380 baris.
-  3. VSOL juga berisiko duplikasi jika menggunakan perulangan fallback OID yang longgar.
+  1. Pada OLT HSGQ-G02ID, seluruh 190 ONT terlaporkan sebagai Online (0 Offline) padahal status aktual adalah 182 Online dan 8 Offline. Ini disebabkan pengecekan `rxPower !== null` yang memaksa status menjadi Online karena OLT menyimpan nilai redaman terakhir di memori SNMP walau ONT mati.
+  2. Pada OLT VSOL-1600GT (Multi-PON), hanya 79 ONT di PON 2 yang ditarik (PON 1 terabaikan). Ini disebabkan bug firmware SNMP agent VSOL yang menghentikan respon walk pada query root OID jika melebihi PDU limit tertentu.
 
 - **Solusi Arsitektural & Perubahan Teknis**:
-  1. **HSGQ SNMP Parser (`src/lib/olt/vendors/hsgq.ts`)**:
-     - Fungsi `getHsgqIdx(oid)` mengekstrak `<onuIndex>` dari OID (menangani suffix `.0.0` pada OID redaman optik `50224.3.12.3.1.4`).
-     - Map `snByIdx` mengumpulkan serial number bersih dari OID `.15`. Membuang string kosong atau zero-phantom.
-     - Hasil akhir `onus` di-looping **1:1 berbasis `snByIdx`** (persis seperti `collector.py` pada BotRedaman). Menggaransi tepat 190 ONT untuk HSGQ.
-  2. **VSOL SNMP Parser (`src/lib/olt/vendors/vsol.ts`)**:
-     - Helper `getVsolKey(oid)` mengekstrak key `${rawPort}.${onuId}`.
-     - Map `snByKey` mengunci entitas ONT 1:1 berdasarkan serial number terdaftar.
-  3. **Script Inventory Sync (`scripts/sync-ont-inventory.ts`)**:
-     - Ekspor fungsi `runSyncOntInventory` agar dapat dipanggil secara terprogram dari route API (`/api/admin/inventory/import-initial-modems`).
+  1. **HSGQ Status Calculation (`src/lib/olt/vendors/hsgq.ts`)**:
+     - Menghapus override `rxPower !== null`. Status `online` murni dievaluasi dari OID status OLT (`rawStatusVal === '1' || 'up'`). Tepat melaporkan **182 Online, 8 Offline**.
+  2. **VSOL Multi-PON & Multi-Slot Walk (`src/lib/olt/vendors/vsol.ts`)**:
+     - Mengimplementasikan `fetchVsolOidMap` yang mengeksekusi walk root OID sekaligus walk per-slot (`0` & `1`) dan per-PON (`1` s/d `16`) secara paralel untuk membypass bug pemotongan firmware VSOL.
+     - Menggunakan key unik `${slot}.${port}.${onuId}` agar PON 1 dan PON 2 tidak saling menimpa. Menjamin ditariknya seluruh **123 ONT** pada VSOL 1600GT.
 
 - **Files**:
   - Modified: `src/lib/olt/vendors/hsgq.ts`

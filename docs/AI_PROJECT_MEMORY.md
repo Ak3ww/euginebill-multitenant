@@ -20,12 +20,16 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 23, 2026 — v2.40.52: BotRedaman 1:1 OID Index Parsing Fix for HSGQ & VSOL OLT)
+### Recent Patch Log (September 23, 2026 — v2.40.52: BotRedaman 1:1 OID Index & Multi-PON Firmware Bypass Fix for HSGQ & VSOL OLT)
 
-- **Hard Invariant: HSGQ & VSOL SNMP OID Index Matching**:
-  - **HSGQ OID Indexing**: OID MIB HSGQ `1.3.6.1.4.1.50224.3.12.2.1.<col>.<onuIndex>` menggunakan komponen OID paling akhir (`parts[-1]`) langsung sebagai `<onuIndex>` (1 s/d 200). DILARANG KERAS mengartikan `parts[-2]` sebagai `port` karena `parts[-2]` adalah index nomor kolom MIB (`.15` = SN, `.2` = Name) yang menyebabkan 1 ONU terduplikasi 2x (menjadi 380 unit).
-  - **BotRedaman 1:1 Mapping**: `snByIdx` (HSGQ) dan `snByKey` (VSOL) di-looping **1:1 berbasis serial number fisik terdaftar**. Seluruh slot kosong (phantom) atau SN zero langsung diabaikan secara ketat.
-  - **Presisi ONT Output**: Guaranteed exact counts: HSGQ = 190 ONTs, VSOL GS = 65 ONTs, VSOL GT = 123 ONTs (Total 378 - 388 ONTs).
+- **Hard Invariant: HSGQ Status Calculation**:
+  - Status `online`/`offline` pada HSGQ WAKTU DIHITUNG DARI OID Status (`1.3.6.1.4.1.50224.3.12.2.1.3`). DILARANG KERAS menggunakan `rxPower !== null` untuk memaksa status `online`, karena HSGQ OLT menyimpan nilai redaman optik terakhir di memori SNMP meskipun ONU sedang offline/mati.
+- **Hard Invariant: VSOL Multi-PON Firmware Truncation Bypass**:
+  - Firmware SNMP agent OLT VSOL V1600GT memiliki bug pemotongan respon PDU jika di-walk sekaligus pada root OID. Untuk menarik seluruh PON port (PON 1 & PON 2), wajib menggunakan `fetchVsolOidMap` yang mengeksekusi walk root OID DAN walk per-slot (`0` & `1`) dan per-PON (`1` s/d `16`) secara paralel. Key dikunci dengan format `${slot}.${port}.${onuId}` agar PON 1 dan PON 2 tidak saling menimpa.
+- **Presisi Hasil Audit**:
+  - HSGQ-G02ID: Tepat 190 ONT (182 Online, 8 Offline).
+  - VSOL V1600GS: Tepat 65 ONT (64 Online, 1 Offline).
+  - VSOL V1600GT: Tepat 123 ONT (120 Online, 3 Offline).
 
 ### Recent Patch Log (September 23, 2026 — v2.40.51: QRIN Docs, GenieACS/RADIUS Nav Toggle, ONT Inventory Sync)
 

@@ -396,7 +396,7 @@ export async function discoverONUsSNMP(
     const rawStatusVal = statusByIdx.get(idxStr);
 
     let status = 'offline';
-    if (rawStatusVal === '1' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up')) || (rxPower !== null && rxPower < 0)) {
+    if (rawStatusVal === '1' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up'))) {
       status = 'online';
     }
 
