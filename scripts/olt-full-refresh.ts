@@ -54,6 +54,10 @@ async function fetchOntsFromOlt(olt: {
   name: string;
   ipAddress: string;
   vendor: string | null;
+  snmpEnabled: boolean;
+  snmpCommunity: string;
+  snmpPort: number;
+  firmwareVersion?: string | null;
   telnetEnabled: boolean;
   telnetPort: number;
   sshEnabled: boolean;
@@ -62,76 +66,85 @@ async function fetchOntsFromOlt(olt: {
   password: string | null;
 }): Promise<{ frame: number; slot: number; port: number; onuId: number; serialNumber: string | null; macAddress: string | null; status: string; rxPower: number | null; description: string | null }[]> {
   
-  // We use the vendor modules from lib/olt/vendors
-  // but we need to do dynamic import to avoid circular deps with server-only
-  let discoverFn: ((config: any) => Promise<any[]>) | null = null;
-
   const vendorName = (olt.vendor || 'huawei').toLowerCase();
+  let vendorModule: any = null;
 
   try {
     if (vendorName === 'vsol') {
-      const vsol = await import('../src/lib/olt/vendors/vsol');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => vsol.discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => vsol.discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/vsol');
     } else if (vendorName === 'hsgq') {
-      const hsgq = await import('../src/lib/olt/vendors/hsgq');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => hsgq.discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => hsgq.discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/hsgq');
     } else if (vendorName === 'zte') {
-      const zte = await import('../src/lib/olt/vendors/zte');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => (zte as any).discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => (zte as any).discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/zte');
     } else if (vendorName === 'huawei') {
-      const huawei = await import('../src/lib/olt/vendors/huawei');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => huawei.discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => huawei.discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/huawei');
     } else if (vendorName === 'fiberhome') {
-      const fh = await import('../src/lib/olt/vendors/fiberhome');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => (fh as any).discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => (fh as any).discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/fiberhome');
     } else {
-      // Fallback: try huawei parser (most common)
-      const huawei = await import('../src/lib/olt/vendors/huawei');
-      if (olt.sshEnabled && olt.username) {
-        discoverFn = (cfg) => huawei.discoverONUsSSH(cfg);
-      } else if (olt.telnetEnabled && olt.username) {
-        discoverFn = (cfg) => huawei.discoverONUs(cfg);
-      }
+      vendorModule = await import('../src/lib/olt/vendors/huawei');
     }
   } catch (importErr: any) {
-    console.error(`  [ERROR] Cannot import vendor module for ${olt.vendor}: ${importErr.message}`);
+    console.error(`  [ERROR] Gagal import vendor module ${olt.vendor}: ${importErr.message}`);
     return [];
   }
 
-  if (!discoverFn) {
-    console.log(`  [SKIP] OLT ${olt.name}: tidak ada SSH/Telnet yang dikonfigurasi atau username kosong.`);
-    return [];
+  const snmpConfig = olt.snmpEnabled ? {
+    host: olt.ipAddress,
+    community: olt.snmpCommunity || 'public',
+    port: olt.snmpPort || 161,
+  } : null;
+
+  const telnetConfig = olt.telnetEnabled && olt.username ? {
+    host: olt.ipAddress,
+    port: olt.telnetPort || 23,
+    username: olt.username,
+    password: olt.password ?? '',
+  } : null;
+
+  const sshConfig = olt.sshEnabled && olt.username ? {
+    host: olt.ipAddress,
+    port: olt.sshPort || 22,
+    username: olt.username,
+    password: olt.password ?? undefined,
+  } : null;
+
+  let raw: any[] = [];
+
+  // 1. Try SNMP discovery first if SNMP is enabled
+  if (snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {
+    console.log(`  Connecting via SNMP (${snmpConfig.host}:${snmpConfig.port}, community: ${snmpConfig.community}) ke ${olt.name}...`);
+    try {
+      raw = await vendorModule.discoverONUsSNMP(snmpConfig, olt.firmwareVersion, telnetConfig);
+      console.log(`  [SNMP] Ditemukan ${raw.length} ONT dari ${olt.name}`);
+    } catch (snmpErr: any) {
+      console.log(`  [SNMP Fallback] SNMP discovery error: ${snmpErr.message}`);
+    }
   }
 
-  const useSSH = olt.sshEnabled && olt.username;
-  const config = useSSH
-    ? { host: olt.ipAddress, port: olt.sshPort, username: olt.username!, password: olt.password ?? undefined }
-    : { host: olt.ipAddress, port: olt.telnetPort, username: olt.username!, password: olt.password ?? '' };
-
-  console.log(`  Connecting via ${useSSH ? 'SSH' : 'Telnet'} ke ${olt.name} (${olt.ipAddress})...`);
-
-  try {
-    const raw = await discoverFn(config);
+  // 2. If SNMP returned no ONTs, try SSH or Telnet
+  if (raw.length === 0) {
+    if (sshConfig && typeof vendorModule.discoverONUsSSH === 'function') {
+      console.log(`  Connecting via SSH (${sshConfig.host}:${sshConfig.port}) ke ${olt.name}...`);
+      try {
+        raw = await vendorModule.discoverONUsSSH(sshConfig);
+        console.log(`  [SSH] Ditemukan ${raw.length} ONT dari ${olt.name}`);
+      } catch (sshErr: any) {
+        console.log(`  [SSH Error] ${sshErr.message}`);
+      }
+    } else if (telnetConfig && typeof vendorModule.discoverONUs === 'function') {
+      console.log(`  Connecting via Telnet (${telnetConfig.host}:${telnetConfig.port}) ke ${olt.name}...`);
+      try {
+        raw = await vendorModule.discoverONUs(telnetConfig);
+        console.log(`  [Telnet] Ditemukan ${raw.length} ONT dari ${olt.name}`);
+      } catch (tErr: any) {
+        console.log(`  [Telnet Error] ${tErr.message}`);
+      }
+    } else {
+      if (raw.length === 0) {
+        console.log(`  [NOTICE] OLT ${olt.name}: SNMP tidak mengembalikan ONT dan SSH/Telnet tidak aktif atau username kosong.`);
+      }
+    }
+  }
     console.log(`  Ditemukan ${raw.length} ONT dari ${olt.name}`);
     return raw.map(o => ({
       frame:        o.frame  ?? 0,
@@ -229,6 +242,7 @@ async function main() {
   const olts = await prisma.networkOLT.findMany({
     select: {
       id: true, name: true, ipAddress: true, vendor: true,
+      snmpEnabled: true, snmpCommunity: true, snmpPort: true, firmwareVersion: true,
       telnetEnabled: true, telnetPort: true,
       sshEnabled: true, sshPort: true,
       username: true, password: true,
@@ -238,7 +252,7 @@ async function main() {
 
   console.log(`Total OLT di database: ${olts.length}`);
   for (const olt of olts) {
-    const conn = olt.sshEnabled ? `SSH:${olt.sshPort}` : olt.telnetEnabled ? `Telnet:${olt.telnetPort}` : 'SNMP only';
+    const conn = olt.sshEnabled ? `SSH:${olt.sshPort}` : olt.telnetEnabled ? `Telnet:${olt.telnetPort}` : `SNMP:${olt.snmpPort} (${olt.snmpCommunity})`;
     console.log(`  - ${olt.name} (${olt.ipAddress}) | Vendor: ${olt.vendor || 'unknown'} | Conn: ${conn} | Monitoring: ${olt.monitoringEnabled ? 'ON' : 'OFF'}`);
   }
 
