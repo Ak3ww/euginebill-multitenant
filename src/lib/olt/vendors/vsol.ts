@@ -316,13 +316,15 @@ export async function getTrafficStats(_config: SNMPConfig): Promise<{ rxBytes?: 
 }
 
 /**
- * Walk a VSOL OID table per-PON port — exact replication of BotRedaman's get_snmp_walk().
+ * Walk a VSOL OID table with smart PON detection — mirrors BotRedaman get_snmp_walk().
  *
- * BotRedaman probes the first entry to detect OID structure:
- *   - suffix length == 2 → no slot prefix (V1600GS style: base.pon.onu)
- *   - suffix length >= 3 → has slot prefix  (V1600GT style: base.slot.pon.onu)
- * Then walks base.slot.pon (or base.pon) for each PON 1–8 individually.
- * This bypasses VSOL firmware bug that truncates root walks at ~79 entries.
+ * Diagnostic findings (2026-09-23):
+ *   - V1600GS (no slot prefix, single-PON): root walk already returns all 65 ONTs completely.
+ *     No per-PON walk needed. Walking empty PON ports returns "No Such Instance" errors
+ *     which (if not filtered) create phantom entries. Return root walk immediately.
+ *   - V1600GT (slot prefix, multi-PON): root walk is truncated by firmware at ~79 entries.
+ *     Must walk per-PON, but ONLY for PON ports seen in the root walk data (activePons set).
+ *     This avoids phantom data from unused PON ports 3-8.
  */
 async function vsolWalkPerPon(
   cfg: SNMPConfig,
@@ -331,45 +333,57 @@ async function vsolWalkPerPon(
   const map: Record<string, string> = {};
   const baseParts = baseOid.split('.');
 
-  // Step 1: Root walk — collect whatever the firmware returns + detect structure
+  // Step 1: Root walk — collects data and reveals OID structure
   const probeRes = await snmpWalk(cfg, baseOid);
   const probeResults = probeRes.results || {};
   Object.assign(map, probeResults);
 
-  // Detect slot presence from first returned OID
+  if (Object.keys(probeResults).length === 0) return map;
+
+  // Detect slot presence and which PON ports are active
   let hasSlot = false;
   let detectedSlot = 0;
+  const activePons = new Set<number>();
+
   for (const oid of Object.keys(probeResults)) {
     const parts = oid.split('.');
     const suffixLen = parts.length - baseParts.length;
     if (suffixLen >= 3) {
-      hasSlot = true;
-      detectedSlot = parseInt(parts[baseParts.length]); // first suffix component = slot
+      if (!hasSlot) {
+        hasSlot = true;
+        detectedSlot = parseInt(parts[baseParts.length]); // e.g. slot 0 for V1600GT
+      }
+      const pon = parseInt(parts[baseParts.length + 1]);
+      if (!isNaN(pon) && pon > 0) activePons.add(pon);
+    } else if (suffixLen === 2) {
+      // No slot — V1600GS style (base.pon.onu)
+      const pon = parseInt(parts[parts.length - 2]);
+      if (!isNaN(pon) && pon > 0) activePons.add(pon);
     }
-    break; // only need first entry
   }
 
-  // Step 2: Walk per PON 1–8 (short timeout for empty ports)
-  // Uses a 4s timeout — empty PON ports fail quickly, active ones return fast
+  // V1600GS (no slot): root walk is already complete for single-PON OLTs.
+  // Return immediately — no per-PON walks needed and they'd just hit "No Such Instance".
+  if (!hasSlot) return map;
+
+  // V1600GT (has slot): root walk truncated. Walk ONLY the active PON ports
+  // detected from root walk entries. This ensures full coverage without phantoms.
   const ponCfg = { ...cfg, timeout: 4 };
-  const ponWalks: Promise<{ results?: Record<string, string> }>[] = [];
-  for (let pon = 1; pon <= 8; pon++) {
-    const ponOid = hasSlot
-      ? `${baseOid}.${detectedSlot}.${pon}`
-      : `${baseOid}.${pon}`;
-    ponWalks.push(snmpWalk(ponCfg, ponOid).then(r => r));
-  }
+  const ponWalks = Array.from(activePons)
+    .sort((a, b) => a - b)
+    .map(pon => snmpWalk(ponCfg, `${baseOid}.${detectedSlot}.${pon}`));
 
   const ponResults = await Promise.all(ponWalks);
   for (const res of ponResults) {
     if (res?.results) {
-      // Merge — per-PON walks are authoritative, overwrite root walk entries
+      // Per-PON walks are authoritative — overwrite partial root walk data
       Object.assign(map, res.results);
     }
   }
 
   return map;
 }
+
 
 export async function discoverONUsSNMP(
   config: SNMPConfig,

@@ -94,9 +94,15 @@ export async function snmpWalk(config: SNMPConfig, oid: string): Promise<SNMPWal
       // Type prefix may include hyphens (e.g. "Hex-STRING:", "Timeticks:").
       const match = line.match(/^\.?([\d][\d.]+)\s*=\s*(?:[\w-]+:\s*)?(.+)$/);
       if (match) {
-        results[match[1].trim()] = match[2].trim().replace(/"/g, '');
+        const value = match[2].trim().replace(/"/g, '');
+        // Skip SNMP error responses — VSOL firmware returns these for empty PON ports.
+        // Without this filter, per-PON walks on unused ports create phantom ONT entries.
+        if (value.includes('No Such Instance') || value.includes('No Such Object') ||
+            value.includes('noSuchInstance') || value.includes('noSuchObject')) continue;
+        results[match[1].trim()] = value;
       }
     }
+
 
     if (Object.keys(results).length === 0) {
       return { success: false, error: 'No parseable OIDs in SNMP walk output' };
