@@ -395,9 +395,20 @@ export async function discoverONUsSNMP(
     const txPower = txByIdx.get(idxStr) ?? null;
     const rawStatusVal = statusByIdx.get(idxStr);
 
-    let status = 'offline';
-    if (rawStatusVal === '1' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up'))) {
-      status = 'online';
+    // HSGQ status OID .3 is a REGISTRATION flag — returns '1' for ALL 190 registered ONTs,
+    // even offline ones. It does NOT distinguish online vs offline.
+    // BotRedaman uses hysteresis (historical state) for offline detection.
+    // For single-shot polling without history: rx power is the only reliable indicator.
+    //   - rxPower present  → OLT is actively reporting signal → online
+    //   - rxPower null     → OLT returning no optical data    → offline
+    // Exception: if status OID explicitly returns a non-'1' value, honour it as offline.
+    let status: string;
+    if (rawStatusVal !== undefined && rawStatusVal !== '1') {
+      status = 'offline'; // Explicit non-online state from OLT
+    } else if (rxPower !== null) {
+      status = 'online';  // Active optical signal = online
+    } else {
+      status = 'offline'; // No rx power = offline (BotRedaman fallback: no history → offline)
     }
 
     onus.push({

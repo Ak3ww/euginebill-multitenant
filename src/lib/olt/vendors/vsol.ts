@@ -316,15 +316,61 @@ export async function getTrafficStats(_config: SNMPConfig): Promise<{ rxBytes?: 
 }
 
 /**
- * Native SNMP ONU discovery for VSOL OLTs (Proven OIDs from BotRedaman)
- * Walks:
- *   - Name:     1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7 (Customer description)
- *   - Rx:       1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7 (scale 10)
- *   - Tx:       1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6 (scale 10)
- *   - SN:       1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5
- *   - Uptime:   1.3.6.1.4.1.37950.1.1.6.1.1.1.1.8
- *   - Downtime: 1.3.6.1.4.1.37950.1.1.6.1.1.1.1.9
+ * Walk a VSOL OID table per-PON port — exact replication of BotRedaman's get_snmp_walk().
+ *
+ * BotRedaman probes the first entry to detect OID structure:
+ *   - suffix length == 2 → no slot prefix (V1600GS style: base.pon.onu)
+ *   - suffix length >= 3 → has slot prefix  (V1600GT style: base.slot.pon.onu)
+ * Then walks base.slot.pon (or base.pon) for each PON 1–8 individually.
+ * This bypasses VSOL firmware bug that truncates root walks at ~79 entries.
  */
+async function vsolWalkPerPon(
+  cfg: SNMPConfig,
+  baseOid: string
+): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  const baseParts = baseOid.split('.');
+
+  // Step 1: Root walk — collect whatever the firmware returns + detect structure
+  const probeRes = await snmpWalk(cfg, baseOid);
+  const probeResults = probeRes.results || {};
+  Object.assign(map, probeResults);
+
+  // Detect slot presence from first returned OID
+  let hasSlot = false;
+  let detectedSlot = 0;
+  for (const oid of Object.keys(probeResults)) {
+    const parts = oid.split('.');
+    const suffixLen = parts.length - baseParts.length;
+    if (suffixLen >= 3) {
+      hasSlot = true;
+      detectedSlot = parseInt(parts[baseParts.length]); // first suffix component = slot
+    }
+    break; // only need first entry
+  }
+
+  // Step 2: Walk per PON 1–8 (short timeout for empty ports)
+  // Uses a 4s timeout — empty PON ports fail quickly, active ones return fast
+  const ponCfg = { ...cfg, timeout: 4 };
+  const ponWalks: Promise<{ results?: Record<string, string> }>[] = [];
+  for (let pon = 1; pon <= 8; pon++) {
+    const ponOid = hasSlot
+      ? `${baseOid}.${detectedSlot}.${pon}`
+      : `${baseOid}.${pon}`;
+    ponWalks.push(snmpWalk(ponCfg, ponOid).then(r => r));
+  }
+
+  const ponResults = await Promise.all(ponWalks);
+  for (const res of ponResults) {
+    if (res?.results) {
+      // Merge — per-PON walks are authoritative, overwrite root walk entries
+      Object.assign(map, res.results);
+    }
+  }
+
+  return map;
+}
+
 export async function discoverONUsSNMP(
   config: SNMPConfig,
   _firmwareVersion?: string | null,
@@ -335,23 +381,18 @@ export async function discoverONUsSNMP(
     version: '2c' as const, // VSOL uses SNMPv2c
   };
 
-  const [nameRes, rxRes, txRes, snRes, upRes, downRes] = await Promise.all([
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.8'),  // Uptime
-    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.9'),  // Downtime
+  // Use per-PON walk for all OIDs — fixes V1600GT firmware truncation bug
+  const [names, rxMap, txMap, snMap, upMap, downMap] = await Promise.all([
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.8'),  // Uptime
+    vsolWalkPerPon(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.9'),  // Downtime
   ]);
 
-  const names = nameRes.results || {};
-  const rxMap = rxRes.results || {};
-  const txMap = txRes.results || {};
-  const snMap = snRes.results || {};
-  const upMap = upRes.results || {};
-  const downMap = downRes.results || {};
-
   // Helper to extract VSOL key (PON.onuId) from OID — exact BotRedaman logic (parts[-2].parts[-1])
+
   const getVsolKey = (oid: string): { key: string; port: number; onuId: number } | null => {
     const parts = oid.split('.');
     if (parts.length >= 2) {
