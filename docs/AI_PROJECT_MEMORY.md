@@ -20,16 +20,16 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 23, 2026 — v2.40.52: BotRedaman 1:1 OID Index & Multi-PON Firmware Bypass Fix for HSGQ & VSOL OLT)
+### Recent Patch Log (September 23, 2026 — v2.40.52: 1:1 BotRedaman Engine Alignment for HSGQ & VSOL OLT)
 
-- **Hard Invariant: HSGQ Status Calculation**:
-  - Status `online`/`offline` pada HSGQ WAKTU DIHITUNG DARI OID Status (`1.3.6.1.4.1.50224.3.12.2.1.3`). DILARANG KERAS menggunakan `rxPower !== null` untuk memaksa status `online`, karena HSGQ OLT menyimpan nilai redaman optik terakhir di memori SNMP meskipun ONU sedang offline/mati.
-- **Hard Invariant: VSOL Multi-PON Firmware Truncation Bypass**:
-  - Firmware SNMP agent OLT VSOL V1600GT memiliki bug pemotongan respon PDU jika di-walk sekaligus pada root OID. Untuk menarik seluruh PON port (PON 1 & PON 2), wajib menggunakan `fetchVsolOidMap` yang mengeksekusi walk root OID DAN walk per-slot (`0` & `1`) dan per-PON (`1` s/d `16`) secara paralel. Key dikunci dengan format `${slot}.${port}.${onuId}` agar PON 1 dan PON 2 tidak saling menimpa.
-- **Presisi Hasil Audit**:
-  - HSGQ-G02ID: Tepat 190 ONT (182 Online, 8 Offline).
-  - VSOL V1600GS: Tepat 65 ONT (64 Online, 1 Offline).
-  - VSOL V1600GT: Tepat 123 ONT (120 Online, 3 Offline).
+- **Hard Invariant: VSOL & HSGQ Collector Engine (100% 1:1 dengan `C:\BotRedaman\backend\collector.py`)**:
+  - **VSOL Key Extraction**: Key VSOL diekstrak murni sebagai `${parts[-2]}.${parts[-1]}` (yaitu `${pon}.${onuId}`).
+  - **VSOL Status Logic**: `isOffline = (validUp && validDown) ? (lastDown > lastUp) : (rxPower === null)` di mana `rxPower` divalidasi oleh `normalize_dbm` di rentang `-38.0 <= dbm <= -5.0`.
+  - **Master Database Counts (Verified via BotRedaman SQLite `redaman.db`)**:
+    - HSGQ-G02ID: Tepat **190 ONT** (`1` s/d `190`).
+    - VSOL-GPON (V1600GS): Tepat **65 ONT** (`1.1` s/d `1.65`).
+    - VSOL-1600GT: Tepat **123 ONT** (`1.1` s/d `1.46` pada PON 1 dan `2.1` s/d `2.82` pada PON 2).
+  - Total ONT Master di seluruh OLT: **378 ONT**.
 
 ### Recent Patch Log (September 23, 2026 — v2.40.51: QRIN Docs, GenieACS/RADIUS Nav Toggle, ONT Inventory Sync)
 

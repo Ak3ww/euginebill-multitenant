@@ -316,39 +316,14 @@ export async function getTrafficStats(_config: SNMPConfig): Promise<{ rxBytes?: 
 }
 
 /**
-  * Helper to fetch VSOL SNMP OID map using root walk + per-slot/per-PON fallback
-  * to bypass VSOL firmware truncation bug on multi-PON OLTs (e.g. V1600GT).
-  */
-async function fetchVsolOidMap(cfg: SNMPConfig, baseOid: string): Promise<Record<string, string>> {
-  const rootRes = await snmpWalk(cfg, baseOid);
-  const map: Record<string, string> = { ...(rootRes.results || {}) };
-
-  // Always perform per-slot (0 and 1) and per-PON (1..16) walks to ensure all PON ports are captured
-  const ponWalkPromises: Promise<any>[] = [];
-  for (let slot = 0; slot <= 1; slot++) {
-    for (let pon = 1; pon <= 16; pon++) {
-      ponWalkPromises.push(snmpWalk(cfg, `${baseOid}.${slot}.${pon}`));
-    }
-  }
-
-  const ponResults = await Promise.all(ponWalkPromises);
-  for (const res of ponResults) {
-    if (res.success && res.results) {
-      Object.assign(map, res.results);
-    }
-  }
-
-  return map;
-}
-
-/**
  * Native SNMP ONU discovery for VSOL OLTs (Proven OIDs from BotRedaman)
  * Walks:
- *   - Name:   1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7 (Customer description)
- *   - Rx:     1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7 (scale 10)
- *   - Tx:     1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6 (scale 10)
- *   - SN:     1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5
- *   - Alive:  1.3.6.1.4.1.37950.1.1.6.1.1.1.1.11
+ *   - Name:     1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7 (Customer description)
+ *   - Rx:       1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7 (scale 10)
+ *   - Tx:       1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6 (scale 10)
+ *   - SN:       1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5
+ *   - Uptime:   1.3.6.1.4.1.37950.1.1.6.1.1.1.1.8
+ *   - Downtime: 1.3.6.1.4.1.37950.1.1.6.1.1.1.1.9
  */
 export async function discoverONUsSNMP(
   config: SNMPConfig,
@@ -360,70 +335,84 @@ export async function discoverONUsSNMP(
     version: '2c' as const, // VSOL uses SNMPv2c
   };
 
-  const [names, rxMap, txMap, snMap, statusMap] = await Promise.all([
-    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
-    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
-    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
-    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
-    fetchVsolOidMap(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.11'), // Status
+  const [nameRes, rxRes, txRes, snRes, upRes, downRes] = await Promise.all([
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.7'),  // Description
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.7'),  // Rx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.3.1.6'),  // Tx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.2.1.5'),  // Serial Number
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.8'),  // Uptime
+    snmpWalk(cfg, '1.3.6.1.4.1.37950.1.1.6.1.1.1.1.9'),  // Downtime
   ]);
 
-  // Helper to extract VSOL unique key (slot.PON.onuId) from OID
-  const getVsolKey = (oid: string): { key: string; slot: number; port: number; onuId: number } | null => {
+  const names = nameRes.results || {};
+  const rxMap = rxRes.results || {};
+  const txMap = txRes.results || {};
+  const snMap = snRes.results || {};
+  const upMap = upRes.results || {};
+  const downMap = downRes.results || {};
+
+  // Helper to extract VSOL key (PON.onuId) from OID — exact BotRedaman logic (parts[-2].parts[-1])
+  const getVsolKey = (oid: string): { key: string; port: number; onuId: number } | null => {
     const parts = oid.split('.');
-    if (parts.length >= 3) {
-      const onuId = parseInt(parts[parts.length - 1]);
-      const rawPort = parseInt(parts[parts.length - 2]);
-      const rawSlot = parseInt(parts[parts.length - 3]);
-      if (!isNaN(onuId) && !isNaN(rawPort)) {
-        const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
-        const slot = !isNaN(rawSlot) && rawSlot >= 0 && rawSlot <= 15 ? rawSlot : 0;
-        return { key: `${slot}.${port}.${onuId}`, slot, port, onuId };
-      }
-    } else if (parts.length === 2) {
+    if (parts.length >= 2) {
       const onuId = parseInt(parts[parts.length - 1]);
       const rawPort = parseInt(parts[parts.length - 2]);
       if (!isNaN(onuId) && !isNaN(rawPort)) {
         const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
-        return { key: `0.${port}.${onuId}`, slot: 0, port, onuId };
+        return { key: `${rawPort}.${onuId}`, port, onuId };
       }
     }
     return null;
   };
 
-  // Build key -> SN map (filtering out empty/zero phantom SNs)
-  const snByKey = new Map<string, { sn: string; slot: number; port: number; onuId: number }>();
+  // Build key -> SN map (driver of discovery, exact 1:1 with BotRedaman)
+  const snByKey = new Map<string, { sn: string; port: number; onuId: number }>();
   for (const [oid, val] of Object.entries(snMap)) {
     const item = getVsolKey(oid);
     if (item) {
       const sn = val.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
       if (sn && sn.length >= 6 && !/^0+$/.test(sn)) {
-        snByKey.set(item.key, { sn, slot: item.slot, port: item.port, onuId: item.onuId });
+        snByKey.set(item.key, { sn, port: item.port, onuId: item.onuId });
       }
     }
   }
 
-  // Name / Description map
+  // Also include any ONUs from nameMap (if SN is in snMap or missing)
+  for (const [oid, val] of Object.entries(names)) {
+    const item = getVsolKey(oid);
+    if (item && val.trim()) {
+      if (!snByKey.has(item.key)) {
+        const rawSn = snMap[oid] || '';
+        const sn = rawSn.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+        if (sn && sn.length >= 6 && !/^0+$/.test(sn)) {
+          snByKey.set(item.key, { sn, port: item.port, onuId: item.onuId });
+        }
+      }
+    }
+  }
+
   const nameByKey = new Map<string, string>();
   for (const [oid, val] of Object.entries(names)) {
     const item = getVsolKey(oid);
     if (item && val.trim()) nameByKey.set(item.key, val.trim());
   }
 
-  // Rx Power map (scale 10: -256 -> -25.6)
+  // Rx Power map (normalize_dbm scale 10.0: -38.0 <= dbm <= -5.0)
   const rxByKey = new Map<string, number>();
   for (const [oid, val] of Object.entries(rxMap)) {
     const item = getVsolKey(oid);
     if (item) {
       const raw = parseFloat(val);
       if (!isNaN(raw)) {
-        const scaled = raw > 0 || raw < -100 ? raw / 10.0 : raw;
-        if (scaled >= -40 && scaled <= -5) rxByKey.set(item.key, parseFloat(scaled.toFixed(2)));
+        const dbm = raw > 0 || raw < -100 ? raw / 10.0 : raw;
+        if (dbm >= -38.0 && dbm <= -5.0) {
+          rxByKey.set(item.key, parseFloat(dbm.toFixed(2)));
+        }
       }
     }
   }
 
-  // Tx Power map (scale 10)
+  // Tx Power map (scale 10.0)
   const txByKey = new Map<string, number>();
   for (const [oid, val] of Object.entries(txMap)) {
     const item = getVsolKey(oid);
@@ -436,34 +425,46 @@ export async function discoverONUsSNMP(
     }
   }
 
-  // Status map
-  const statusByKey = new Map<string, string>();
-  for (const [oid, val] of Object.entries(statusMap)) {
+  const upByKey = new Map<string, string>();
+  for (const [oid, val] of Object.entries(upMap)) {
     const item = getVsolKey(oid);
-    if (item) statusByKey.set(item.key, val);
+    if (item) upByKey.set(item.key, val);
+  }
+
+  const downByKey = new Map<string, string>();
+  for (const [oid, val] of Object.entries(downMap)) {
+    const item = getVsolKey(oid);
+    if (item) downByKey.set(item.key, val);
   }
 
   const onus: any[] = [];
-  // Loop strictly over registered SNs (1:1 with BotRedaman)
-  for (const [key, { sn, slot, port, onuId }] of Array.from(snByKey.entries())) {
+  // Loop strictly over master registered ONUs (exact BotRedaman logic)
+  for (const [key, { sn, port, onuId }] of Array.from(snByKey.entries())) {
     const description = nameByKey.get(key) || null;
     const rxPower = rxByKey.get(key) ?? null;
     const txPower = txByKey.get(key) ?? null;
-    const rawStatusVal = statusByKey.get(key);
+    const lastUp = upByKey.get(key);
+    const lastDown = downByKey.get(key);
 
-    let status = 'offline';
-    if (rawStatusVal === '1' || rawStatusVal === '11' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up'))) {
-      status = 'online';
+    // Exact BotRedaman status calculation logic
+    const validUp = lastUp && String(lastUp) !== 'N/A' && String(lastUp) !== '0000-00-00 00:00:00' && String(lastUp) !== '';
+    const validDown = lastDown && String(lastDown) !== 'N/A' && String(lastDown) !== '0000-00-00 00:00:00' && String(lastDown) !== '';
+
+    let isOffline = false;
+    if (validUp && validDown) {
+      isOffline = String(lastDown) > String(lastUp);
+    } else {
+      isOffline = (rxPower === null);
     }
 
     onus.push({
       frame: 0,
-      slot,
+      slot: 0,
       port,
       onuId,
       serialNumber: sn,
       description,
-      status,
+      status: isOffline ? 'offline' : 'online',
       rxPower,
       txPower,
     });
