@@ -10,7 +10,7 @@
 
 import { SNMPConfig, snmpGet, snmpWalk } from '../snmp';
 import { TelnetConfig, executeCommand } from '../telnet';
-import { SSHConfig, executeCommand as sshExecute } from '../ssh';
+import { SSHConfig, executeCommand as sshExecute, executeCommandsInShell } from '../ssh';
 
 // VSOL Enterprise MIB root: 1.3.6.1.4.1.37950
 const VSOL_OIDS = {
@@ -213,27 +213,24 @@ export async function discoverONUsSSH(config: SSHConfig): Promise<any[]> {
     }
   };
 
-  await sshExecute(config, 'terminal length 0').catch(() => {});
+  const cmds = [
+    'terminal length 0',
+    'show ont status',
+    'show gpon onu state',
+    'show ont status 0/1',
+    'show ont status 0/2',
+    'show ont status 0/3',
+    'show ont status 0/4',
+  ];
 
-  const globalCmds = ['show ont status', 'show gpon onu state', 'show onu status', 'show ont info'];
-  for (const cmd of globalCmds) {
-    const res = await sshExecute(config, cmd);
-    if (res.success && res.output && res.output.length > 30) {
-      const parsed = parseVsolOnuOutput(res.output);
-      if (parsed.length > 0) {
-        addOnus(parsed);
-      }
-    }
-  }
-
-  for (let port = 1; port <= 16; port++) {
-    const res = await sshExecute(config, `show ont status 0/${port}`);
-    if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('Incomplete')) {
-      addOnus(parseVsolOnuOutput(res.output, port));
-    } else {
-      const res2 = await sshExecute(config, `show gpon onu state 0/${port}`);
-      if (res2.success && res2.output && !res2.output.includes('Invalid')) {
-        addOnus(parseVsolOnuOutput(res2.output, port));
+  const res = await executeCommandsInShell(config, cmds);
+  if (res.success && res.output && res.output.length > 30) {
+    addOnus(parseVsolOnuOutput(res.output));
+  } else {
+    for (const cmd of ['show ont status 0/1', 'show ont status 0/2']) {
+      const singleRes = await sshExecute({ ...config, timeout: 5000 }, cmd);
+      if (singleRes.success && singleRes.output && singleRes.output.length > 30) {
+        addOnus(parseVsolOnuOutput(singleRes.output));
       }
     }
   }

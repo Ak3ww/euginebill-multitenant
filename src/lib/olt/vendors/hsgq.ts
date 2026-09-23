@@ -8,7 +8,7 @@
 
 import { SNMPConfig, snmpGet, snmpWalk } from '../snmp';
 import { TelnetConfig, executeCommand } from '../telnet';
-import { SSHConfig, executeCommand as sshExecute } from '../ssh';
+import { SSHConfig, executeCommand as sshExecute, executeCommandsInShell } from '../ssh';
 
 // HSGQ Enterprise MIB root: 1.3.6.1.4.1.50222
 const HSGQ_OIDS = {
@@ -198,30 +198,25 @@ export async function discoverONUsSSH(config: SSHConfig): Promise<any[]> {
     }
   };
 
-  await sshExecute(config, 'terminal length 0').catch(() => {});
-
-  const globalCmds = [
+  const cmds = [
+    'terminal length 0',
     'show gpon onu information',
     'show gpon onu state',
-    'show onu status',
-    'show epon onu state',
+    'show gpon onu state 1',
+    'show gpon onu state 2',
+    'show gpon onu state 3',
+    'show gpon onu state 4',
   ];
 
-  for (const cmd of globalCmds) {
-    const res = await sshExecute(config, cmd);
-    if (res.success && res.output && res.output.length > 30) {
-      addOnus(parseHsgqOnuOutput(res.output));
-    }
-  }
-
-  for (let port = 1; port <= 16; port++) {
-    const res = await sshExecute(config, `show gpon onu state ${port}`);
-    if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('error')) {
-      addOnus(parseHsgqOnuOutput(res.output, port));
-    }
-    const res2 = await sshExecute(config, `show gpon onu information ${port}`);
-    if (res2.success && res2.output && !res2.output.includes('Invalid') && !res2.output.includes('error')) {
-      addOnus(parseHsgqOnuOutput(res2.output, port));
+  const res = await executeCommandsInShell(config, cmds);
+  if (res.success && res.output && res.output.length > 30) {
+    addOnus(parseHsgqOnuOutput(res.output));
+  } else {
+    for (const cmd of ['show gpon onu information', 'show gpon onu state 1', 'show gpon onu state 2']) {
+      const singleRes = await sshExecute({ ...config, timeout: 5000 }, cmd);
+      if (singleRes.success && singleRes.output && singleRes.output.length > 30) {
+        addOnus(parseHsgqOnuOutput(singleRes.output));
+      }
     }
   }
 

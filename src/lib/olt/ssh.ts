@@ -45,10 +45,11 @@ export async function executeCommand(config: SSHConfig, command: string): Promis
       },
     };
 
+    const timeoutDuration = config.timeout || 7000;
     const timeout = setTimeout(() => {
       client.end();
       resolve({ success: false, error: 'SSH connection timeout' });
-    }, config.timeout || 30000);
+    }, timeoutDuration);
 
     client.on('ready', () => {
       client.exec(command, (err: Error | undefined, stream: Channel) => {
