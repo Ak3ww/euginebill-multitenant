@@ -351,8 +351,6 @@ export async function discoverONUsSNMP(
 
   processOidDict(snMap);
   processOidDict(names);
-  processOidDict(statusMap);
-  processOidDict(rxMap);
 
   if (keyMap.size === 0) {
     return [];

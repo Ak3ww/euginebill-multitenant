@@ -111,8 +111,19 @@ async function fetchOntsFromOlt(olt: {
   try {
     let raw: any[] = [];
 
-    // 1. Try SSH discovery first if SSH is configured & enabled (Native OLT CLI = 100% exact Web GUI match)
-    if (sshConfig && typeof vendorModule.discoverONUsSSH === 'function') {
+    // 1. Try SNMP discovery first (BotRedaman OID pattern — instant, 100% accurate, no SSH shell hang)
+    if (snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {
+      console.log(`  Connecting via SNMP (${snmpConfig.host}:${snmpConfig.port}, community: ${snmpConfig.community}) ke ${olt.name}...`);
+      try {
+        raw = await vendorModule.discoverONUsSNMP(snmpConfig, olt.firmwareVersion, telnetConfig);
+        console.log(`  [SNMP] Ditemukan ${raw.length} ONT dari ${olt.name}`);
+      } catch (snmpErr: any) {
+        console.log(`  [SNMP Fallback] Error: ${snmpErr.message}`);
+      }
+    }
+
+    // 2. Fallback to SSH if SNMP returned no ONTs or is disabled
+    if (raw.length === 0 && sshConfig && typeof vendorModule.discoverONUsSSH === 'function') {
       console.log(`  Connecting via SSH (${sshConfig.host}:${sshConfig.port}) ke ${olt.name}...`);
       try {
         raw = await vendorModule.discoverONUsSSH(sshConfig);
@@ -122,7 +133,7 @@ async function fetchOntsFromOlt(olt: {
       }
     }
 
-    // 2. Try Telnet if SSH returned no ONTs or is not enabled
+    // 3. Fallback to Telnet if SNMP and SSH returned no ONTs
     if (raw.length === 0 && telnetConfig && typeof vendorModule.discoverONUs === 'function') {
       console.log(`  Connecting via Telnet (${telnetConfig.host}:${telnetConfig.port}) ke ${olt.name}...`);
       try {
@@ -133,19 +144,8 @@ async function fetchOntsFromOlt(olt: {
       }
     }
 
-    // 3. Fallback to SNMP if CLI discovery returned no ONTs
-    if (raw.length === 0 && snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {
-      console.log(`  Connecting via SNMP (${snmpConfig.host}:${snmpConfig.port}, community: ${snmpConfig.community}) ke ${olt.name}...`);
-      try {
-        raw = await vendorModule.discoverONUsSNMP(snmpConfig, olt.firmwareVersion, telnetConfig);
-        console.log(`  [SNMP] Ditemukan ${raw.length} ONT dari ${olt.name}`);
-      } catch (snmpErr: any) {
-        console.log(`  [SNMP Fallback Error] ${snmpErr.message}`);
-      }
-    }
-
     if (raw.length === 0) {
-      console.log(`  [NOTICE] OLT ${olt.name}: Tidak ada ONT yang berhasil ditarik dari SSH/Telnet/SNMP.`);
+      console.log(`  [NOTICE] OLT ${olt.name}: Tidak ada ONT yang berhasil ditarik dari SNMP/SSH/Telnet.`);
     }
 
     console.log(`  Total ditarik dari ${olt.name}: ${raw.length} ONT`);
