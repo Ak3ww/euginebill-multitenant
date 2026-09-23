@@ -222,14 +222,13 @@ async function main() {
     const itemId = await getOrCreateOntItem(vendor, model, categoryId);
 
     const location = `${onu.olt?.name || 'OLT'} Port ${onu.port}:${onu.onuId}`;
+    const status = 'IN_USE';
+    const condition = 'USED_GOOD';
     const note = onu.customer
-      ? `Terpasang di ${onu.customer.username} (${onu.customer.name}) — ${location}`
+      ? `Terpasang di pelanggan: ${onu.customer.username} (${onu.customer.name}) — ${location}`
       : onu.description
-      ? `Unassigned: "${onu.description}" — ${location}`
-      : `Terdeteksi di ${location}`;
-
-    const status = onu.customer ? 'IN_USE' : 'AVAILABLE';
-    const condition = (onu.customer || onu.status === 'online') ? 'USED_GOOD' : 'NEW';
+      ? `Lapangan/Fasum: "${onu.description}" — ${location}`
+      : `Di lapangan (unassigned) — ${location}`;
 
     try {
       const existing = await prisma.inventoryAsset.findUnique({ where: { serialNumber: cleanSn } });

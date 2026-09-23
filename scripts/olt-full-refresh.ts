@@ -396,12 +396,17 @@ async function main() {
     const itemId = await getOrCreateOntItem(vendor, model, categoryId);
 
     const location = `${onu.olt?.name || 'OLT'} ${onu.port}:${onu.onuId}`;
-    const status = onu.customer ? 'IN_USE' : 'AVAILABLE';
+
+    // Semua ONT yang terdeteksi di OLT = IN_USE (sudah di lapangan).
+    // AVAILABLE hanya untuk modem yang fisiknya masih di gudang (ditambah manual admin).
+    // Perbedaan: IN_USE + customerId = terpasang ke pelanggan.
+    //            IN_USE + no customerId = fasum/lapangan tanpa pelanggan terdaftar.
+    const status = 'IN_USE';
     const note = (onu.customer
-      ? `Terpasang di ${onu.customer.username} (${onu.customer.name})`
+      ? `Terpasang di pelanggan: ${onu.customer.username} (${onu.customer.name}) — ${location}`
       : onu.description
-      ? `Unassigned: "${onu.description}"`
-      : `Stok — terdeteksi di ${location}`
+      ? `Lapangan/Fasum: "${onu.description}" — ${location}`
+      : `Di lapangan (unassigned) — ${location}`
     ).slice(0, 190);
 
     try {
