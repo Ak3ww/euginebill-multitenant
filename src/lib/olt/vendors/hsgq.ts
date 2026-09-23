@@ -339,7 +339,7 @@ export async function discoverONUsSNMP(
 
   const onus: any[] = [];
 
-  for (const [key, { port, onuId }] of keyMap.entries()) {
+  for (const [key, { port, onuId }] of Array.from(keyMap.entries())) {
     // SN
     let sn: string | undefined = undefined;
     for (const [sOid, sVal] of Object.entries(snMap)) {

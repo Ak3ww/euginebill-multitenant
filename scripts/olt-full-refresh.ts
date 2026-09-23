@@ -108,7 +108,8 @@ async function fetchOntsFromOlt(olt: {
     password: olt.password ?? undefined,
   } : null;
 
-  let raw: any[] = [];
+  try {
+    let raw: any[] = [];
 
   // 1. Try SNMP discovery first if SNMP is enabled
   if (snmpConfig && typeof vendorModule.discoverONUsSNMP === 'function') {

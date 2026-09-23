@@ -154,55 +154,91 @@ function normalizeStatus(raw: string): string {
 }
 
 export async function discoverONUs(config: TelnetConfig): Promise<any[]> {
-  const onus: any[] = [];
+  const onusMap = new Map<string, any>();
 
-  // 1. Try global discovery commands first (fastest)
+  const addOnus = (list: any[]) => {
+    for (const item of list) {
+      const key = `${item.port}:${item.onuId}`;
+      if (!onusMap.has(key)) {
+        onusMap.set(key, item);
+      }
+    }
+  };
+
+  // 1. Disable paging so output doesn't stop or truncate
+  await executeCommand(config, 'terminal length 0').catch(() => {});
+
+  // 2. Try global discovery commands
   const globalCmds = ['show ont status', 'show gpon onu state', 'show onu status', 'show ont info'];
   for (const cmd of globalCmds) {
     const res = await executeCommand(config, cmd);
     if (res.success && res.output && res.output.length > 30) {
       const parsed = parseVsolOnuOutput(res.output);
-      if (parsed.length > 0) return parsed;
-    }
-  }
-
-  // 2. Fallback: iterate over PON ports (1..8)
-  for (let port = 1; port <= 8; port++) {
-    const res = await executeCommand(config, `show ont status 0/${port}`);
-    if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('Incomplete')) {
-      onus.push(...parseVsolOnuOutput(res.output, port));
-    } else {
-      // Try alternate syntax without 0/ prefix: "show gpon onu state {port}"
-      const res2 = await executeCommand(config, `show gpon onu state ${port}`);
-      if (res2.success && res2.output && !res2.output.includes('Invalid')) {
-        onus.push(...parseVsolOnuOutput(res2.output, port));
+      if (parsed.length > 0) {
+        addOnus(parsed);
       }
     }
   }
 
-  return onus;
+  // 3. Always iterate over all PON ports (1..16) to ensure all PONs (e.g. 0/1, 0/2 on V1600GT) are captured
+  for (let port = 1; port <= 16; port++) {
+    const res = await executeCommand(config, `show ont status 0/${port}`);
+    if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('Incomplete')) {
+      addOnus(parseVsolOnuOutput(res.output, port));
+    } else {
+      const res2 = await executeCommand(config, `show gpon onu state 0/${port}`);
+      if (res2.success && res2.output && !res2.output.includes('Invalid')) {
+        addOnus(parseVsolOnuOutput(res2.output, port));
+      } else {
+        const res3 = await executeCommand(config, `show gpon onu state ${port}`);
+        if (res3.success && res3.output && !res3.output.includes('Invalid')) {
+          addOnus(parseVsolOnuOutput(res3.output, port));
+        }
+      }
+    }
+  }
+
+  return Array.from(onusMap.values());
 }
 
 export async function discoverONUsSSH(config: SSHConfig): Promise<any[]> {
-  const onus: any[] = [];
+  const onusMap = new Map<string, any>();
+
+  const addOnus = (list: any[]) => {
+    for (const item of list) {
+      const key = `${item.port}:${item.onuId}`;
+      if (!onusMap.has(key)) {
+        onusMap.set(key, item);
+      }
+    }
+  };
+
+  await sshExecute(config, 'terminal length 0').catch(() => {});
 
   const globalCmds = ['show ont status', 'show gpon onu state', 'show onu status', 'show ont info'];
   for (const cmd of globalCmds) {
     const res = await sshExecute(config, cmd);
     if (res.success && res.output && res.output.length > 30) {
       const parsed = parseVsolOnuOutput(res.output);
-      if (parsed.length > 0) return parsed;
+      if (parsed.length > 0) {
+        addOnus(parsed);
+      }
     }
   }
 
-  for (let port = 1; port <= 8; port++) {
+  for (let port = 1; port <= 16; port++) {
     const res = await sshExecute(config, `show ont status 0/${port}`);
     if (res.success && res.output && !res.output.includes('Invalid') && !res.output.includes('Incomplete')) {
-      onus.push(...parseVsolOnuOutput(res.output, port));
+      addOnus(parseVsolOnuOutput(res.output, port));
+    } else {
+      const res2 = await sshExecute(config, `show gpon onu state 0/${port}`);
+      if (res2.success && res2.output && !res2.output.includes('Invalid')) {
+        addOnus(parseVsolOnuOutput(res2.output, port));
+      }
     }
   }
 
-  return onus;
+  return Array.from(onusMap.values());
 }
 
 function parseOpticalOutput(output: string): any {
@@ -323,9 +359,10 @@ export async function discoverONUsSNMP(
       const parts = oid.split('.');
       if (parts.length >= 2) {
         const onuIdx = parseInt(parts[parts.length - 1]);
-        const port = parseInt(parts[parts.length - 2]);
-        if (!isNaN(onuIdx) && !isNaN(port)) {
-          const key = `${port}.${onuIdx}`;
+        const rawPort = parseInt(parts[parts.length - 2]);
+        if (!isNaN(onuIdx) && !isNaN(rawPort)) {
+          const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
+          const key = `${rawPort}.${onuIdx}`;
           if (!keyMap.has(key)) {
             keyMap.set(key, { port, onuId: onuIdx });
           }
@@ -345,7 +382,7 @@ export async function discoverONUsSNMP(
 
   const onus: any[] = [];
 
-  for (const [key, { port, onuId }] of keyMap.entries()) {
+  for (const [key, { port, onuId }] of Array.from(keyMap.entries())) {
     // SN
     let sn: string | undefined = undefined;
     for (const [sOid, sVal] of Object.entries(snMap)) {
