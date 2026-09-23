@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.50
+- **Version**: 2.40.51
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 23, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,25 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 23, 2026 — v2.40.51: QRIN Docs, GenieACS/RADIUS Nav Toggle, ONT Inventory Sync)
+
+- **Hard Invariant: GenieACS Nav Toggle System**:
+  - `src/lib/store.ts`: `CompanySettings` memiliki field `genieacsEnabled?: boolean`.
+  - `src/app/api/company/route.ts`: GET handler query `genieacsSettings.isActive` dan return sebagai `genieacsEnabled` di response JSON. Spread company object (`{ ...company, genieacsEnabled }`).
+  - `src/app/admin/AdminClientLayout.tsx`: `MenuItem` interface memiliki flag `requiresGenieACS?: boolean`. Nav item "nav.acs" (Built-in ACS) diberi `requiresGenieACS: true`. Filter di `CategoryItem` menyembunyikan item jika `genieacsEnabled === false`. Halaman Settings GenieACS (`/admin/settings/genieacs`) TETAP SELALU TAMPIL (tidak dikunci) — itu halaman untuk enable/disable GenieACS.
+  - FreeRADIUS nav sudah hide via `requiresRadius: true` yang ada sejak sebelumnya.
+  - JANGAN tambahkan `requiresGenieACS: true` ke `/admin/settings/genieacs` nav item — itu halaman toggle-nya!
+
+- **Hard Invariant: ONT Inventory Sync Scripts**:
+  - `scripts/sync-ont-inventory.ts`: Script CLI untuk sync ONT dari `oltOnuStatus` table ke `inventoryAsset`. Support `--dry-run` (preview) dan `--wipe` (hapus semua MODEM asset lalu rebuild). Jalankan via `npm run sync:ont-inventory` atau `npm run sync:ont-inventory:wipe`.
+  - `scripts/analyze-inventory-duplicates.ts`: Script analisis duplikat SN, catalog item duplikat, item kosong, dan ONU yang belum di inventori. Jalankan via `npm run analyze:inventory`.
+  - Setelah wipe+sync, `currentStock` di `inventoryItem` dihitung ulang dari jumlah asset berstatus `AVAILABLE`.
+
+- **Hard Invariant: Payment Gateway List (Selalu 5 Provider)**:
+  - Setiap kali menyebut daftar payment gateway, WAJIB mencantumkan semua 5: Midtrans, Tripay, Xendit, Duitku, QRIN. Jangan lupa QRIN!
+
 ### Recent Patch Log (September 23, 2026 — v2.40.50: Centralized PPPoE Billing Cycle & Expiry Calculator Service)
+
 
 - **Hard Invariant: Centralized PPPoE Expiry & Due Date Calculator (`src/server/services/billing/billing-cycle.service.ts`)**:
   - DILARANG KERAS melakukan perhitungan masa aktif manual (`setMonth(getMonth() + 1)`, `addMonths`, atau `setDate`) di route handler API atau cron job manapun. Seluruh perhitungan `expiredAt` dan `dueDate` WAJIB mengimpor dan menggunakan fungsi terpusat `calculateNextBillingExpiry` dan `getCycleDueDate`.
