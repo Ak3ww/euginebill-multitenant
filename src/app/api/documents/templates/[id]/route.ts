@@ -1,4 +1,4 @@
-﻿import { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
@@ -7,14 +7,15 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 // GET /api/documents/templates/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) return unauthorized();
 
   try {
+    const { id } = await params;
     const template = await prisma.documentTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         documents: {
           orderBy: { createdAt: 'desc' },
@@ -35,14 +36,15 @@ export async function GET(
 // PUT /api/documents/templates/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) return unauthorized();
 
   try {
+    const { id } = await params;
     const template = await prisma.documentTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { _count: { select: { documents: true } } },
     });
     if (!template) return notFound('Template');
@@ -51,7 +53,7 @@ export async function PUT(
     const { name, bodyHtml, fieldsSchema, isActive } = body;
 
     const issuedCount = await prisma.generatedDocument.count({
-      where: { templateId: params.id, status: 'ISSUED' },
+      where: { templateId: id, status: 'ISSUED' },
     });
 
     const updateData: any = {};
@@ -68,7 +70,7 @@ export async function PUT(
     }
 
     const updated = await prisma.documentTemplate.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
     });
 
@@ -82,19 +84,20 @@ export async function PUT(
 // DELETE /api/documents/templates/[id] - soft delete
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) return unauthorized();
 
   try {
+    const { id } = await params;
     const template = await prisma.documentTemplate.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
     if (!template) return notFound('Template');
 
     const updated = await prisma.documentTemplate.update({
-      where: { id: params.id },
+      where: { id },
       data: { isActive: false },
     });
 

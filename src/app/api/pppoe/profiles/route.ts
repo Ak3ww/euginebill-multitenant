@@ -48,6 +48,9 @@ export async function POST(request: NextRequest) {
       groupName,
       mikrotikProfileName,
       ipPoolName,
+      ipPoolRange,
+      localAddress,
+      lastRouterId,
       price,
       downloadSpeed: rawDownloadSpeed,
       uploadSpeed: rawUploadSpeed,
@@ -87,6 +90,9 @@ export async function POST(request: NextRequest) {
     const finalGroupName = String(groupName).trim();
     const finalMikrotikProfileName = finalGroupName;
     const finalIpPoolName = typeof ipPoolName === 'string' ? ipPoolName.trim() || null : null;
+    const finalIpPoolRange = typeof ipPoolRange === 'string' ? ipPoolRange.trim() || null : null;
+    const finalLocalAddress = typeof localAddress === 'string' ? localAddress.trim() || null : null;
+    const finalLastRouterId = typeof lastRouterId === 'string' ? lastRouterId.trim() || null : null;
 
     // Create profile
     const profile = await prisma.pppoeProfile.create({
@@ -97,6 +103,9 @@ export async function POST(request: NextRequest) {
         groupName: finalGroupName,
         mikrotikProfileName: finalMikrotikProfileName,
         ipPoolName: finalIpPoolName,
+        ipPoolRange: finalIpPoolRange,
+        localAddress: finalLocalAddress,
+        lastRouterId: finalLastRouterId,
         price: parseInt(price),
         proratePricePerDay: proratePricePerDay ? parseInt(proratePricePerDay) : 0,
         downloadSpeed: parseInt(downloadSpeed),
@@ -167,6 +176,9 @@ export async function PUT(request: NextRequest) {
       groupName,
       mikrotikProfileName,
       ipPoolName,
+      ipPoolRange,
+      localAddress,
+      lastRouterId,
       price,
       proratePricePerDay,
       downloadSpeed: rawDownloadSpeed,
@@ -218,6 +230,15 @@ export async function PUT(request: NextRequest) {
     const normalizedIpPoolName = typeof ipPoolName === 'string'
       ? ipPoolName.trim() || null
       : undefined;
+    const normalizedIpPoolRange = typeof ipPoolRange === 'string'
+      ? ipPoolRange.trim() || null
+      : undefined;
+    const normalizedLocalAddress = typeof localAddress === 'string'
+      ? localAddress.trim() || null
+      : undefined;
+    const normalizedLastRouterId = typeof lastRouterId === 'string'
+      ? lastRouterId.trim() || null
+      : undefined;
 
     if (normalizedGroupName && normalizedGroupName !== currentProfile.groupName) {
       const existingProfile = await prisma.pppoeProfile.findFirst({
@@ -239,6 +260,9 @@ export async function PUT(request: NextRequest) {
     if (normalizedGroupName) updateData.groupName = normalizedGroupName;
     if (normalizedGroupName) updateData.mikrotikProfileName = normalizedGroupName;
     if (normalizedIpPoolName !== undefined) updateData.ipPoolName = normalizedIpPoolName;
+    if (normalizedIpPoolRange !== undefined) updateData.ipPoolRange = normalizedIpPoolRange;
+    if (normalizedLocalAddress !== undefined) updateData.localAddress = normalizedLocalAddress;
+    if (normalizedLastRouterId !== undefined) updateData.lastRouterId = normalizedLastRouterId;
     if (price) updateData.price = parseInt(price);
     if (proratePricePerDay !== undefined) updateData.proratePricePerDay = parseInt(proratePricePerDay);
     if (downloadSpeed !== undefined) updateData.downloadSpeed = parseInt(downloadSpeed.toString());

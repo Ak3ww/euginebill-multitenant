@@ -16,11 +16,20 @@ export async function POST(
     }
 
     const { id } = await context.params;
+    if (!id || id === 'undefined') {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
     const { profileId } = await request.json();
 
     // Get user data
-    const user = await prisma.pppoeUser.findUnique({
-      where: { id },
+    const user = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id },
+          { customerId: id },
+          { username: id },
+        ],
+      },
       include: { profile: true, area: true },
     });
 

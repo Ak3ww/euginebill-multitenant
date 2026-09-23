@@ -1,7 +1,7 @@
 'use client';
 import { showSuccess, showError, showConfirm } from '@/lib/sweetalert';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, FileText, RefreshCw, Download, Upload, ChevronRight, ChevronDown, Eye, Radio, Wifi, WifiOff, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, FileText, RefreshCw, Download, Upload, ChevronRight, ChevronDown, Eye, Radio, Wifi, WifiOff, RotateCcw, Info, Server, Layers, Database } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useAppStore } from '@/lib/store';
 import {
@@ -49,6 +49,11 @@ const defaultForm = {
   priority: '8', limitAtDownload: '', limitAtUpload: '',
   groupName: '', validityValue: '1', validityUnit: 'MONTHS' as 'DAYS' | 'MONTHS',
   sharedUser: true, isActive: true,
+  selectedRouterId: '',
+  creationMode: 'new' as 'new' | 'existing',
+  selectedMikrotikProfile: '',
+  ipPoolName: '',
+  localAddress: '',
 };
 
 export default function PPPoEProfilesPage() {
@@ -95,11 +100,84 @@ export default function PPPoEProfilesPage() {
     finally { setLoading(false); }
   };
 
+  const [routerResources, setRouterResources] = useState<{
+    pools: { name: string; ranges: string }[];
+    profiles: { name: string; rateLimit: string; localAddress: string; remoteAddress: string; onlyOne: string }[];
+    addresses: { address: string; ip: string; interface: string; network: string; comment: string }[];
+  }>({ pools: [], profiles: [], addresses: [] });
+  const [loadingResources, setLoadingResources] = useState(false);
+
+  const fetchRouterResources = async (routerId: string) => {
+    if (!routerId) {
+      setRouterResources({ pools: [], profiles: [], addresses: [] });
+      return;
+    }
+    setLoadingResources(true);
+    try {
+      const res = await fetch(`/api/network/routers/${routerId}/resources`);
+      const data = await res.json();
+      if (data.success) {
+        setRouterResources({
+          pools: Array.isArray(data.pools) ? data.pools : [],
+          profiles: Array.isArray(data.profiles) ? data.profiles : [],
+          addresses: Array.isArray(data.addresses) ? data.addresses : [],
+        });
+      } else {
+        setRouterResources({ pools: [], profiles: [], addresses: [] });
+      }
+    } catch (err) {
+      console.error('Failed to fetch router resources:', err);
+      setRouterResources({ pools: [], profiles: [], addresses: [] });
+    } finally {
+      setLoadingResources(false);
+    }
+  };
+
+  const handleSelectMikrotikProfile = (profileName: string) => {
+    setFormData(prev => ({ ...prev, selectedMikrotikProfile: profileName }));
+    if (!profileName) return;
+
+    const mkProfile = routerResources.profiles.find(p => p.name === profileName);
+    if (!mkProfile) return;
+
+    let dl = '10';
+    let ul = '10';
+    if (mkProfile.rateLimit) {
+      const speedPart = mkProfile.rateLimit.split(/\s+/)[0];
+      const parts = speedPart.split('/');
+      if (parts.length >= 2) {
+        let parsedDl = parseInt(parts[0].replace(/[^0-9]/g, '')) || 0;
+        let parsedUl = parseInt(parts[1].replace(/[^0-9]/g, '')) || 0;
+        if (parts[0].toLowerCase().includes('k')) parsedDl = Math.ceil(parsedDl / 1000);
+        if (parts[1].toLowerCase().includes('k')) parsedUl = Math.ceil(parsedUl / 1000);
+        if (parsedDl > 0) dl = String(parsedDl);
+        if (parsedUl > 0) ul = String(parsedUl);
+      }
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      name: prev.name && prev.name !== prev.groupName ? prev.name : mkProfile.name,
+      groupName: mkProfile.name,
+      downloadSpeed: dl,
+      uploadSpeed: ul,
+      speedUnit: 'Mbps',
+      ipPoolName: mkProfile.remoteAddress && mkProfile.remoteAddress !== 'none' && mkProfile.remoteAddress !== '0.0.0.0' ? mkProfile.remoteAddress : prev.ipPoolName,
+      localAddress: mkProfile.localAddress && mkProfile.localAddress !== 'none' && mkProfile.localAddress !== '0.0.0.0' ? mkProfile.localAddress : prev.localAddress,
+      sharedUser: mkProfile.onlyOne !== 'yes',
+    }));
+  };
+
   const loadRouterList = async () => {
     try {
       const res = await fetch('/api/pppoe/profiles/sync-mikrotik');
       const data = await res.json();
-      setRouters(data.routers || []);
+      const list = data.routers || [];
+      setRouters(list);
+      if (list.length > 0 && !formData.selectedRouterId) {
+        setFormData(prev => ({ ...prev, selectedRouterId: list[0].id }));
+        fetchRouterResources(list[0].id);
+      }
     } catch { setRouters([]); }
   };
 
@@ -166,6 +244,9 @@ export default function PPPoEProfilesPage() {
         name: formData.name,
         description: formData.description || undefined,
         groupName: generatedGroupName,
+        ipPoolName: formData.ipPoolName || undefined,
+        localAddress: formData.localAddress || undefined,
+        lastRouterId: formData.selectedRouterId || undefined,
         price: parseInt(formData.price),
         proratePricePerDay: parseInt(formData.proratePricePerDay) || 0,
         hpp: formData.hpp ? parseInt(formData.hpp) : null,
@@ -182,6 +263,24 @@ export default function PPPoEProfilesPage() {
       const res = await fetch('/api/pppoe/profiles', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const result = await res.json();
       if (res.ok) {
+        const savedId = result.profile?.id || editingProfile?.id;
+        // Non-destructive auto-sync if router was selected
+        if (formData.selectedRouterId && savedId) {
+          try {
+            await fetch('/api/pppoe/profiles/sync-mikrotik', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: savedId,
+                routerIds: [formData.selectedRouterId],
+                ipPoolName: formData.ipPoolName || undefined,
+                localAddress: formData.localAddress || undefined,
+              }),
+            });
+          } catch (syncErr) {
+            console.warn('[ProfileSubmit] Auto sync error:', syncErr);
+          }
+        }
         setIsDialogOpen(false); setEditingProfile(null); resetForm(); loadProfiles(); setFieldErrors({});
         await showSuccess(editingProfile ? t('pppoe.profileUpdated') : t('pppoe.profileCreated'));
       } else {
@@ -219,6 +318,7 @@ export default function PPPoEProfilesPage() {
       }
     }
     setShowBurst(hasBurst);
+    const targetRouterId = profile.lastRouterId || (routers.length > 0 ? routers[0].id : '');
     setFormData({
       name: profile.name, description: profile.description || '',
       price: profile.price.toString(), proratePricePerDay: profile.proratePricePerDay?.toString() || '0', hpp: profile.hpp?.toString() || '', ppnActive: profile.ppnActive || false,
@@ -229,7 +329,15 @@ export default function PPPoEProfilesPage() {
       groupName: profile.groupName, validityValue: profile.validityValue.toString(), validityUnit: profile.validityUnit,
       sharedUser: profile.sharedUser, isActive: profile.isActive,
       ppnRate: profile.ppnRate?.toString() || '11',
+      selectedRouterId: targetRouterId,
+      creationMode: 'new',
+      selectedMikrotikProfile: profile.mikrotikProfileName || profile.groupName || '',
+      ipPoolName: profile.ipPoolName || '',
+      localAddress: profile.localAddress || '',
     });
+    if (targetRouterId) {
+      fetchRouterResources(targetRouterId);
+    }
     setIsDialogOpen(true);
   };
 
@@ -246,7 +354,20 @@ export default function PPPoEProfilesPage() {
     finally { setDeleteProfileId(null); }
   };
 
-  const resetForm = () => { setFormData({ ...defaultForm, groupName: '' }); setShowBurst(false); setFieldErrors({}); };
+  const resetForm = () => {
+    const defaultRouterId = routers.length > 0 ? routers[0].id : '';
+    setFormData({
+      ...defaultForm,
+      groupName: '',
+      selectedRouterId: defaultRouterId,
+      creationMode: 'new',
+    });
+    setShowBurst(false);
+    setFieldErrors({});
+    if (defaultRouterId) {
+      fetchRouterResources(defaultRouterId);
+    }
+  };
 
   const handleSyncRadius = async (profile: PPPoEProfile) => {
     setSyncingRadiusId(profile.id);
@@ -344,18 +465,18 @@ export default function PPPoEProfilesPage() {
           `Router: ${result.routerName}  |  User: ${result.user}`,
           `Port: ${okPort.port}  |  Identity: ${okPort.identity}`,
           ``,
-          `PPP Profile Read: ${pppReadOk ? '✅ ' + okPort.pppReadError : '❌ ' + okPort.pppReadError}`,
-          `PPP Profile Write: ${pppWriteOk ? '✅ OK' : '❌ ' + okPort.pppWriteError}`,
+          `PPP Profile Read: ${pppReadOk ? '[OK] ' + okPort.pppReadError : '[Gagal] ' + okPort.pppReadError}`,
+          `PPP Profile Write: ${pppWriteOk ? '[OK]' : '[Gagal] ' + okPort.pppWriteError}`,
         ];
-        if (result.hint) lines.push('', '⚠️ ' + result.hint);
+        if (result.hint) lines.push('', '[Info] ' + result.hint);
         if (!pppReadOk || !pppWriteOk) {
           await showError('Koneksi OK tapi akses PPP gagal:\n\n' + lines.join('\n'));
         } else {
-          await showSuccess('✅ Semua test berhasil!\n\n' + lines.join('\n'));
+          await showSuccess('Semua test berhasil!\n\n' + lines.join('\n'));
         }
       } else {
-        const detail = result.results?.map((r: any) => `Port ${r.port}: ❌ ${r.error}`).join('\n') || '';
-        await showError(`❌ Gagal konek ke ${result.host}\n\n${detail}\n\n${result.hint || ''}`);
+        const detail = result.results?.map((r: any) => `Port ${r.port}: [Gagal] ${r.error}`).join('\n') || '';
+        await showError(`Gagal konek ke ${result.host}\n\n${detail}\n\n${result.hint || ''}`);
       }
     } catch { await showError('Gagal test koneksi'); }
     finally { setTestingConnection(false); }
@@ -682,6 +803,94 @@ export default function PPPoEProfilesPage() {
           <form onSubmit={handleSubmit}>
             <ModalBody className="space-y-4">
 
+              {/* Router MikroTik & Sumber Profil */}
+              <div className="p-3.5 rounded-lg border border-border bg-muted/20 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <ModalLabel className="mb-0 font-semibold flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-primary" />
+                      Router MikroTik (Sinkronisasi Otomatis)
+                    </ModalLabel>
+                    {loadingResources && (
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Membaca data router...
+                      </span>
+                    )}
+                  </div>
+                  <ModalSelect
+                    value={formData.selectedRouterId}
+                    onChange={(e) => {
+                      const rId = e.target.value;
+                      setFormData(prev => ({ ...prev, selectedRouterId: rId }));
+                      fetchRouterResources(rId);
+                    }}
+                  >
+                    <option value="">-- Tanpa Router / Konfigurasi Manual --</option>
+                    {routers.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name || r.shortname} ({r.ipAddress || r.nasname})
+                      </option>
+                    ))}
+                  </ModalSelect>
+                </div>
+
+                {formData.selectedRouterId && (
+                  <div>
+                    <div className="flex items-center gap-4 mb-2">
+                      <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                        <input
+                          type="radio"
+                          name="creationMode"
+                          checked={formData.creationMode === 'existing'}
+                          onChange={() => setFormData(prev => ({ ...prev, creationMode: 'existing' }))}
+                          className="text-primary focus:ring-primary"
+                        />
+                        <span>Pilih Profil MikroTik yang Ada</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                        <input
+                          type="radio"
+                          name="creationMode"
+                          checked={formData.creationMode === 'new'}
+                          onChange={() => setFormData(prev => ({ ...prev, creationMode: 'new' }))}
+                          className="text-primary focus:ring-primary"
+                        />
+                        <span>Buat Profil Baru</span>
+                      </label>
+                    </div>
+
+                    {formData.creationMode === 'existing' && (
+                      <div className="space-y-1.5 bg-background p-2.5 rounded-md border border-border">
+                        <ModalLabel className="text-xs">Daftar PPP Profile di MikroTik</ModalLabel>
+                        <ModalSelect
+                          value={formData.selectedMikrotikProfile}
+                          onChange={(e) => handleSelectMikrotikProfile(e.target.value)}
+                          disabled={loadingResources || routerResources.profiles.length === 0}
+                        >
+                          <option value="">-- Pilih PPP Profile dari MikroTik --</option>
+                          {routerResources.profiles.map(p => (
+                            <option key={p.name} value={p.name}>
+                              {p.name} {p.rateLimit ? `(${p.rateLimit})` : ''} {p.remoteAddress ? `[Pool: ${p.remoteAddress}]` : ''}
+                            </option>
+                          ))}
+                        </ModalSelect>
+                        <p className="text-[10px] text-muted-foreground">
+                          Memilih profil MikroTik akan otomatis mengisi nama paket, nama profil, alokasi bandwidth, dan IP pool.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Callout Info Arsitektur MikroTik */}
+              <div className="flex items-start gap-2.5 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-xs text-muted-foreground">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Pengaturan dasar (nama, kecepatan, dan IP pool) disinkronkan ke MikroTik. Pengaturan lanjutan seperti antrean CAKE / FQ-CoDel, Parent Queue, dan mangle dapat dikonfigurasi langsung di Winbox MikroTik tanpa terhapus saat sinkronisasi.
+                </p>
+              </div>
+
               {/* Nama Paket */}
               <div>
                 <ModalLabel required>Nama Paket</ModalLabel>
@@ -751,6 +960,52 @@ export default function PPPoEProfilesPage() {
                       <p className="text-[10px] text-[#00f7ff] mt-1">{toKbpsDisplay(formData.uploadSpeed, formData.speedUnit)}</p>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* IP Pool & Local Address */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <ModalLabel>Remote Address (IP Pool)</ModalLabel>
+                  <input
+                    type="text"
+                    list="router-pool-options"
+                    value={formData.ipPoolName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ipPoolName: e.target.value }))}
+                    placeholder={routerResources.pools.length > 0 ? "Pilih atau ketik pool..." : "Contoh: pppoe-pool"}
+                    className="w-full px-3 py-2 text-xs rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                  />
+                  <datalist id="router-pool-options">
+                    {routerResources.pools.map(pool => (
+                      <option key={pool.name} value={pool.name}>
+                        {pool.name} ({pool.ranges})
+                      </option>
+                    ))}
+                  </datalist>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Pool alamat IP MikroTik untuk alokasi IP dinamis pelanggan saat login.
+                  </p>
+                </div>
+                <div>
+                  <ModalLabel>Local Address (IP Gateway)</ModalLabel>
+                  <input
+                    type="text"
+                    list="router-address-options"
+                    value={formData.localAddress}
+                    onChange={(e) => setFormData(prev => ({ ...prev, localAddress: e.target.value }))}
+                    placeholder="Contoh: 10.10.10.1 (opsional)"
+                    className="w-full px-3 py-2 text-xs rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                  />
+                  <datalist id="router-address-options">
+                    {routerResources.addresses.map(addr => (
+                      <option key={addr.ip} value={addr.ip}>
+                        {addr.ip} ({addr.interface})
+                      </option>
+                    ))}
+                  </datalist>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    IP address interface router yang menjadi gateway PPP pelanggan.
+                  </p>
                 </div>
               </div>
 

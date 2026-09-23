@@ -240,9 +240,15 @@ export async function syncOnuToInventory(input: SyncOnuInput): Promise<SyncResul
   }
 
   // 3. Update customer PPPoE record & Device History if assigned
-  if (input.customerId) {
-    const customer = await prisma.pppoeUser.findUnique({
-      where: { id: input.customerId },
+  if (input.customerId && input.customerId !== 'undefined') {
+    const customer = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id: input.customerId },
+          { customerId: input.customerId },
+          { username: input.customerId },
+        ],
+      },
       select: { id: true, macAddress: true, username: true },
     });
 

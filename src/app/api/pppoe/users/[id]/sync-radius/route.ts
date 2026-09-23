@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
-import { ok, unauthorized, notFound, serverError } from '@/lib/api-response';
+import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response';
 import { prisma } from '@/server/db/client';
 import { PPPSecretService } from '@/server/services/mikrotik/ppp-secret.service';
 
@@ -15,9 +15,16 @@ export async function POST(
 
   try {
     const { id } = await params;
+    if (!id || id === 'undefined') return badRequest('User ID is required');
 
-    const user = await prisma.pppoeUser.findUnique({
-      where: { id },
+    const user = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id },
+          { customerId: id },
+          { username: id },
+        ],
+      },
       include: { profile: true, router: true },
     });
     if (!user) return notFound('User tidak ditemukan');

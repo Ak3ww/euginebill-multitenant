@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; itemId: string } }
+  { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,12 +15,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id, itemId } = await params;
     const deleteResult = await prisma.workOrderTypeKitItem.deleteMany({
       where: {
-        kitId: params.id,
+        kitId: id,
         OR: [
-          { id: params.itemId },
-          { itemId: params.itemId },
+          { id: itemId },
+          { itemId: itemId },
         ],
       },
     });

@@ -35,9 +35,15 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
 
     // If customerId is provided, return nearest ODPs
-    if (customerId) {
-      const customer = await prisma.pppoeUser.findUnique({
-        where: { id: customerId },
+    if (customerId && customerId !== 'undefined') {
+      const customer = await prisma.pppoeUser.findFirst({
+        where: {
+          OR: [
+            { id: customerId },
+            { customerId },
+            { username: customerId },
+          ],
+        },
         select: { latitude: true, longitude: true },
       });
 
@@ -168,9 +174,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer exists and has GPS coordinates
-    const customer = await prisma.pppoeUser.findUnique({
-      where: { id: customerId },
-      select: { latitude: true, longitude: true },
+    const customer = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id: customerId },
+          { customerId },
+          { username: customerId },
+        ],
+      },
+      select: { id: true, latitude: true, longitude: true },
     });
 
     if (!customer) {
@@ -208,8 +220,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if customer is already assigned
-    const existingAssignment = await prisma.odpCustomerAssignment.findUnique({
-      where: { customerId },
+    const existingAssignment = await prisma.odpCustomerAssignment.findFirst({
+      where: {
+        OR: [
+          { customerId: customer.id },
+          { customerId },
+        ],
+      },
     });
 
     if (existingAssignment) {
@@ -234,7 +251,7 @@ export async function POST(request: NextRequest) {
     const assignment = await prisma.odpCustomerAssignment.create({
       data: {
         id: nanoid(),
-        customerId,
+        customerId: customer.id,
         odpId,
         portNumber,
         distance,

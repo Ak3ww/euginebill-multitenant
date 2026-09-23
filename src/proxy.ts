@@ -82,7 +82,8 @@ export default async function proxy(req: NextRequest) {
         pathname.startsWith('/pay') || 
         pathname.startsWith('/isolated') || 
         pathname.startsWith('/uploads') ||
-        pathname.startsWith('/setup');
+        pathname.startsWith('/setup') ||
+        pathname.startsWith('/docs');
 
       if (!isSystem && !isStaticFile && !isStandaloneRoute) {
         if (!pathname.startsWith(targetBase)) {

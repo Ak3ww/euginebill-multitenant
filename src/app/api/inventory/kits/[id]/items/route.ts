@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,8 +15,9 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const items = await prisma.workOrderTypeKitItem.findMany({
-      where: { kitId: params.id },
+      where: { kitId: id },
       include: {
         item: {
           select: {
@@ -44,7 +45,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -52,6 +53,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { itemId, defaultQty } = body;
 
@@ -66,7 +68,7 @@ export async function POST(
 
     // Verify kit exists
     const kit = await prisma.workOrderTypeKit.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
     if (!kit) {
       return NextResponse.json({ error: 'Kit not found' }, { status: 404 });
@@ -83,12 +85,12 @@ export async function POST(
     const kitItem = await prisma.workOrderTypeKitItem.upsert({
       where: {
         kitId_itemId: {
-          kitId: params.id,
+          kitId: id,
           itemId,
         },
       },
       create: {
-        kitId: params.id,
+        kitId: id,
         itemId,
         defaultQty: qty,
       },

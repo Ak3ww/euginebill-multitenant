@@ -25,6 +25,16 @@ export async function GET(
     let wo = await prisma.workOrder.findUnique({
       where: { id },
       include: {
+        assignedAssets: {
+          where: { assetType: 'MODEM' },
+          select: {
+            id: true,
+            serialNumber: true,
+            macAddress: true,
+            vendor: true,
+            model: true,
+          },
+        },
         customer: {
           select: {
             id: true,
@@ -49,7 +59,8 @@ export async function GET(
               },
             },
             inventoryAssets: {
-              where: { status: 'IN_USE', assetType: 'MODEM' },
+              where: { assetType: 'MODEM' },
+              orderBy: { updatedAt: 'desc' },
               select: {
                 id: true,
                 serialNumber: true,
@@ -57,7 +68,7 @@ export async function GET(
                 vendor: true,
                 model: true,
               },
-              take: 1,
+              take: 5,
             },
             deviceHistories: {
               orderBy: { createdAt: 'desc' },
@@ -67,6 +78,14 @@ export async function GET(
                 macAddress: true,
                 vendor: true,
                 model: true,
+              },
+            },
+            oltOnuStatuses: {
+              take: 1,
+              select: {
+                serialNumber: true,
+                macAddress: true,
+                description: true,
               },
             },
           },
@@ -116,7 +135,8 @@ export async function GET(
             },
           },
           inventoryAssets: {
-            where: { status: 'IN_USE', assetType: 'MODEM' },
+            where: { assetType: 'MODEM' },
+            orderBy: { updatedAt: 'desc' },
             select: {
               id: true,
               serialNumber: true,
@@ -124,7 +144,7 @@ export async function GET(
               vendor: true,
               model: true,
             },
-            take: 1,
+            take: 5,
           },
           deviceHistories: {
             orderBy: { createdAt: 'desc' },
@@ -134,6 +154,14 @@ export async function GET(
               macAddress: true,
               vendor: true,
               model: true,
+            },
+          },
+          oltOnuStatuses: {
+            take: 1,
+            select: {
+              serialNumber: true,
+              macAddress: true,
+              description: true,
             },
           },
         },

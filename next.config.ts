@@ -162,6 +162,16 @@ const nextConfig: NextConfig = {
         destination: '/technician/:path*',
         permanent: false,
       },
+      {
+        source: '/admin/packages',
+        destination: '/admin/pppoe/profiles',
+        permanent: false,
+      },
+      {
+        source: '/admin/customers',
+        destination: '/admin/pppoe/users',
+        permanent: false,
+      },
     ];
   },
   async rewrites() {

@@ -167,9 +167,20 @@ export default function UnifiedSetupWizardPage() {
     uploadSpeed: '20',
     price: '200000',
     groupName: 'default',
+    ipPoolName: '',
+    localAddress: '',
+    creationMode: 'new' as 'new' | 'existing',
+    selectedMikrotikProfile: '',
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [createdProfile, setCreatedProfile] = useState<CreatedProfile | null>(null);
+
+  const [routerResources, setRouterResources] = useState<{
+    pools: { name: string; ranges: string }[];
+    profiles: { name: string; rateLimit: string; localAddress: string; remoteAddress: string; onlyOne: string }[];
+    addresses: { address: string; ip: string; interface: string; network: string; comment: string }[];
+  }>({ pools: [], profiles: [], addresses: [] });
+  const [loadingResources, setLoadingResources] = useState(false);
 
   // Step 4: Trial Customer State
   const [customerForm, setCustomerForm] = useState({
@@ -474,6 +485,75 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
+  // Step 3: Fetch Router Resources when entering step 3
+  useEffect(() => {
+    if (currentStep === 3 && savedRouterId) {
+      const fetchResources = async () => {
+        setLoadingResources(true);
+        try {
+          const res = await fetch(`/api/network/routers/${savedRouterId}/resources`);
+          const data = await res.json();
+          if (data.success) {
+            setRouterResources({
+              pools: Array.isArray(data.pools) ? data.pools : [],
+              profiles: Array.isArray(data.profiles) ? data.profiles : [],
+              addresses: Array.isArray(data.addresses) ? data.addresses : [],
+            });
+            if (data.pools?.length > 0 && !profileForm.ipPoolName) {
+              setProfileForm(prev => ({ ...prev, ipPoolName: data.pools[0].name }));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load router resources in setup:', e);
+        } finally {
+          setLoadingResources(false);
+        }
+      };
+      fetchResources();
+    }
+  }, [currentStep, savedRouterId]);
+
+  const handleSelectMikrotikProfileSetup = (profileName: string) => {
+    if (!profileName) {
+      setProfileForm(prev => ({ ...prev, selectedMikrotikProfile: '' }));
+      return;
+    }
+
+    const mkProfile = routerResources.profiles.find(p => p.name === profileName);
+    if (!mkProfile) {
+      setProfileForm(prev => ({ ...prev, selectedMikrotikProfile: profileName }));
+      return;
+    }
+
+    setProfileForm(prev => {
+      let dl = profileForm.downloadSpeed;
+      let ul = profileForm.uploadSpeed;
+      if (mkProfile.rateLimit) {
+        const speedPart = mkProfile.rateLimit.split(/\s+/)[0];
+        const parts = speedPart.split('/');
+        if (parts.length >= 2) {
+          let parsedDl = parseInt(parts[0].replace(/[^0-9]/g, '')) || 0;
+          let parsedUl = parseInt(parts[1].replace(/[^0-9]/g, '')) || 0;
+          if (parts[0].toLowerCase().includes('k')) parsedDl = Math.ceil(parsedDl / 1000);
+          if (parts[1].toLowerCase().includes('k')) parsedUl = Math.ceil(parsedUl / 1000);
+          if (parsedDl > 0) dl = String(parsedDl);
+          if (parsedUl > 0) ul = String(parsedUl);
+        }
+      }
+
+      return {
+        ...prev,
+        selectedMikrotikProfile: profileName,
+        name: mkProfile.name,
+        groupName: mkProfile.name,
+        downloadSpeed: dl,
+        uploadSpeed: ul,
+        ipPoolName: mkProfile.remoteAddress && mkProfile.remoteAddress !== 'none' && mkProfile.remoteAddress !== '0.0.0.0' ? mkProfile.remoteAddress : prev.ipPoolName,
+        localAddress: mkProfile.localAddress && mkProfile.localAddress !== 'none' && mkProfile.localAddress !== '0.0.0.0' ? mkProfile.localAddress : prev.localAddress,
+      };
+    });
+  };
+
   // Step 3: Save PPPoE Profile
   const handleSaveProfile = async () => {
     setIsSavingProfile(true);
@@ -487,6 +567,9 @@ export default function UnifiedSetupWizardPage() {
           price: parseInt(profileForm.price) || 200000,
           downloadSpeed: parseInt(profileForm.downloadSpeed) || 20,
           uploadSpeed: parseInt(profileForm.uploadSpeed) || 20,
+          ipPoolName: profileForm.ipPoolName || undefined,
+          localAddress: profileForm.localAddress || undefined,
+          lastRouterId: savedRouterId || undefined,
           validityValue: 1,
           validityUnit: 'MONTHS',
           sharedUser: true,
@@ -499,7 +582,27 @@ export default function UnifiedSetupWizardPage() {
       }
 
       const created = await res.json();
-      setCreatedProfile(created);
+      const profileObj = created.profile || created;
+      setCreatedProfile(profileObj);
+
+      // Auto-sync newly created profile to MikroTik if router is connected
+      if (savedRouterId && profileObj?.id) {
+        try {
+          await fetch('/api/pppoe/profiles/sync-mikrotik', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: profileObj.id,
+              routerIds: [savedRouterId],
+              ipPoolName: profileForm.ipPoolName || undefined,
+              localAddress: profileForm.localAddress || undefined,
+            }),
+          });
+        } catch (syncErr) {
+          console.warn('[SetupStep3] Auto-sync warning:', syncErr);
+        }
+      }
+
       markStepCompleted(3);
       setCurrentStep(4);
     } catch (err: any) {
@@ -1462,6 +1565,84 @@ export default function UnifiedSetupWizardPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
+              {/* Status Router MikroTik */}
+              {savedRouterId && (
+                <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-sky-950 font-medium">
+                    <Server className="w-4 h-4 text-sky-600 shrink-0" />
+                    <span>Router: <strong className="font-semibold">{routerForm.name}</strong> ({routerForm.ipAddress})</span>
+                  </div>
+                  {loadingResources ? (
+                    <span className="text-[11px] text-sky-700 flex items-center gap-1.5">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Membaca profil MikroTik...
+                    </span>
+                  ) : (
+                    <Badge variant="outline" className="border-sky-300 bg-white text-sky-700 text-[10px] gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-sky-600" />
+                      {routerResources.profiles.length} Profil &bull; {routerResources.pools.length} IP Pool
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Mode Pemilihan Profil MikroTik */}
+              {routerResources.profiles.length > 0 && (
+                <div className="flex items-center gap-4 py-1">
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-foreground">
+                    <input
+                      type="radio"
+                      name="setupCreationMode"
+                      checked={profileForm.creationMode === 'existing'}
+                      onChange={() => setProfileForm(prev => ({ ...prev, creationMode: 'existing' }))}
+                      className="text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Pilih dari Profil MikroTik Eksisting</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-foreground">
+                    <input
+                      type="radio"
+                      name="setupCreationMode"
+                      checked={profileForm.creationMode === 'new'}
+                      onChange={() => setProfileForm(prev => ({ ...prev, creationMode: 'new' }))}
+                      className="text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>Buat Paket Baru</span>
+                  </label>
+                </div>
+              )}
+
+              {profileForm.creationMode === 'existing' && routerResources.profiles.length > 0 && (
+                <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/50 space-y-1.5">
+                  <Label htmlFor="setupProfileSelect" className="text-xs font-semibold text-sky-950">
+                    Pilih PPP Profile dari MikroTik
+                  </Label>
+                  <select
+                    id="setupProfileSelect"
+                    value={profileForm.selectedMikrotikProfile}
+                    onChange={(e) => handleSelectMikrotikProfileSetup(e.target.value)}
+                    className="w-full h-9 px-3 py-1.5 text-xs rounded-md border border-border bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
+                  >
+                    <option value="">-- Pilih Profil MikroTik --</option>
+                    {routerResources.profiles.map(p => (
+                      <option key={p.name} value={p.name}>
+                        {p.name} {p.rateLimit ? `(${p.rateLimit})` : ''} {p.remoteAddress ? `[Pool: ${p.remoteAddress}]` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-sky-700">
+                    Memilih profil MikroTik akan otomatis mengisi nama paket, nama profil, alokasi bandwidth, dan IP pool.
+                  </p>
+                </div>
+              )}
+
+              {/* Callout Info Arsitektur MikroTik */}
+              <div className="flex items-start gap-2.5 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sky-900 text-xs">
+                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Pengaturan dasar (nama, kecepatan, dan IP pool) disinkronkan ke MikroTik. Pengaturan lanjutan seperti antrean CAKE / FQ-CoDel, Parent Queue, dan mangle dapat dikonfigurasi langsung di Winbox MikroTik tanpa terhapus saat sinkronisasi.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="pkgName" className="text-xs font-medium">
@@ -1519,6 +1700,50 @@ export default function UnifiedSetupWizardPage() {
                     placeholder="20"
                     className="h-9 text-sm"
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="pkgPool" className="text-xs font-medium">
+                    Remote Address / IP Pool
+                  </Label>
+                  <Input
+                    id="pkgPool"
+                    list="setup-pool-datalist"
+                    value={profileForm.ipPoolName}
+                    onChange={(e) => setProfileForm({ ...profileForm, ipPoolName: e.target.value })}
+                    placeholder={routerResources.pools.length > 0 ? "Pilih atau ketik pool..." : "Contoh: pppoe-pool"}
+                    className="h-9 text-sm font-mono"
+                  />
+                  <datalist id="setup-pool-datalist">
+                    {routerResources.pools.map(p => (
+                      <option key={p.name} value={p.name}>
+                        {p.name} ({p.ranges})
+                      </option>
+                    ))}
+                  </datalist>
+                  <p className="text-[11px] text-muted-foreground">Pool alamat IP MikroTik untuk alokasi IP pelanggan.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="pkgLocal" className="text-xs font-medium">
+                    Local Address (IP Gateway)
+                  </Label>
+                  <Input
+                    id="pkgLocal"
+                    list="setup-address-datalist"
+                    value={profileForm.localAddress}
+                    onChange={(e) => setProfileForm({ ...profileForm, localAddress: e.target.value })}
+                    placeholder="Contoh: 10.10.10.1 (opsional)"
+                    className="h-9 text-sm font-mono"
+                  />
+                  <datalist id="setup-address-datalist">
+                    {routerResources.addresses.map(a => (
+                      <option key={a.ip} value={a.ip}>
+                        {a.ip} ({a.interface})
+                      </option>
+                    ))}
+                  </datalist>
+                  <p className="text-[11px] text-muted-foreground">IP interface router yang menjadi gateway PPP.</p>
                 </div>
 
                 <div className="space-y-1.5 md:col-span-2">

@@ -11,6 +11,7 @@ import { generateUniqueReferralCode } from '@/server/services/referral.service';
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service';
 import crypto, { randomBytes, randomUUID } from 'crypto';
 import { PPPSecretService } from '@/server/services/mikrotik/ppp-secret.service';
+import { detectOntVendorAndModel } from '@/lib/olt/ont-detector';
 import type { NextRequest } from 'next/server';
 import type { Session } from 'next-auth';
 
@@ -44,6 +45,7 @@ export interface CreatePppoeUserInput {
   autoIsolationEnabled?: boolean;
   firstInvoice?: 'none' | 'prorate' | 'full';
   ontSerialNumber?: string;
+  assetId?: string;
 }
 
 export interface UpdatePppoeUserInput {
@@ -629,96 +631,151 @@ export async function createPppoeUser(
     })().catch(() => {});
   }
 
-  // ── Inventory Asset Auto-Link / Auto-Registration ────────────────────────────
+  // ── Inventory Asset Auto-Link / Auto-Deduct / Auto-Registration ─────────────
   const rawOntSn = ((data as any).ontSerialNumber || '').trim();
   const rawMac = (macAddress || '').trim();
-  const effectiveSn = rawOntSn || (!rawMac.includes(':') && !rawMac.includes('-') && rawMac.length >= 8 ? rawMac : '');
+  const rawAssetId = ((data as any).assetId || '').trim();
+  const cleanMacSn = rawMac ? rawMac.replace(/[:-]/g, '').toUpperCase() : '';
+  const effectiveSn = rawOntSn || cleanMacSn;
 
-  if (effectiveSn) {
+  let targetAsset: any = null;
+
+  if (rawAssetId) {
+    try {
+      targetAsset = await prisma.inventoryAsset.findUnique({
+        where: { id: rawAssetId },
+        include: { item: true },
+      });
+    } catch (e) {
+      console.error('[createPppoeUser] Find asset by ID error:', e);
+    }
+  }
+
+  if (!targetAsset && effectiveSn) {
     try {
       const upperSn = effectiveSn.toUpperCase();
-      const existingAsset = await prisma.inventoryAsset.findFirst({
+      targetAsset = await prisma.inventoryAsset.findFirst({
         where: {
           OR: [
             { serialNumber: effectiveSn },
             { serialNumber: upperSn },
+            ...(rawMac ? [{ macAddress: rawMac }, { serialNumber: cleanMacSn }] : []),
+          ],
+        },
+        include: { item: true },
+      });
+    } catch (e) {
+      console.error('[createPppoeUser] Search asset error:', e);
+    }
+  }
+
+  if (targetAsset) {
+    try {
+      const updatedAsset = await prisma.inventoryAsset.update({
+        where: { id: targetAsset.id },
+        data: {
+          status: 'IN_USE',
+          currentCustomerId: user.id,
+          macAddress: rawMac && rawMac.includes(':') ? rawMac : (targetAsset.macAddress || (rawMac || null)),
+          installedAt: new Date(),
+        },
+        include: { item: true },
+      });
+      targetAsset = updatedAsset;
+
+      await prisma.customerDeviceHistory.create({
+        data: {
+          customerId: user.id,
+          assetId: targetAsset.id,
+          serialNumber: targetAsset.serialNumber,
+          vendor: targetAsset.vendor,
+          model: targetAsset.model,
+          macAddress: rawMac && rawMac.includes(':') ? rawMac : targetAsset.macAddress,
+          action: 'INSTALLED',
+          reason: 'Pasang Baru (PSB)',
+          installedAt: new Date(),
+          technicianName: (session?.user as any)?.name || 'Admin PSB',
+        },
+      }).catch((histErr) => console.error('[createPppoeUser] History create error:', histErr));
+
+      // Record stock movement and decrement currentStock if > 0
+      try {
+        const item = targetAsset.item || (targetAsset.itemId ? await prisma.inventoryItem.findUnique({ where: { id: targetAsset.itemId } }) : null);
+        if (item) {
+          const prevStock = item.currentStock ?? 0;
+          const newStock = prevStock > 0 ? prevStock - 1 : 0;
+          if (prevStock > 0) {
+            await prisma.inventoryItem.update({
+              where: { id: item.id },
+              data: { currentStock: newStock },
+            }).catch((itemErr) => console.error('[createPppoeUser] Item stock decrement error:', itemErr));
+          }
+
+          await prisma.inventoryMovement.create({
+            data: {
+              itemId: item.id,
+              movementType: 'OUT',
+              quantity: 1,
+              previousStock: prevStock,
+              newStock: newStock,
+              referenceNo: `PSB-${user.customerId || user.username}`,
+              notes: `Pengeluaran modem ${targetAsset.serialNumber} untuk PSB Pelanggan ${resolvedName} (${username})`,
+              userId: (session?.user as any)?.id || null,
+              userName: (session?.user as any)?.name || 'Admin PSB',
+            },
+          }).catch((movErr) => console.error('[createPppoeUser] Inventory movement create error:', movErr));
+        }
+      } catch (stockErr) {
+        console.error('[createPppoeUser] Stock deduct error:', stockErr);
+      }
+    } catch (err) {
+      console.error('[createPppoeUser] Update existing asset error:', err);
+    }
+  } else if (!targetAsset && effectiveSn) {
+    try {
+      // Auto-register new modem unit directly into inventoryAsset
+      let catalogItem = await prisma.inventoryItem.findFirst({
+        where: {
+          OR: [
+            { sku: 'EMG-CPE-ONT-GENERIC' },
+            { sku: { contains: 'CPE-ONT' } },
+            { name: { contains: 'ONT' } },
+            { name: { contains: 'Modem' } },
           ],
         },
       });
 
-      if (existingAsset) {
-        await prisma.inventoryAsset.update({
-          where: { id: existingAsset.id },
-          data: {
-            status: 'IN_USE',
-            currentCustomerId: user.id,
-            macAddress: rawMac && rawMac.includes(':') ? rawMac : existingAsset.macAddress,
-            installedAt: new Date(),
-          },
-        });
+      if (!catalogItem) {
+        catalogItem = await prisma.inventoryItem.findFirst();
+      }
 
-        await prisma.customerDeviceHistory.create({
-          data: {
-            customerId: user.id,
-            assetId: existingAsset.id,
-            serialNumber: existingAsset.serialNumber,
-            vendor: existingAsset.vendor,
-            model: existingAsset.model,
-            macAddress: rawMac && rawMac.includes(':') ? rawMac : existingAsset.macAddress,
-            action: 'INSTALLED',
-            reason: 'Pasang Baru (PSB)',
-            installedAt: new Date(),
-            technicianName: (session?.user as any)?.name || 'Admin PSB',
-          },
-        }).catch(() => {});
-      } else {
-        // Auto-register new modem unit directly into inventoryAsset
-        let catalogItem = await prisma.inventoryItem.findFirst({
-          where: {
-            OR: [
-              { sku: { contains: 'CPE-ONT' } },
-              { name: { contains: 'ONT' } },
-              { name: { contains: 'Modem' } },
-            ],
-          },
-        });
-
-        if (!catalogItem) {
+      // If no catalog item exists at all, auto-create a standard default ONT catalog item
+      if (!catalogItem) {
+        try {
+          catalogItem = await prisma.inventoryItem.create({
+            data: {
+              sku: 'EMG-CPE-ONT-GENERIC',
+              name: 'Modem ONT GPON Standar',
+              description: 'Katalog default auto-generated untuk modem ONT pelanggan',
+              categoryCode: 'CPE',
+              subCategory: 'ONT',
+              unit: 'pcs',
+              minimumStock: 5,
+              isSerialized: true,
+            },
+          });
+        } catch {
           catalogItem = await prisma.inventoryItem.findFirst();
         }
+      }
 
-        // If no catalog item exists at all, auto-create a standard default ONT catalog item
-        if (!catalogItem) {
-          try {
-            catalogItem = await prisma.inventoryItem.create({
-              data: {
-                sku: 'EMG-CPE-ONT-GENERIC',
-                name: 'Modem ONT GPON Standar',
-                description: 'Katalog default auto-generated untuk modem ONT pelanggan',
-                categoryCode: 'CPE',
-                subCategory: 'ONT',
-                unit: 'pcs',
-                minimumStock: 5,
-                isSerialized: true,
-              },
-            });
-          } catch {
-            catalogItem = await prisma.inventoryItem.findFirst();
-          }
-        }
+      if (catalogItem) {
+        const detected = detectOntVendorAndModel(effectiveSn);
+        const vendor = detected.vendor || 'Generic';
+        const model = detected.model || 'GPON ONT';
 
-        if (catalogItem) {
-          let vendor = 'Generic';
-          let model = 'GPON ONT';
-          if (upperSn.startsWith('ZTEG')) { vendor = 'ZTE'; model = 'ZTE F609 V3'; }
-          else if (upperSn.startsWith('SKYW')) { vendor = 'Skyworth'; model = 'GN542VF'; }
-          else if (upperSn.startsWith('RTEG')) { vendor = 'Realtek'; model = 'RTL8672 GPON'; }
-          else if (upperSn.startsWith('YHTC')) { vendor = 'Yuhua'; model = 'YH-100G'; }
-          else if (upperSn.startsWith('FHTT')) { vendor = 'FiberHome'; model = 'HG6243C'; }
-          else if (upperSn.startsWith('HWTC')) { vendor = 'Huawei'; model = 'HG8245H'; }
-          else if (upperSn.startsWith('AZVG')) { vendor = 'VSOL'; model = 'V2801 Series'; }
-
-          const newAsset = await prisma.inventoryAsset.create({
+        try {
+          targetAsset = await prisma.inventoryAsset.create({
             data: {
               itemId: catalogItem.id,
               assetType: 'MODEM',
@@ -732,12 +789,13 @@ export async function createPppoeUser(
               installedAt: new Date(),
               notes: `Auto-registered saat Pasang Baru (PSB) Pelanggan: ${resolvedName} (${username})`,
             },
+            include: { item: true },
           });
 
           await prisma.customerDeviceHistory.create({
             data: {
               customerId: user.id,
-              assetId: newAsset.id,
+              assetId: targetAsset.id,
               serialNumber: effectiveSn,
               vendor,
               model,
@@ -748,10 +806,120 @@ export async function createPppoeUser(
               technicianName: (session?.user as any)?.name || 'Admin PSB',
             },
           }).catch(() => {});
+        } catch (collisionErr: any) {
+          // Handle collision safely (fallback query if unique constraint conflict)
+          console.warn('[createPppoeUser] Collision on inventoryAsset create, fetching existing:', collisionErr?.message);
+          targetAsset = await prisma.inventoryAsset.findFirst({
+            where: {
+              OR: [
+                { serialNumber: effectiveSn },
+                { serialNumber: effectiveSn.toUpperCase() },
+              ],
+            },
+            include: { item: true },
+          });
+
+          if (targetAsset) {
+            await prisma.inventoryAsset.update({
+              where: { id: targetAsset.id },
+              data: {
+                status: 'IN_USE',
+                currentCustomerId: user.id,
+                macAddress: rawMac && rawMac.includes(':') ? rawMac : (targetAsset.macAddress || null),
+                installedAt: new Date(),
+              },
+            }).catch(() => {});
+
+            await prisma.customerDeviceHistory.create({
+              data: {
+                customerId: user.id,
+                assetId: targetAsset.id,
+                serialNumber: targetAsset.serialNumber,
+                vendor: targetAsset.vendor || vendor,
+                model: targetAsset.model || model,
+                macAddress: rawMac && rawMac.includes(':') ? rawMac : targetAsset.macAddress,
+                action: 'INSTALLED',
+                reason: 'Pasang Baru (PSB)',
+                installedAt: new Date(),
+                technicianName: (session?.user as any)?.name || 'Admin PSB',
+              },
+            }).catch(() => {});
+          }
         }
       }
     } catch (assetErr) {
       console.error('Auto-register inventoryAsset error during PSB:', assetErr);
+    }
+  }
+
+  // ── Sync to Open Work Orders if present ──────────────────────────────────────
+  if (targetAsset || effectiveSn || rawMac) {
+    try {
+      const phoneVariations = resolvedPhone && resolvedPhone !== '-' ? [
+        resolvedPhone,
+        resolvedPhone.replace(/\D/g, ''),
+        '0' + resolvedPhone.replace(/\D/g, '').replace(/^62/, ''),
+        '62' + resolvedPhone.replace(/\D/g, '').replace(/^0/, ''),
+      ].filter(Boolean) : [];
+
+      const openWorkOrders = await prisma.workOrder.findMany({
+        where: {
+          status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] },
+          OR: [
+            { linkedUserId: user.id },
+            ...(phoneVariations.length > 0 ? [{ customerPhone: { in: phoneVariations } }] : []),
+          ],
+        },
+        select: {
+          id: true,
+          reportData: true,
+          linkedUserId: true,
+        },
+      });
+
+      const finalSn = targetAsset?.serialNumber || effectiveSn || undefined;
+      const finalMac = targetAsset?.macAddress || (rawMac && rawMac.includes(':') ? rawMac : undefined);
+      const finalModel = targetAsset?.model || targetAsset?.vendor || undefined;
+
+      for (const wo of openWorkOrders) {
+        const existingRd = (wo.reportData as Record<string, any>) || {};
+        const updatedRd = {
+          ...existingRd,
+          ...(finalSn ? { sn: finalSn } : {}),
+          ...(finalMac ? { mac: finalMac } : {}),
+          ...(finalModel ? { modemType: finalModel } : {}),
+        };
+
+        const updateData: any = {
+          reportData: updatedRd,
+        };
+        if (!wo.linkedUserId) {
+          updateData.linkedUserId = user.id;
+        }
+        if (targetAsset?.id) {
+          updateData.assignedAssets = {
+            connect: { id: targetAsset.id },
+          };
+        }
+
+        try {
+          await prisma.workOrder.update({
+            where: { id: wo.id },
+            data: updateData,
+          });
+        } catch (woUpdateErr) {
+          console.warn(`[createPppoeUser] Work order update fallback for ${wo.id}:`, woUpdateErr);
+          await prisma.workOrder.update({
+            where: { id: wo.id },
+            data: {
+              reportData: updatedRd,
+              ...(!wo.linkedUserId ? { linkedUserId: user.id } : {}),
+            },
+          }).catch(() => {});
+        }
+      }
+    } catch (woQueryErr) {
+      console.error('[createPppoeUser] Error linking open work orders:', woQueryErr);
     }
   }
 

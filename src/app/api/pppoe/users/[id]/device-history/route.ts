@@ -101,40 +101,30 @@ export async function GET(
     }
 
     // Self-healing step B: if still no currentAsset, check completed workOrder reportData
-    if (!currentAsset) {
+    if (!currentAsset && customerId) {
       try {
-        const userDetail = await prisma.pppoeUser.findUnique({
-          where: { id: customerId },
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            macAddress: true,
-            workOrders: {
-              where: { status: 'COMPLETED' },
-              orderBy: { completedAt: 'desc' },
-              take: 3,
-              select: { id: true, issueType: true, reportData: true },
-            },
-          },
+        const completedWorkOrders = await prisma.workOrder.findMany({
+          where: { linkedUserId: customerId, status: 'COMPLETED' },
+          orderBy: { completedAt: 'desc' },
+          take: 3,
+          select: { id: true, issueType: true, reportData: true },
         });
 
-        if (userDetail) {
-          let candidateSn = '';
-          let candidateMac = userDetail.macAddress ? userDetail.macAddress.trim().toUpperCase() : '';
-          let candidateModel = '';
-          let matchedWoId = '';
+        let candidateSn = '';
+        let candidateMac = user.macAddress ? user.macAddress.trim().toUpperCase() : '';
+        let candidateModel = '';
+        let matchedWoId = '';
 
-          for (const wo of userDetail.workOrders) {
-            const rd = (wo.reportData || {}) as any;
-            if (rd.sn) {
-              candidateSn = String(rd.sn).trim().toUpperCase();
-              if (rd.mac) candidateMac = String(rd.mac).trim().toUpperCase();
-              if (rd.modemType) candidateModel = String(rd.modemType).trim();
-              matchedWoId = wo.id;
-              break;
-            }
+        for (const wo of completedWorkOrders) {
+          const rd = (wo.reportData || {}) as any;
+          if (rd.sn) {
+            candidateSn = String(rd.sn).trim().toUpperCase();
+            if (rd.mac) candidateMac = String(rd.mac).trim().toUpperCase();
+            if (rd.modemType) candidateModel = String(rd.modemType).trim();
+            matchedWoId = wo.id;
+            break;
           }
+        }
 
           if (candidateSn) {
             // Check if asset already exists in inventory
@@ -234,7 +224,6 @@ export async function GET(
               }
             }
           }
-        }
       } catch (healErr) {
         console.warn('Self-healing device history error:', healErr);
       }

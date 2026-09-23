@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { checkAuth } from '@/server/middleware/api-auth';
+import { detectOntVendorAndModel } from '@/lib/olt/ont-detector';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,27 +138,145 @@ export async function POST(req: Request) {
       }
     }
 
+    // Query customer modem device from inventoryAssets, deviceHistories, oltOnuStatuses, and macAddress
+    let foundSn: string | null = null;
+    let foundMac: string | null = null;
+    let foundModel: string | null = null;
+    let foundAssetId: string | null = null;
+
+    if (finalLinkedUserId) {
+      try {
+        // 1. Query perangkat modem pelanggan dari inventoryAssets (assetType: MODEM, order by updatedAt: desc)
+        const modemAsset = await prisma.inventoryAsset.findFirst({
+          where: {
+            currentCustomerId: finalLinkedUserId,
+            assetType: 'MODEM',
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        if (modemAsset) {
+          foundSn = modemAsset.serialNumber || null;
+          foundMac = modemAsset.macAddress || null;
+          foundModel = modemAsset.model || modemAsset.vendor || null;
+          foundAssetId = modemAsset.id;
+        }
+
+        // 2. Query deviceHistories (order by createdAt: desc) jika data perangkat belum lengkap
+        if (!foundSn || !foundMac || !foundModel) {
+          const deviceHistory = await prisma.customerDeviceHistory.findFirst({
+            where: { customerId: finalLinkedUserId },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (deviceHistory) {
+            foundSn = foundSn || deviceHistory.serialNumber || null;
+            foundMac = foundMac || deviceHistory.macAddress || null;
+            foundModel = foundModel || deviceHistory.model || deviceHistory.vendor || null;
+            foundAssetId = foundAssetId || deviceHistory.assetId || null;
+          }
+        }
+
+        // 3. Query oltOnuStatuses (order by updatedAt: desc) jika masih belum lengkap
+        if (!foundSn || !foundMac) {
+          const oltOnu = await prisma.oltOnuStatus.findFirst({
+            where: { customerId: finalLinkedUserId },
+            orderBy: { updatedAt: 'desc' },
+          });
+
+          if (oltOnu) {
+            foundSn = foundSn || oltOnu.serialNumber || null;
+            foundMac = foundMac || oltOnu.macAddress || null;
+          }
+        }
+
+        // 4. Query customer macAddress dari pppoeUser
+        if (!foundMac) {
+          const customerRecord = await prisma.pppoeUser.findUnique({
+            where: { id: finalLinkedUserId },
+            select: { macAddress: true },
+          });
+          if (customerRecord?.macAddress) {
+            foundMac = customerRecord.macAddress;
+          }
+        }
+
+        // Auto-detect vendor & model jika foundSn ada tapi foundModel belum terisi
+        if (foundSn && !foundModel) {
+          const detected = detectOntVendorAndModel(foundSn);
+          if (detected.model && detected.model !== 'Generic ONT') {
+            foundModel = detected.model;
+          } else if (detected.vendor && detected.vendor !== 'Generic') {
+            foundModel = detected.vendor;
+          }
+        }
+
+        // Jika foundSn ada tetapi foundAssetId belum terdeteksi, cari dari inventoryAsset
+        if (foundSn && !foundAssetId) {
+          const matchedAsset = await prisma.inventoryAsset.findFirst({
+            where: {
+              OR: [
+                { serialNumber: foundSn },
+                { serialNumber: foundSn.toUpperCase() },
+              ],
+            },
+            select: { id: true },
+          });
+          if (matchedAsset) {
+            foundAssetId = matchedAsset.id;
+          }
+        }
+      } catch (deviceLookupErr) {
+        console.error('[API Admin WorkOrders POST] Device lookup error:', deviceLookupErr);
+      }
+    }
+
+    const initialReportData: any = body.reportData || {};
+    const mergedReportData = {
+      ...initialReportData,
+      ...(foundSn ? { sn: foundSn } : {}),
+      ...(foundMac ? { mac: foundMac } : {}),
+      ...(foundModel ? { modemType: foundModel } : {}),
+    };
+
     const status = technicianId ? 'ASSIGNED' : 'OPEN';
 
-    const newWorkOrder = await prisma.workOrder.create({
-      data: {
-        linkedUserId: finalLinkedUserId,
-        customerName,
-        customerPhone,
-        customerAddress,
-        issueType,
-        description: description || `Pekerjaan ${issueType.replace('_', ' ')} untuk ${customerName}`,
-        priority,
-        status,
-        technicianId: technicianId || null,
-        scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
-        assignedAt: technicianId ? new Date() : null,
-        notes: notes || null,
-      },
-      include: {
-        technician: { select: { id: true, name: true, phoneNumber: true } },
-      },
-    });
+    const createData: any = {
+      linkedUserId: finalLinkedUserId,
+      customerName,
+      customerPhone,
+      customerAddress,
+      issueType,
+      description: description || `Pekerjaan ${issueType.replace('_', ' ')} untuk ${customerName}`,
+      priority,
+      status,
+      technicianId: technicianId || null,
+      scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
+      assignedAt: technicianId ? new Date() : null,
+      notes: notes || null,
+      ...(Object.keys(mergedReportData).length > 0 ? { reportData: mergedReportData } : {}),
+      ...(foundAssetId ? { assignedAssets: { connect: { id: foundAssetId } } } : {}),
+    };
+
+    let newWorkOrder;
+    try {
+      newWorkOrder = await prisma.workOrder.create({
+        data: createData,
+        include: {
+          technician: { select: { id: true, name: true, phoneNumber: true } },
+          assignedAssets: true,
+        },
+      });
+    } catch (createErr) {
+      console.warn('[API Admin WorkOrders POST] Creation with assignedAssets failed, falling back without connect:', createErr);
+      delete createData.assignedAssets;
+      newWorkOrder = await prisma.workOrder.create({
+        data: createData,
+        include: {
+          technician: { select: { id: true, name: true, phoneNumber: true } },
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

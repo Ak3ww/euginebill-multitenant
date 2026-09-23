@@ -53,8 +53,21 @@ export async function POST(
         OR: [
           { serialNumber: cleanSN },
           { serialNumber: newSerialNumber.trim() },
+          { macAddress: cleanSN },
         ],
       },
+    });
+
+    // Check if the SN/MAC matches an existing ONU on any OLT
+    const matchingOnu = await prisma.oltOnuStatus.findFirst({
+      where: {
+        OR: [
+          { serialNumber: cleanSN },
+          { macAddress: cleanSN },
+          { serialNumber: newSerialNumber.trim() },
+        ],
+      },
+      include: { olt: { select: { name: true, vendor: true } } },
     });
 
     if (!newAsset) {
@@ -92,8 +105,8 @@ export async function POST(
       }
 
       if (catalogItem) {
-        let vendor = 'Generic';
-        let model = 'GPON ONT';
+        let vendor = matchingOnu?.olt?.vendor || 'Generic';
+        let model = matchingOnu ? `GPON ONT (${matchingOnu.olt?.name || ''})` : 'GPON ONT';
         if (cleanSN.startsWith('ZTEG')) { vendor = 'ZTE'; model = 'ZTE F609 V3'; }
         else if (cleanSN.startsWith('SKYW')) { vendor = 'Skyworth'; model = 'GN542VF'; }
         else if (cleanSN.startsWith('RTEG')) { vendor = 'Realtek'; model = 'RTL8672 GPON'; }
@@ -102,18 +115,31 @@ export async function POST(
         else if (cleanSN.startsWith('HWTC')) { vendor = 'Huawei'; model = 'HG8245H'; }
         else if (cleanSN.startsWith('AZVG')) { vendor = 'VSOL'; model = 'V2801 Series'; }
 
-        newAsset = await prisma.inventoryAsset.create({
-          data: {
-            itemId: catalogItem.id,
-            assetType: 'MODEM',
-            serialNumber: cleanSN,
-            vendor,
-            model,
-            condition: 'NEW',
-            status: 'AVAILABLE',
-            notes: `Auto-registered saat pergantian modem pelanggan ${customer.name} (${customer.username})`,
-          },
-        });
+        try {
+          newAsset = await prisma.inventoryAsset.create({
+            data: {
+              itemId: catalogItem.id,
+              assetType: 'MODEM',
+              serialNumber: cleanSN,
+              macAddress: matchingOnu?.macAddress || null,
+              vendor,
+              model,
+              condition: 'NEW',
+              status: 'AVAILABLE',
+              notes: `Auto-registered saat pergantian modem pelanggan ${customer.name} (${customer.username})`,
+            },
+          });
+        } catch {
+          // Fallback if concurrent insert or casing collision
+          newAsset = await prisma.inventoryAsset.findFirst({
+            where: {
+              OR: [
+                { serialNumber: cleanSN },
+                { serialNumber: newSerialNumber.trim() },
+              ],
+            },
+          });
+        }
       }
     }
 
@@ -127,9 +153,14 @@ export async function POST(
       return NextResponse.json({ error: 'Perangkat ini bukan tipe MODEM' }, { status: 400 });
     }
 
-    if (newAsset.status !== 'AVAILABLE' && newAsset.status !== 'USED_GOOD' && newAsset.currentCustomerId !== customerId) {
+    // Safety check: is it assigned to a different customer?
+    if (newAsset.currentCustomerId && newAsset.currentCustomerId !== customerId) {
+      const assignedCustomer = await prisma.pppoeUser.findFirst({
+        where: { id: newAsset.currentCustomerId },
+        select: { name: true, username: true },
+      });
       return NextResponse.json({
-        error: `Modem SN ${cleanSN} sedang digunakan pelanggan lain (status: ${newAsset.status}). Pilih modem yang berstatus AVAILABLE atau hubungi admin inventori.`
+        error: `Modem SN ${cleanSN} saat ini sedang terpasang pada pelanggan lain: ${assignedCustomer?.name || 'Lain'} (${assignedCustomer?.username || newAsset.currentCustomerId}). Harap lepas perangkat dari pelanggan tersebut terlebih dahulu.`
       }, { status: 400 });
     }
 
@@ -138,13 +169,13 @@ export async function POST(
     const replaceReason = reason?.trim() || 'Penggantian modem';
 
     await prisma.$transaction(async (tx) => {
-      // 3. Find old active asset for this customer
-      const oldAsset = await tx.inventoryAsset.findFirst({
-        where: { currentCustomerId: customerId, status: 'IN_USE', assetType: 'MODEM' },
+      // 3. Find old active assets for this customer and mark as USED_GOOD
+      const oldAssets = await tx.inventoryAsset.findMany({
+        where: { currentCustomerId: customerId, assetType: 'MODEM' },
       });
 
-      if (oldAsset) {
-        // 4. Update old asset — set to USED_GOOD, remove customer link
+      for (const oldAsset of oldAssets) {
+        if (oldAsset.id === newAsset!.id) continue;
         await tx.inventoryAsset.update({
           where: { id: oldAsset.id },
           data: {
@@ -154,7 +185,7 @@ export async function POST(
           },
         });
 
-        // 5. Log old device removal
+        // 4. Log old device removal
         await tx.customerDeviceHistory.create({
           data: {
             customerId,
@@ -171,7 +202,7 @@ export async function POST(
         });
       }
 
-      // 6. Update new asset — set to IN_USE, link to customer
+      // 5. Update new asset — set to IN_USE, link to customer
       await tx.inventoryAsset.update({
         where: { id: newAsset!.id },
         data: {
@@ -182,13 +213,13 @@ export async function POST(
         },
       });
 
-      // 7. Log new device installation
+      // 6. Log new device installation
       await tx.customerDeviceHistory.create({
         data: {
           customerId,
           assetId: newAsset!.id,
           serialNumber: cleanSN,
-          macAddress: newAsset!.macAddress,
+          macAddress: newAsset!.macAddress || matchingOnu?.macAddress || null,
           vendor: newAsset!.vendor,
           model: newAsset!.model,
           action: 'REPLACED_NEW',
@@ -198,40 +229,67 @@ export async function POST(
         },
       });
 
-      // 8. Update pppoeUser macAddress if available
-      if (newAsset!.macAddress) {
+      // 7. Update pppoeUser macAddress if available
+      const resolvedMac = newAsset!.macAddress || matchingOnu?.macAddress || (cleanSN.length === 12 && /^[0-9A-Fa-f]{12}$/.test(cleanSN) ? cleanSN : null);
+      if (resolvedMac) {
         await tx.pppoeUser.update({
           where: { id: customerId },
-          data: { macAddress: newAsset!.macAddress },
+          data: { macAddress: resolvedMac },
         });
       }
 
-      // 9. 1-Pintu: Synchronize OLT ONU assignments
-      if (oldAsset?.serialNumber) {
-        await tx.oltOnuStatus.updateMany({
-          where: {
-            customerId,
-            OR: [
-              { serialNumber: oldAsset.serialNumber },
-              ...(oldAsset.macAddress ? [{ macAddress: oldAsset.macAddress }] : []),
-            ],
-          },
-          data: { customerId: null },
-        });
+      // 8. 1-Pintu: Synchronize OLT ONU assignments
+      for (const oldAsset of oldAssets) {
+        if (oldAsset.id === newAsset!.id) continue;
+        if (oldAsset.serialNumber) {
+          await tx.oltOnuStatus.updateMany({
+            where: {
+              customerId,
+              OR: [
+                { serialNumber: oldAsset.serialNumber },
+                ...(oldAsset.macAddress ? [{ macAddress: oldAsset.macAddress }] : []),
+              ],
+            },
+            data: { customerId: null },
+          });
+        }
       }
 
       await tx.oltOnuStatus.updateMany({
         where: {
           OR: [
             { serialNumber: cleanSN },
-            ...(newAsset!.macAddress ? [{ macAddress: newAsset!.macAddress }] : []),
+            ...(resolvedMac ? [{ macAddress: resolvedMac }] : []),
           ],
         },
         data: { customerId },
       });
     });
 
-    const updatedAsset = await prisma.inventoryAsset.findUnique({ where: { id: newAsset.id } });
+    // 9. Optional: kick active session on MikroTik router so new ONT connects and authenticates cleanly
+    if (customer.routerId && customer.username) {
+      try {
+        const { PPPSecretService } = await import('@/server/services/mikrotik/ppp-secret.service');
+        const targetRouter = await prisma.router.findUnique({
+          where: { id: customer.routerId },
+          include: { vpnClient: true },
+        });
+        if (targetRouter && targetRouter.isActive) {
+          const { conn } = await PPPSecretService.connectToRouter(targetRouter);
+          const active = await conn.execute('/ppp/active/print', [`?name=${customer.username}`], 6000);
+          if (active && active.length > 0) {
+            for (const a of active) {
+              if (a['.id']) await conn.execute('/ppp/active/remove', [`=.id=${a['.id']}`], 6000);
+            }
+          }
+          await conn.disconnect();
+        }
+      } catch (kickErr) {
+        console.warn('[replace-device] Non-fatal MikroTik active session kick warning:', kickErr);
+      }
+    }
+
+    const updatedAsset = await prisma.inventoryAsset.findFirst({ where: { id: newAsset.id } });
 
     return NextResponse.json({
       success: true,

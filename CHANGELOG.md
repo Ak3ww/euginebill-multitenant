@@ -4,6 +4,162 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.48] — 2026-09-23
+### Master ODP Dropdown & Auto-Locked Tikor GPS SPK Teknisi, Auto-Deduct Inventori PSB, Auto-Fill Modem WO, dan Fix Ganti Modem (Next.js 15 Async Params)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pada form wizard SPK Teknisi (`/technician/work-orders/[id]`), teknisi sebelumnya harus mengetik nama ODP secara manual dan mengaktifkan GPS tiang ODP yang seringkali memakan waktu atau terhalang akurasi sinyal HP, padahal Admin sudah menentukan nama dan titik koordinat (tikor) ODP pada data master.
+  2. Alur Pasang Baru (PSB) pada penambahan user PPPoE baru (`src/server/services/pppoe.service.ts`) belum secara otomatis memotong stok gudang (`inventoryMovement` tipe `OUT`) dan meng-update status modem menjadi `IN_USE` beserta riwayat perangkat (`customerDeviceHistory`).
+  3. Pembuatan SPK oleh Admin (`src/app/api/admin/work-orders/route.ts`) belum secara otomatis menarik serial number (SN), MAC address, dan tipe modem pelanggan ke dalam `reportData` SPK.
+  4. Terjadi runtime error saat ganti modem di rute `/api/pppoe/users/[id]/replace-device` akibat perubahan Next.js 15 di mana `params` adalah Promise (`await params`), menyebabkan parameter `id` bernilai `undefined` pada query Prisma.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Master ODP Dropdown & Auto-Lock Tikor GPS Teknisi (`src/app/technician/(portal)/work-orders/[id]/page.tsx`)**:
+     - Menggantikan input teks biasa dengan dropdown `<select>` interaktif berisi daftar master ODP (`existingOdps`), jumlah port, dan status ketersediaan tikor.
+     - Menyediakan mode toggle "+ Ketik ODP Manual" jika terdapat ODP baru yang belum terdaftar di master data.
+     - Auto-Lock Tikor GPS: Ketika ODP dipilih dari dropdown atau diset oleh Admin, koordinat GPS tiang ODP otomatis terkunci langsung dari master data (`lockedOdpGps`), menampilkan badge sukses hijau dan membebaskan teknisi dari keharusan mengunci GPS tiang secara manual.
+     - GPS rumah pelanggan pada Langkah 3 tetap dipertahankan untuk dikunci di lokasi fisik rumah pelanggan.
+  2. **Auto-Deduct Inventori PSB (`src/server/services/pppoe.service.ts`)**:
+     - Saat admin membuat user PPPoE baru dengan `ontSerialNumber` atau `macAddress`, sistem otomatis mencari unit di `prisma.inventoryAsset`.
+     - Mengubah status aset menjadi `IN_USE`, mengaitkan `currentCustomerId: user.id`, dan mencatat riwayat `customerDeviceHistory` (`action: 'INSTALLED'`, `reason: 'Pasang Baru (PSB)'`).
+     - Mengurangi stok barang di gudang secara otomatis via `prisma.inventoryMovement` (`movementType: 'OUT'`) dan mendiskon `currentStock`.
+     - Menghubungkan secara otomatis ke Work Order aktif pelanggan dengan `reportData: { sn, mac, modemType }`.
+  3. **Auto-Fill Data Modem pada SPK Admin (`src/app/api/admin/work-orders/route.ts` & `[id]/route.ts`)**:
+     - Saat SPK dibuat, sistem meng-query modem pelanggan dari `inventoryAssets`, `deviceHistories`, `oltOnuStatuses`, dan `macAddress`.
+     - Mengisi otomatis `reportData: { sn, mac, modemType }` dan menghubungkan aset `assignedAssets: { connect: { id: foundAssetId } }`.
+  4. **Fix Ganti Modem & Next.js 15 Async Params (`src/app/api/pppoe/users/[id]/replace-device/route.ts`)**:
+     - Menerapkan `await params` pada handler API route.
+     - Menggunakan query multi-kunci `OR: [{ id: rawId }, { customerId: rawId }, { username: rawId }]` sehingga tidak pernah terjadi `id: undefined` pada query Prisma.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `src/app/technician/(portal)/work-orders/[id]/page.tsx`
+  - `src/app/api/technician/work-orders/[id]/route.ts`
+  - `src/server/services/pppoe.service.ts`
+  - `src/app/api/admin/work-orders/route.ts`
+  - `src/app/api/pppoe/users/[id]/replace-device/route.ts`
+
+## [2.40.47] — 2026-09-23
+### Sinkronisasi IP Pool & Profil MikroTik Cerdas (Anti-0.0.0.0 & Non-Destructive Sync), Router Resources Endpoint, Modal Paket Admin & Setup Wizard Step 3
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pelanggan PPPoE berisiko mendapatkan alokasi IP `0.0.0.0` jika saat sinkronisasi profil PPP dari EugineBill ke MikroTik, parameter `=remote-address=` terkirim dalam kondisi string kosong atau menimpa IP pool yang sudah ada di MikroTik.
+  2. Saat admin mengonfigurasi antrean mutakhir di Winbox MikroTik (seperti CAKE, FQ-CoDel, Parent Queue, dan packet mark mangle), sinkronisasi profil PPP dari sistem billing berisiko bersifat destruktif dan menghapus parameter kustom tersebut jika meng-overwrite seluruh properti profil.
+  3. Form pembuatan/pengeditan paket PPPoE di Admin Portal (`/admin/pppoe/profiles`) dan Setup Wizard (`/setup` Step 3) sebelumnya mengharuskan pengetikan nama profile dan IP pool secara manual tanpa adanya kemampuan membaca langsung daftar profil, IP pool, dan interface IP yang sudah aktif di router MikroTik.
+  4. Sesuai standar Workspace UI, seluruh portal dilarang menggunakan text emojis (`✅`, `❌`, `⚠️`), melainkan wajib menggunakan komponen ikon Lucide React (`<Info />`, `<CheckCircle2 />`, `<XCircle />`, dll).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Endpoint Baru Router Resources (`/api/network/routers/[id]/resources`)**:
+     - Lokasi: `src/app/api/network/routers/[id]/resources/route.ts`.
+     - Membaca RouterOS API dari router secara paralel dengan timeout guard 5000ms:
+       - `/ip/pool/print`: Ambil daftar pool (`name`, `ranges`).
+       - `/ppp/profile/print`: Ambil daftar profil PPP (`name`, `rate-limit`, `local-address`, `remote-address`, `only-one`).
+       - `/ip/address/print`: Ambil daftar IP interface router untuk saran `local-address`.
+     - Menggunakan `PPPSecretService.connectToRouter` dan `MikroTikConnection` dengan timeout guard (5000ms) dan return `{ success: true, pools, profiles, addresses }`.
+     - Menghasilkan respon graceful `{ success: false, error, pools: [], profiles: [], addresses: [] }` jika router tidak aktif atau timeout.
+  2. **Penguatan Sync MikroTik Anti-0.0.0.0 & Non-Destructive Sync (`/api/pppoe/profiles/sync-mikrotik`)**:
+     - Lokasi: `src/app/api/pppoe/profiles/sync-mikrotik/route.ts`.
+     - Sinkronisasi bersifat strictly non-destructive: hanya meng-update `rate-limit` dan `only-one`.
+     - Menjamin parameter `=remote-address=` kosong tidak pernah dikirim ke MikroTik.
+     - Preservasi Konfigurasi MikroTik: Hanya mengatur `remote-address` jika profil di MikroTik belum memiliki pool ATAU jika user secara eksplisit memilih pool di EugineBill. Konfigurasi CAKE, FQ-CoDel, Parent Queue, dan mangle di Winbox tetap utuh 100%.
+     - Menjamin `ipPoolName`, `ipPoolRange`, dan `localAddress` di database tidak tertimpa null jika tidak diubah.
+  3. **Modal Paket Layanan di Admin Portal (`src/app/admin/pppoe/profiles/page.tsx`)**:
+     - Pemilihan Router Aktif: Menampilkan dropdown router MikroTik aktif dan memuat resources secara real-time via `/api/network/routers/[id]/resources`.
+     - Pilihan Mode Impor Profil MikroTik Eksisting: Dropdown profil MikroTik dengan auto-fill nama paket, nama profil, alokasi bandwidth download/upload, IP pool, local address, dan shared user limit.
+     - Mode Pembuatan Profil Baru: Dropdown datalist interaktif untuk Remote Address (IP Pool) dan Local Address (IP Gateway) yang diambil dari router.
+     - Callout info teknis CAKE / FQ-CoDel dengan ikon Lucide `<Info className="w-4 h-4 text-blue-500" />` tanpa text emoji.
+     - Pembersihan text emojis pada alert test koneksi menjadi teks bersih.
+  4. **Setup Wizard Step 3 (`src/app/setup/page.tsx`)**:
+     - Jika router telah tersambung di Step 2, Step 3 otomatis memuat daftar profil & IP pool dari router yang bersangkutan via `/api/network/routers/[id]/resources`.
+     - Opsi memilih profil eksisting dari MikroTik atau membuat paket baru dengan dropdown datalist IP pool dan local address.
+     - Callout info teknis CAKE / FQ-CoDel tanpa text emoji.
+     - Sinkronisasi otomatis profil baru ke router MikroTik saat paket disimpan.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `src/app/api/network/routers/[id]/resources/route.ts`
+  - `src/app/api/pppoe/profiles/sync-mikrotik/route.ts`
+  - `src/app/api/pppoe/profiles/route.ts`
+  - `src/app/admin/pppoe/profiles/page.tsx`
+  - `src/app/setup/page.tsx`
+
+## [2.40.46] — 2026-09-23
+### Eliminasi Duplikasi Setup Wizard di Sidebar Admin, Standalone Route Fix & Seamless Integration Panduan Setup Awal (/admin/docs & /docs)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Terdapat duplikasi item navigasi "Setup Wizard" pada Sidebar Admin (`src/app/admin/AdminClientLayout.tsx`), yaitu item anak di dalam `nav.settingsMenu` (Pengaturan) dengan badge `Wizard` dan item menu utama mandiri dengan badge `Baru` dan ikon `Sparkles`.
+  2. Akses ke menu "Panduan Setup Awal" di sidebar mengarah ke `/docs` secara mentah, dan pada arsitektur multi-subdomain/proxy (`src/proxy.ts`), rute `/docs` tidak terdaftar dalam `isStandaloneRoute` sehingga berisiko ter-rewrite secara keliru atau 404 ketika diakses langsung melalui subdomain atau direct URL.
+  3. Halaman panduan setup (`src/app/admin/docs/page.tsx` dan `src/app/docs/page.tsx`) belum terintegrasi mulus dengan layout tema Shadcn UI Admin ketika diakses di dalam portal admin (mengakibatkan padding/scroll ganda dan link aksi yang mengarah ke rute legacy 404 seperti `/admin/packages` dan `/admin/customers`).
+  4. Penggunaan entitas teks panah (`&larr;` dan `&rarr;`) pada kontrol navigasi langkah panduan setup perlu distandarisasi ke komponen Lucide React (`ArrowLeft`, `ArrowRight`) sesuai aturan Workspace UI (Strictly No Text Emojis / Emoticons).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Eliminasi Duplikasi Setup Wizard Sidebar**:
+     - Menghapus item anak duplikat `{ titleKey: 'Setup Wizard', href: '/setup', badge: 'Wizard', requiredPermission: 'settings.view' }` di dalam `nav.settingsMenu`.
+     - Mempertahankan satu menu Setup Wizard utama mandiri di sidebar dengan ikon `Sparkles` dan badge `Baru`.
+  2. **Link Internal & Standalone Subdomain Route Fix**:
+     - Mengubah tautan sidebar "Panduan Setup Awal" dari `/docs` menjadi `/admin/docs` agar admin tetap berada di dalam tata letak admin dashboard.
+     - Menambahkan `pathname.startsWith('/docs')` ke dalam `isStandaloneRoute` pada `src/proxy.ts` agar akses langsung ke `/docs` di subdomain maupun domain utama tidak di-rewrite secara salah.
+     - Menambahkan fallback redirects di `next.config.ts` untuk `/admin/packages` -> `/admin/pppoe/profiles` dan `/admin/customers` -> `/admin/pppoe/users`.
+  3. **Integrasi Seamless Shadcn UI & Pembersihan Ikon**:
+     - Memperbarui `src/app/docs/page.tsx` dengan dukungan `embedded?: boolean`. Saat dimuat melalui `/admin/docs`, halaman menggunakan struktur kontainer menyatu tanpa padding ganda layar penuh.
+     - Memperbarui aksi langkah konfigurasi agar langsung mengarah ke rute valid: Step 2 ke `/admin/pppoe/profiles` dan Step 3 ke `/admin/pppoe/users`.
+     - Mengganti seluruh entitas panah teks `&larr;` dan `&rarr;` dengan komponen ikon Lucide React `<ArrowLeft />` dan `<ArrowRight />`.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `next.config.ts`
+  - `src/app/admin/AdminClientLayout.tsx`
+  - `src/app/admin/docs/page.tsx`
+  - `src/app/docs/page.tsx`
+  - `src/proxy.ts`
+
+## [2.40.45] — 2026-09-23
+### Auto-Deduct Inventory saat Tambah Pelanggan Baru & Data Linking Otomatis pada Penerbitan SPK Admin
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Saat admin mendaftarkan pelanggan PPPoE baru dengan perangkat modem (mengisi Serial Number ONT atau MAC Address), aset modem sebelumnya tidak otomatis terpotong dari inventori (`AVAILABLE` -> `IN_USE`), stok master katalog tidak terpotong (`currentStock`), dan tidak tercatat di `inventoryMovement` bertipe `OUT`.
+  2. Jika nomor Serial Number ONT belum pernah didaftarkan ke inventori, sistem belum menangani potensi collision unique constraint secara aman dengan fallback query.
+  3. Saat pelanggan didaftarkan dan sudah ada Surat Tugas (Work Order / SPK) yang berstatus terbuka (`OPEN`, `ASSIGNED`, `IN_PROGRESS`) untuk pelanggan atau nomor telepon tersebut, data perangkat (`sn`, `mac`, `modemType`) belum tersinkronisasi otomatis ke `workOrder.reportData` dan `assignedAssets`.
+  4. Saat admin menerbitkan Surat Tugas (SPK) baru di portal admin (`/api/admin/work-orders`), teknisi lapangan harus mengisi ulang Serial Number dan MAC address modem secara manual karena sistem belum meng-query dan menyematkan data perangkat pelanggan yang telah terpasang ke dalam `reportData` dan menghubungkan `assignedAssets`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Auto-Deduct Inventory & Stock Decrement saat Pasang Baru (PSB)**:
+     - Lokasi: `src/server/services/pppoe.service.ts` (`createPppoeUser`).
+     - Menghitung `effectiveSn`: jika `rawOntSn` kosong tetapi `macAddress` tersedia, sistem menggunakan `rawMac.replace(/[:-]/g, '').toUpperCase()` sebagai fallback Serial Number.
+     - Mencari aset di `inventoryAsset` berdasarkan ID, raw SN, uppercase SN, atau MAC address dengan menyertakan relasi `item`.
+     - Jika aset ditemukan:
+       - Status aset diperbarui menjadi `IN_USE`, `currentCustomerId: user.id`, dan `installedAt: new Date()`.
+       - Merekam riwayat di `customerDeviceHistory` dengan `action: 'INSTALLED'`, `reason: 'Pasang Baru (PSB)'`.
+       - Mengurangi `item.currentStock` jika `currentStock > 0` dan mencatat mutasi pengeluaran barang di `prisma.inventoryMovement` (`movementType: 'OUT'`, `referenceNo: 'PSB-' + customerId/username`).
+     - Jika aset belum terdaftar di inventori:
+       - Otomatis mendaftarkan unit baru ke `inventoryAsset` dengan status `IN_USE`, `currentCustomerId: user.id`, dan mendeteksi vendor/model melalui `detectOntVendorAndModel`.
+       - Menangani kemungkinan collision unique constraint secara aman dengan blok `catch` dan fallback query untuk memperbarui aset yang sudah ada.
+     - Jika ada Surat Tugas (SPK) terbuka (`OPEN`, `ASSIGNED`, `IN_PROGRESS`) untuk pelanggan atau nomor teleponnya:
+       - Memperbarui `workOrder.reportData` dengan `{ sn, mac, modemType }` tanpa menimpa data ODP/port yang sudah ada.
+       - Menautkan aset ke work order melalui `assignedAssets: { connect: { id: targetAsset.id } }` dan menghubungkan `linkedUserId`.
+  2. **Data Linking Otomatis pada Penerbitan SPK Admin**:
+     - Lokasi: `src/app/api/admin/work-orders/route.ts` (`POST`).
+     - Saat admin menerbitkan SPK dan `finalLinkedUserId` terdeteksi atau ditemukan melalui pencarian telepon/nama:
+       - Meng-query perangkat modem pelanggan secara berlapis: `inventoryAssets` (assetType: `MODEM`, order by `updatedAt: desc`), `customerDeviceHistory`, `oltOnuStatus`, dan `macAddress` dari `pppoeUser`.
+       - Otomatis mendeteksi vendor dan model modem jika belum terisi via `detectOntVendorAndModel`.
+       - Memasukkan data perangkat langsung ke dalam `reportData: { sn: foundSn, mac: foundMac, modemType: foundModel }` (digabungkan secara aman dengan draft reportData).
+       - Menghubungkan aset ke Surat Tugas via `assignedAssets: { connect: { id: foundAssetId } }` dengan fallback aman tanpa fatal error.
+
+- **Files**:
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `src/server/services/pppoe.service.ts`
+  - `src/app/api/admin/work-orders/route.ts`
+  - `src/app/api/pppoe/users/[id]/device-history/route.ts`
+  - `src/app/api/pppoe/users/[id]/replace-device/route.ts`
+  - `src/app/api/pppoe/users/[id]/sync-radius/route.ts`
+
 ## [2.40.44] — 2026-09-20
 ### Fix Ganti Modem (Next.js 15 Promise Params & Flexible ID Resolution), Router Route Alias, /docs Layout, & One-Time OLT Modem Sync
 

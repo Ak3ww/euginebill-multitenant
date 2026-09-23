@@ -10,6 +10,7 @@ import {
   Bot,
   Package,
   ArrowRight,
+  ArrowLeft,
   ExternalLink,
   CheckCircle2,
   HelpCircle,
@@ -40,7 +41,11 @@ interface SetupStep {
   scriptNote: string;
 }
 
-export default function DocsPage() {
+interface DocsPageProps {
+  embedded?: boolean;
+}
+
+export default function DocsPage({ embedded = false }: DocsPageProps = {}) {
   const [activeStepId, setActiveStepId] = useState<string>('step-1');
 
   const steps: SetupStep[] = [
@@ -76,7 +81,7 @@ export default function DocsPage() {
       summary: 'Hubungkan paket tarif bulanan yang akan ditagihkan ke pelanggan dengan nama PPP Profile yang sudah ada di MikroTik Anda.',
       primaryAction: {
         label: 'Buka Halaman Manajemen Paket',
-        href: '/admin/packages',
+        href: '/admin/pppoe/profiles',
       },
       actionItems: [
         'Pastikan PPP Profile kecepatan bandwidth Anda sudah tersedia di MikroTik (menu /ppp profile).',
@@ -95,7 +100,7 @@ export default function DocsPage() {
       summary: 'Input data pelanggan baru di web billing. Akun secret di MikroTik otomatis terbuat secara instan dan invoice perdana langsung terbit.',
       primaryAction: {
         label: 'Buka Halaman Data Pelanggan',
-        href: '/admin/customers',
+        href: '/admin/pppoe/users',
       },
       actionItems: [
         'Masuk ke halaman Data Pelanggan > klik "Tambah Pelanggan".',
@@ -172,8 +177,8 @@ export default function DocsPage() {
   const activeStep = steps.find((s) => s.id === activeStepId) || steps[0];
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className={embedded ? "w-full max-w-6xl mx-auto space-y-6" : "min-h-screen bg-background text-foreground py-8 px-4 sm:px-6 lg:px-8"}>
+      <div className={embedded ? "space-y-6" : "max-w-6xl mx-auto space-y-6"}>
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
           <div className="flex items-center gap-3">
@@ -193,7 +198,7 @@ export default function DocsPage() {
             </div>
           </div>
           <Link
-            href="/admin/dashboard"
+            href="/admin"
             className="px-4 py-2 text-xs font-medium bg-muted hover:bg-accent border border-border rounded-xl text-foreground transition-colors flex items-center gap-2 self-start sm:self-auto"
           >
             <LayoutDashboard className="w-4 h-4" /> Kembali ke Dashboard
@@ -334,7 +339,7 @@ export default function DocsPage() {
                       onClick={() => setActiveStepId(prevStep.id)}
                       className="px-4 py-2 text-xs bg-muted hover:bg-accent border border-border rounded-xl text-foreground flex items-center gap-1.5 font-medium transition-colors"
                     >
-                      &larr; Langkah {prevStep.stepNumber}: {prevStep.title}
+                      <ArrowLeft className="w-3.5 h-3.5" /> Langkah {prevStep.stepNumber}: {prevStep.title}
                     </button>
                   ) : (
                     <div />
@@ -345,14 +350,14 @@ export default function DocsPage() {
                       onClick={() => setActiveStepId(nextStep.id)}
                       className="px-5 py-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl flex items-center gap-1.5 font-semibold transition-colors shadow-sm"
                     >
-                      Lanjut ke Langkah {nextStep.stepNumber}: {nextStep.title} &rarr;
+                      Lanjut ke Langkah {nextStep.stepNumber}: {nextStep.title} <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   ) : (
                     <Link
-                      href="/admin/dashboard"
+                      href="/admin"
                       className="px-5 py-2 text-xs bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl flex items-center gap-1.5 font-semibold transition-colors shadow-sm"
                     >
-                      Setup Selesai! Buka Dashboard &rarr;
+                      Setup Selesai! Buka Dashboard <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   )}
                 </>

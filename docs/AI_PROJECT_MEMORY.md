@@ -10,15 +10,90 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.44
+- **Version**: 2.40.48
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
-- **Last Updated**: September 20, 2026
+- **Last Updated**: September 23, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 23, 2026 — v2.40.48: Master ODP Dropdown & Auto-Locked Tikor GPS SPK Teknisi, Auto-Deduct Inventory PSB, Auto-Fill Modem WO, Next.js 15 Async Params Fix)
+
+- **Hard Invariant: Master ODP Selection & GPS Auto-Lock for Technicians**:
+  - Pada wizard SPK Teknisi (`/technician/work-orders/[id]`), teknisi tidak boleh diwajibkan mengetik nama ODP atau mengunci GPS tiang ODP secara manual jika ODP telah terdaftar di master data.
+  - Dropdown `<select>` master ODP memuat daftar ODP (`existingOdps`), jumlah port, dan status koordinat.
+  - Begitu ODP dipilih dari dropdown atau telah di-prefill oleh Admin, titik koordinat tiang ODP (`lockedOdpGps`) otomatis terkunci dari master data, menampilkan kartu konfirmasi hijau tanpa perlu aktivasi GPS tiang manual.
+  - Mode toggle manual disediakan untuk ODP baru yang belum terdaftar. GPS rumah pelanggan pada Langkah 3 tetap diwajibkan dikunci di lokasi fisik rumah pelanggan.
+
+- **Hard Invariant: Auto-Deduct Inventory on Create PPPoE User**:
+  - Penambahan user PPPoE baru dengan serial number atau MAC modem (`createPppoeUser` di `pppoe.service.ts`) wajib memotong stok gudang secara otomatis via `prisma.inventoryMovement` (`movementType: 'OUT'`), mengubah status aset `inventoryAsset` menjadi `IN_USE`, dan mencatat riwayat ke `customerDeviceHistory` (`action: 'INSTALLED'`).
+  - Unit modem otomatis ditautkan ke SPK pelanggan yang masih berstatus terbuka (`OPEN`, `ASSIGNED`, `IN_PROGRESS`).
+
+- **Hard Invariant: Auto-Fill Customer Modem Data on Work Order**:
+  - Saat Admin menerbitkan SPK (`/api/admin/work-orders`), sistem wajib mencari serial number, MAC address, dan tipe modem pelanggan dari `inventoryAssets`, `deviceHistories`, `oltOnuStatuses`, dan `macAddress`, lalu otomatis memasukkannya ke dalam `reportData` SPK serta mengaitkan `assignedAssets`.
+
+- **Hard Invariant: Next.js 15 Async Params on Replace Device Route**:
+  - Handler API route dinamis seperti `/api/pppoe/users/[id]/replace-device` wajib melakukan `await params` sebelum membaca parameter `id`.
+  - Pencarian user wajib menggunakan query multi-kunci aman `OR: [{ id: rawId }, { customerId: rawId }, { username: rawId }]` untuk mencegah eksepsi Prisma `id: undefined`.
+
+### Recent Patch Log (September 23, 2026 — v2.40.47: Intelligent MikroTik Profile & IP Pool Sync, Anti-0.0.0.0 & Non-Destructive Invariants)
+
+- **Hard Invariant: Non-Destructive PPP Profile Synchronization**:
+  - Sinkronisasi PPP profile (`/api/pppoe/profiles/sync-mikrotik`) bersifat strictly non-destructive: hanya meng-update parameter `.id`, `rate-limit`, dan `only-one`.
+  - **Anti-0.0.0.0 Rule**: JANGAN PERNAH mengirim `=remote-address=` kosong atau `=local-address=` kosong ke MikroTik. Hal ini akan menyebabkan router MikroTik menghapus pool pada profil dan membagikan IP `0.0.0.0` ke sesi pelanggan PPPoE yang terkoneksi!
+  - **Winbox Queue & Mangle Preservation**: Konfigurasi antrean lanjutan yang dibuat admin di Winbox (CAKE, FQ-CoDel, Parent Queue, Queue Type, Packet Mark Mangle) TIDAK BOLEH ditimpa atau dihapus saat sinkronisasi billing berlangsung.
+  - Parameter `remote-address` hanya boleh diset ke MikroTik jika profil di MikroTik belum memiliki remote-address/pool ATAU jika user secara eksplisit memilih pool di EugineBill.
+  - Di database Prisma, properti `ipPoolName`, `ipPoolRange`, dan `localAddress` tidak boleh ditimpa null jika sync request tidak mengirimkan nilai baru.
+
+- **Hard Invariant: Router Resources Real-Time Inspection**:
+  - Endpoint `/api/network/routers/[id]/resources` wajib membaca RouterOS API secara paralel dengan timeout guard 5000ms:
+    - `/ip/pool/print`: Ambil daftar pool (`name`, `ranges`).
+    - `/ppp/profile/print`: Ambil profil PPP (`name`, `rate-limit`, `local-address`, `remote-address`, `only-one`).
+    - `/ip/address/print`: Ambil interface IP addresses untuk saran `local-address`.
+  - Mengembalikan respon graceful `{ success: false, error, pools: [], profiles: [], addresses: [] }` jika router offline / timeout, sehingga UI frontend tidak pernah crash.
+
+- **Hard Invariant: Interactive Profile Importer in Admin & Setup Wizard**:
+  - Di Admin Portal (`/admin/pppoe/profiles`) dan Setup Wizard (`/setup` Step 3), admin dapat memilih router aktif untuk membaca daftar profil dan IP pool secara langsung.
+  - Memilih profil eksisting dari MikroTik secara otomatis mengisi nama paket, nama profil PPP, bandwidth download/upload, remote-address (IP pool), dan local-address.
+  - Callout banner teknis CAKE / FQ-CoDel wajib menggunakan komponen ikon Lucide React `<Info className="w-4 h-4 text-blue-500" />` tanpa text emoji.
+
+### Recent Patch Log (September 23, 2026 — v2.40.46: Setup Wizard De-duplication & Standalone Route Fix for Documentation)
+
+- **Hard Invariant: Setup Wizard Sidebar Singularity**:
+  - Menu "Setup Wizard" hanya boleh didefinisikan satu kali di tingkat atas sidebar admin (`AdminClientLayout.tsx`), tidak boleh diduplikasi sebagai anak menu di dalam `nav.settingsMenu`.
+- **Hard Invariant: Standalone Route in Multi-Subdomain Proxy**:
+  - Rute `/docs` wajib terdaftar dalam `isStandaloneRoute` di `src/proxy.ts` bersama `/invoice`, `/pay`, `/isolated`, `/uploads`, dan `/setup` agar akses direct URL pada subdomain (misal `admin.domain.com/docs`) tidak mengalami rewriting keliru ke prefix subdomain yang memicu 404.
+- **Hard Invariant: Internal Admin Documentation Embedding**:
+  - Tautan sidebar admin "Panduan Setup Awal" mengarah ke `/admin/docs` (yang me-render `DocsPage embedded`), menjaga admin tetap dalam konteks layout admin, sedangkan direct URL `/docs` dapat diakses secara publik/mandiri.
+  - Halaman panduan setup tidak boleh memiliki tautan mati ke rute legacy (misal `/admin/packages` diarahkan ke `/admin/pppoe/profiles`, dan `/admin/customers` diarahkan ke `/admin/pppoe/users`).
+- **Hard Invariant: Strict Lucide React Icons Across All Portals**:
+  - Dilarang keras menggunakan text emoji maupun simbol entitas HTML seperti `&larr;` / `&rarr;` sebagai elemen UI navigasi. Wajib menggunakan komponen Lucide React (`ArrowLeft`, `ArrowRight`).
+
+### Recent Patch Log (September 23, 2026 — v2.40.45: Auto-Deduct Inventory saat Tambah Pelanggan Baru & Data Linking Otomatis pada Penerbitan SPK Admin)
+
+- **Hard Invariant: Auto-Deduct Inventory saat Pasang Baru (PSB)**:
+  - Pada `createPppoeUser` (`src/server/services/pppoe.service.ts`), jika pendaftaran pelanggan menyertakan modem (`ontSerialNumber` atau `macAddress` atau `assetId`):
+    - Sistem menghitung `effectiveSn`: jika `rawOntSn` kosong tetapi `macAddress` tersedia, sistem wajib menggunakan `rawMac.replace(/[:-]/g, '').toUpperCase()` sebagai fallback Serial Number agar tidak terabaikan.
+    - Cari aset di `inventoryAsset` (dengan ID, raw SN, uppercase SN, atau MAC address).
+    - Jika aset ada (`AVAILABLE` atau status lain):
+      - Update status menjadi `IN_USE`, set `currentCustomerId: user.id`, `installedAt: new Date()`.
+      - Catat histori di `customerDeviceHistory` dengan `action: 'INSTALLED'`, `reason: 'Pasang Baru (PSB)'`.
+      - Catat pergerakan stok di `prisma.inventoryMovement` (`movementType: 'OUT'`, `referenceNo: 'PSB-' + (user.customerId || user.username)`), dan kurangi `item.currentStock` jika `item.currentStock > 0`.
+    - Jika aset belum terdaftar di inventori:
+      - Otomatis daftarkan unit baru ke `inventoryAsset` dengan status `IN_USE`, `currentCustomerId: user.id`, dan auto-detect vendor/model via `detectOntVendorAndModel`.
+      - Wajib tangani collision unique constraint secara aman dengan blok `catch` dan fallback query agar pendaftaran user tidak pernah crash.
+    - Jika ada Work Order terbuka (`status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS'] }`) untuk user ini atau nomor teleponnya:
+      - Perbarui `workOrder.reportData` dengan `{ sn, mac, modemType }` tanpa menimpa data ODP/port.
+      - Tautkan `assignedAssets: { connect: { id: targetAsset.id } }` dan hubungkan `linkedUserId`.
+
+- **Hard Invariant: Data Linking pada Penerbitan SPK Admin**:
+  - Pada `POST /api/admin/work-orders` (`src/app/api/admin/work-orders/route.ts`), saat admin menerbitkan SPK dan `finalLinkedUserId` terdeteksi atau ditemukan via telepon/nama:
+    - Query perangkat modem pelanggan secara hierarkis: `inventoryAssets` (assetType: `MODEM`, order by `updatedAt: desc`), `customerDeviceHistory`, `oltOnuStatus`, dan `macAddress` dari `pppoeUser`.
+    - Jika ditemukan SN/MAC, masukkan langsung ke dalam `reportData`: `{ sn: foundSn, mac: foundMac, modemType: foundModel }` (digabung secara aman dengan draft `reportData`).
+    - Hubungkan aset ke Surat Tugas via `assignedAssets: { connect: { id: foundAssetId } }` dengan fallback aman (wrap `try/catch` tanpa `assignedAssets` jika relasi connect gagal) sehingga SPK selalu berhasil diterbitkan.
 
 ### Recent Patch Log (September 20, 2026 — v2.40.44: Modem Replacement Hardening, Next.js 15 Promise Params, Flexible ID Resolution, & One-Time OLT Modem Sync)
 

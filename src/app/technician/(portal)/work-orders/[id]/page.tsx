@@ -448,6 +448,7 @@ export default function TechnicianWorkOrderWizardPage() {
   const [existingOdps, setExistingOdps] = useState<OdpOption[]>([]);
   const [selectedOdp, setSelectedOdp] = useState<OdpOption | null>(null);
   const [suggestedOdp, setSuggestedOdp] = useState<{ name: string; distMeters: number; odp: OdpOption } | null>(null);
+  const [isManualOdp, setIsManualOdp] = useState(false);
 
   // Cable roll picker (Step 2 — ODP step)
   const [selectedRollId, setSelectedRollId] = useState<string | null>(null);
@@ -526,25 +527,50 @@ export default function TechnicianWorkOrderWizardPage() {
 
         const customer = woData?.customer;
         const odpAssign = customer?.odpAssignment;
-        const activeModem = customer?.inventoryAssets?.[0];
+        const assignedModem = woData?.assignedAssets?.[0];
+        const customerModem = customer?.inventoryAssets?.[0];
         const latestHistory = customer?.deviceHistories?.[0];
+        const oltStatus = customer?.oltOnuStatuses?.[0];
+        const woReport = woData?.reportData as any;
 
         // Derived defaults from Admin / Customer data
         const adminCustomerGps = (customer?.latitude && customer?.longitude)
           ? { lat: Number(customer.latitude), lng: Number(customer.longitude) }
           : null;
 
-        const adminOdpName = odpAssign?.odp?.name || '';
-        const adminPortNumber = odpAssign?.portNumber || null;
+        const adminOdpName = (odpAssign?.odp?.name || woReport?.odpName || '').trim();
+        const adminPortNumber = odpAssign?.portNumber || woReport?.portNumber || null;
         const adminOdpGps = (odpAssign?.odp?.latitude && odpAssign?.odp?.longitude)
           ? { lat: Number(odpAssign.odp.latitude), lng: Number(odpAssign.odp.longitude) }
-          : null;
+          : (woReport?.odpLat && woReport?.odpLng ? { lat: Number(woReport.odpLat), lng: Number(woReport.odpLng) } : null);
 
-        const adminSn = activeModem?.serialNumber || latestHistory?.serialNumber || '';
-        const adminMac = activeModem?.macAddress || latestHistory?.macAddress || customer?.macAddress || '';
-        const adminModemType = [activeModem?.vendor, activeModem?.model].filter(Boolean).join(' ')
-          || [latestHistory?.vendor, latestHistory?.model].filter(Boolean).join(' ')
-          || '';
+        const adminSn = (
+          woReport?.sn ||
+          assignedModem?.serialNumber ||
+          customerModem?.serialNumber ||
+          latestHistory?.serialNumber ||
+          oltStatus?.serialNumber ||
+          ''
+        ).trim().toUpperCase();
+
+        const adminMac = (
+          woReport?.mac ||
+          assignedModem?.macAddress ||
+          customerModem?.macAddress ||
+          latestHistory?.macAddress ||
+          customer?.macAddress ||
+          oltStatus?.macAddress ||
+          ''
+        ).trim().toUpperCase();
+
+        const adminModemType = (
+          woReport?.modemType ||
+          [assignedModem?.vendor, assignedModem?.model].filter(Boolean).join(' ') ||
+          [customerModem?.vendor, customerModem?.model].filter(Boolean).join(' ') ||
+          [latestHistory?.vendor, latestHistory?.model].filter(Boolean).join(' ') ||
+          oltStatus?.description ||
+          ''
+        ).trim();
 
         setHasAdminPrefills({
           gps: !!adminCustomerGps,
@@ -574,19 +600,20 @@ export default function TechnicianWorkOrderWizardPage() {
           if (draft.checklist) setChecklist(draft.checklist);
           if (draft.dismantleChecklist) setDismantleChecklist(draft.dismantleChecklist);
           if (draft.deviceCondition) setDeviceCondition(draft.deviceCondition);
-          if (draft.reportData) {
-            setReportData(prev => ({
-              ...prev,
-              ...draft.reportData,
-              odpName: draft.reportData.odpName || adminOdpName || prev.odpName,
-              portNumber: draft.reportData.portNumber || adminPortNumber || prev.portNumber,
-              odpLat: draft.reportData.odpLat || (adminOdpGps ? String(adminOdpGps.lat) : '') || prev.odpLat,
-              odpLng: draft.reportData.odpLng || (adminOdpGps ? String(adminOdpGps.lng) : '') || prev.odpLng,
-              sn: draft.reportData.sn || adminSn || prev.sn,
-              mac: draft.reportData.mac || adminMac || prev.mac,
-              modemType: draft.reportData.modemType || adminModemType || prev.modemType,
-            }));
-          }
+          
+          const dReport = draft.reportData || woReport || {};
+          setReportData(prev => ({
+            ...prev,
+            ...dReport,
+            odpName: (dReport.odpName && dReport.odpName.trim()) ? dReport.odpName.trim() : (adminOdpName || prev.odpName),
+            portNumber: dReport.portNumber || adminPortNumber || prev.portNumber,
+            odpLat: dReport.odpLat || (adminOdpGps ? String(adminOdpGps.lat) : '') || prev.odpLat,
+            odpLng: dReport.odpLng || (adminOdpGps ? String(adminOdpGps.lng) : '') || prev.odpLng,
+            sn: (dReport.sn && dReport.sn.trim()) ? dReport.sn.trim().toUpperCase() : (adminSn || prev.sn),
+            mac: (dReport.mac && dReport.mac.trim()) ? dReport.mac.trim().toUpperCase() : (adminMac || prev.mac),
+            modemType: (dReport.modemType && dReport.modemType.trim()) ? dReport.modemType.trim() : (adminModemType || prev.modemType),
+          }));
+
           if (draft.photos) setPhotos(draft.photos);
           if (draft.lockedOdpGps) setLockedOdpGps(draft.lockedOdpGps);
           else if (adminOdpGps) setLockedOdpGps(adminOdpGps);
@@ -641,9 +668,23 @@ export default function TechnicianWorkOrderWizardPage() {
 
   // ─── ODP name change ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!reportData.odpName) {
+      setSelectedOdp(null);
+      return;
+    }
     const found = existingOdps.find(o => o.name.toLowerCase() === reportData.odpName.toLowerCase());
-    setSelectedOdp(found || null);
-  }, [reportData.odpName, existingOdps]);
+    if (found) {
+      setSelectedOdp(found);
+      if (found.latitude && found.longitude && !lockedOdpGps) {
+        setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
+      }
+    } else {
+      setSelectedOdp(null);
+      if (existingOdps.length > 0) {
+        setIsManualOdp(true);
+      }
+    }
+  }, [reportData.odpName, existingOdps, lockedOdpGps]);
 
   // ─── ODP GPS suggestion ──────────────────────────────────────────────────
   useEffect(() => {
@@ -694,7 +735,15 @@ export default function TechnicianWorkOrderWizardPage() {
     const missing: string[] = [];
     if (!reportData.odpName.trim()) missing.push('Nama ODP');
     if (!reportData.portNumber) missing.push('Nomor Port ODP');
-    if (!lockedOdpGps) missing.push('GPS ODP (harus dikunci)');
+
+    // Auto-resolve ODP GPS from selected master ODP if not already locked
+    let effectiveOdpGps = lockedOdpGps;
+    if (!effectiveOdpGps && selectedOdp?.latitude && selectedOdp?.longitude) {
+      effectiveOdpGps = { lat: Number(selectedOdp.latitude), lng: Number(selectedOdp.longitude) };
+      setLockedOdpGps(effectiveOdpGps);
+    }
+
+    if (!effectiveOdpGps) missing.push('GPS ODP (pilih ODP terdaftar atau kunci GPS)');
     if (!photos['Foto Box ODP']) missing.push('Foto Box ODP');
     if (!photos['Foto Port ODP']) missing.push('Foto Port ODP');
     if (missing.length > 0) {
@@ -1223,12 +1272,135 @@ export default function TechnicianWorkOrderWizardPage() {
             </div>
           )}
 
+          {/* 1. Pilih ODP (Master Data) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-foreground">
+                Pilih ODP (Master Data) *
+              </label>
+              {!isManualOdp ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManualOdp(true);
+                    setReportData(p => ({ ...p, odpName: '' }));
+                    setSelectedOdp(null);
+                  }}
+                  className="text-[11px] text-primary hover:underline font-semibold"
+                >
+                  + Ketik ODP Manual
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManualOdp(false);
+                    const first = existingOdps[0]?.name || '';
+                    if (first) {
+                      const found = existingOdps[0];
+                      setSelectedOdp(found);
+                      setReportData(p => ({
+                        ...p,
+                        odpName: first,
+                        odpLat: found?.latitude ? String(found.latitude) : p.odpLat,
+                        odpLng: found?.longitude ? String(found.longitude) : p.odpLng,
+                      }));
+                      if (found?.latitude && found?.longitude) {
+                        setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
+                      }
+                    }
+                  }}
+                  className="text-[11px] text-primary hover:underline font-semibold"
+                >
+                  &larr; Pilih dari Daftar ODP
+                </button>
+              )}
+            </div>
+
+            {!isManualOdp ? (
+              <select
+                value={reportData.odpName}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '__MANUAL__') {
+                    setIsManualOdp(true);
+                    setReportData(p => ({ ...p, odpName: '' }));
+                    setSelectedOdp(null);
+                    return;
+                  }
+                  const found = existingOdps.find(o => o.name === val);
+                  setSelectedOdp(found || null);
+                  setReportData(p => ({
+                    ...p,
+                    odpName: val,
+                    odpLat: found?.latitude ? String(found.latitude) : p.odpLat,
+                    odpLng: found?.longitude ? String(found.longitude) : p.odpLng,
+                  }));
+                  if (found?.latitude && found?.longitude) {
+                    setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
+                  }
+                }}
+                className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs text-foreground"
+              >
+                <option value="">-- Pilih ODP Terdaftar --</option>
+                {existingOdps.map(o => (
+                  <option key={o.id} value={o.name}>
+                    {o.name} ({o.portCount || 16} Port{o.latitude && o.longitude ? ' - Tikor Tersedia' : ''})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  placeholder="Ketik Nama ODP (Cth: ODP-KDS-07)"
+                  value={reportData.odpName}
+                  onChange={e => setReportData(p => ({ ...p, odpName: e.target.value }))}
+                  className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  Mode manual aktif. Pastikan kunci GPS ODP di bawah jika ODP belum ada di master data.
+                </span>
+              </div>
+            )}
+
+            {suggestedOdp && !isManualOdp && (
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between">
+                <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-emerald-600 inline" /> ODP Terdekat: <strong>{suggestedOdp.name}</strong> ({suggestedOdp.distMeters}m)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportData(p => ({
+                      ...p,
+                      odpName: suggestedOdp.name,
+                      odpLat: suggestedOdp.odp.latitude ? String(suggestedOdp.odp.latitude) : p.odpLat,
+                      odpLng: suggestedOdp.odp.longitude ? String(suggestedOdp.odp.longitude) : p.odpLng,
+                    }));
+                    setSelectedOdp(suggestedOdp.odp);
+                    if (suggestedOdp.odp.latitude && suggestedOdp.odp.longitude) {
+                      setLockedOdpGps({ lat: Number(suggestedOdp.odp.latitude), lng: Number(suggestedOdp.odp.longitude) });
+                    }
+                    setSuggestedOdp(null);
+                  }}
+                  className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700"
+                >
+                  Gunakan
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 2. GPS Tiang ODP */}
           <div className="p-4 bg-muted/40 border border-border rounded-xl space-y-3">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-bold text-foreground">GPS Tiang ODP *</span>
-                <GpsAccuracyBadge accuracy={odpGps.gps.accuracy} watching={odpGps.gps.watching} />
+                <span className="text-xs font-bold text-foreground">Tikor GPS Tiang ODP *</span>
+                {(!lockedOdpGps || isManualOdp) && (
+                  <GpsAccuracyBadge accuracy={odpGps.gps.accuracy} watching={odpGps.gps.watching} />
+                )}
               </div>
               {!lockedOdpGps ? (
                 !odpGps.gps.watching ? (
@@ -1247,33 +1419,23 @@ export default function TechnicianWorkOrderWizardPage() {
                 )
               ) : (
                 <button onClick={() => { setLockedOdpGps(null); odpGps.startWatch(); }}
-                  className="px-3 py-1.5 bg-muted text-foreground border border-border rounded-lg font-mono text-[10px] font-bold">
-                  <RefreshCw className="w-3 h-3 inline mr-1" /> Ubah
+                  className="px-3 py-1.5 bg-muted text-foreground border border-border rounded-lg font-mono text-[10px] font-bold hover:bg-muted/80">
+                  <RefreshCw className="w-3 h-3 inline mr-1" /> Ubah GPS
                 </button>
               )}
             </div>
-            {lockedOdpGps && (
-              <div className="font-mono text-xs text-emerald-600 font-bold bg-background p-2 rounded border border-emerald-500/30">
-                Terkunci — Lat: {lockedOdpGps.lat.toFixed(6)}, Lng: {lockedOdpGps.lng.toFixed(6)}
-              </div>
-            )}
-          </div>
 
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-foreground">Nama ODP *</label>
-            <input type="text" list="odp-suggestions-list" placeholder="Cth: ODP-KDS-07 / KPS-06" value={reportData.odpName}
-              onChange={e => setReportData(p => ({ ...p, odpName: e.target.value }))}
-              className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs" />
-            <datalist id="odp-suggestions-list">
-              {existingOdps.map(o => <option key={o.id} value={o.name} />)}
-            </datalist>
-            {suggestedOdp && (
-              <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between">
-                <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-emerald-600 inline" /> Terdekat: <strong>{suggestedOdp.name}</strong> ({suggestedOdp.distMeters}m)
-                </span>
-                <button onClick={() => { setReportData(p => ({ ...p, odpName: suggestedOdp.name })); setSelectedOdp(suggestedOdp.odp); setSuggestedOdp(null); }}
-                  className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-bold">Gunakan</button>
+            {lockedOdpGps && (
+              <div className="space-y-1.5">
+                <div className="font-mono text-xs text-emerald-600 font-bold bg-background p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between">
+                  <span>Terkunci — Lat: {lockedOdpGps.lat.toFixed(6)}, Lng: {lockedOdpGps.lng.toFixed(6)}</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                </div>
+                {selectedOdp?.latitude && selectedOdp?.longitude && Math.abs(lockedOdpGps.lat - Number(selectedOdp.latitude)) < 0.0001 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Tikor diambil otomatis dari master data ODP. Teknisi tidak perlu mengunci GPS tiang secara manual.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>

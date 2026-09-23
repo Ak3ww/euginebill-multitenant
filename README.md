@@ -374,195 +374,179 @@ Bagian ini otomatis sinkron dari `CHANGELOG.md` saat file changelog berubah di G
 
 <!-- AUTO-CHANGELOG:START -->
 
-### v2.40.4 — 2026-09-16
+### v2.40.45 — 2026-09-23
 
-### Hardening Pasang Baru Pelanggan (PSB), Timeout Guard MikroTik/Email, & Resolusi Tampilan SN ONT
+### Auto-Deduct Inventory saat Tambah Pelanggan Baru & Data Linking Otomatis pada Penerbitan SPK Admin
 
-- **Latar Belakang / Context**:
-  1. Pada form Pasang Baru (`/admin/pppoe/users/new`), proses penambahan pelanggan sempat terasa lambat dan berpotensi freeze/loading lama jika router MikroTik memiliki latensi tinggi, VPN terputus, atau API MikroTik tidak merespon instan.
-  2. Data Serial Number (SN ONT) dan Tipe/Model ONT yang diinput saat PSB sempat bernilai `-` pada kartu "Data Perangkat & Infrastruktur Lapangan (ONT / ODP)" di detail pelanggan, karena kartu tersebut sebelumnya hanya membaca data dari laporan SPK/Work Order (`woReportData.sn`), bukan dari `inventoryAsset` / `customerDeviceHistory` aktif pelanggan.
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Saat admin mendaftarkan pelanggan PPPoE baru dengan perangkat modem (mengisi Serial Number ONT atau MAC Address), aset modem sebelumnya tidak otomatis terpotong dari inventori (`AVAILABLE` -> `IN_USE`), stok master katalog tidak terpotong (`currentStock`), dan tidak tercatat di `inventoryMovement` bertipe `OUT`.
+  2. Jika nomor Serial Number ONT belum pernah didaftarkan ke inventori, sistem belum menangani potensi collision unique constraint secara aman dengan fallback query.
+  3. Saat pelanggan didaftarkan dan sudah ada Surat Tugas (Work Order / SPK) yang berstatus terbuka (`OPEN`, `ASSIGNED`, `IN_PROGRESS`) untuk pelanggan atau nomor telepon tersebut, data perangkat (`sn`, `mac`, `modemType`) belum tersinkronisasi otomatis ke `workOrder.reportData` dan `assignedAssets`.
+  4. Saat admin menerbitkan Surat Tugas (SPK) baru di portal admin (`/api/admin/work-orders`), teknisi lapangan harus mengisi ulang Serial Number dan MAC address modem secara manual karena sistem belum meng-query dan menyematkan data perangkat pelanggan yang telah terpasang ke dalam `reportData` dan menghubungkan `assignedAssets`.
 
 - **Solusi Arsitektural & Perubahan Teknis**:
-  1. **MikroTik API & Email Non-Blocking Timeout Guard**:
-     - `src/server/services/mikrotik/client.ts`: Menambahkan hard timeout guard (`customTimeoutMs || 8000ms`) pada method `execute()`. Membatalkan perintah RouterOS jika tidak merespons dalam batas waktu aman (mencegah socket hang tak terbatas `timeout: 9999`).
-     - `src/server/services/mikrotik/ppp-secret.service.ts`: Memasang batas waktu koneksi dan eksekusi 4000ms pada `syncSecret()`.
-     - `src/server/services/pppoe.service.ts`: Membungkus proses sinkronisasi secret MikroTik saat pembuatan user dalam `Promise.race([syncPromise, timeout(4000)])` baik mode RADIUS maupun Local Auth. Router lambat/offline tidak akan pernah menggagalkan atau memperlambat pembuatan akun pelanggan.
-     - Email notifikasi (`EmailService.sendAdminCreateUser`) dipindahkan ke eksekusi non-blocking asynchronous IIFE dengan timeout 5000ms, sehingga kegagalan/kelambatan SMTP tidak menambah delay HTTP response.
-  2. **Resolusi Data Perangkat ONT di Detail Pelanggan (`/admin/pppoe/users/[id]`)**:
-     - `getPppoeUserById()` sekarang meng-include relasi `inventoryAssets` (status `IN_USE`) dan `deviceHistories` (terbaru).
-     - Pada kartu "Data Perangkat & Infrastruktur Lapangan (ONT / ODP)", variabel `ontSn`, `ontModel`, dan `ontMac` sekarang memprioritaskan `currentDevice` $\to$ `user.inventoryAssets[0]` $\to$ `deviceHistory[0]` $\to$ fallback `woReportData` $\to$ `-`.
-     - Menambahkan tombol interaktif `+ Hubungkan` / `Ubah` langsung di baris Serial Number ONT pada Section 3, yang langsung memicu modal pergantian/penghubungan unit modem secara realtime.
-  3. **Auto-Register ONT Universal & Safe Client Submission**:
-     - `replace-device`: Jika admin memasukkan Serial Number baru yang belum terdaftar di inventori, endpoint otomatis mendaftarkan unit tersebut ke `inventoryAsset` (auto-detect vendor ZTE/Skyworth/Realtek/FiberHome/Huawei/VSOL) tanpa memblokir proses penggantian.
-     - `createPppoeUser`: Jika katalog inventori belum memiliki record ONT, otomatis membuat katalog fallback (`EMG-CPE-ONT-GENERIC`) sehingga unit modem baru selalu berhasil tercatat di database.
-     - `NewPppoeUserPage`: Dilengkapi `AbortController` (15s) dan penanganan `res.json()` yang aman agar spinner submit selalu ter-reset dengan notifikasi jelas.
+  1. **Auto-Deduct Inventory & Stock Decrement saat Pasang Baru (PSB)**:
+     - Lokasi: `src/server/services/pppoe.service.ts` (`createPppoeUser`).
+     - Menghitung `effectiveSn`: jika `rawOntSn` kosong tetapi `macAddress` tersedia, sistem menggunakan `rawMac.replace(/[:-]/g, '').toUpperCase()` sebagai fallback Serial Number.
+     - Mencari aset di `inventoryAsset` berdasarkan ID, raw SN, uppercase SN, atau MAC address dengan menyertakan relasi `item`.
+     - Jika aset ditemukan:
+       - Status aset diperbarui menjadi `IN_USE`, `currentCustomerId: user.id`, dan `installedAt: new Date()`.
+       - Merekam riwayat di `customerDeviceHistory` dengan `action: 'INSTALLED'`, `reason: 'Pasang Baru (PSB)'`.
+       - Mengurangi `item.currentStock` jika `currentStock > 0` dan mencatat mutasi pengeluaran barang di `prisma.inventoryMovement` (`movementType: 'OUT'`, `referenceNo: 'PSB-' + customerId/username`).
+     - Jika aset belum terdaftar di inventori:
+       - Otomatis mendaftarkan unit baru ke `inventoryAsset` dengan status `IN_USE`, `currentCustomerId: user.id`, dan mendeteksi vendor/model melalui `detectOntVendorAndModel`.
+       - Menangani kemungkinan collision unique constraint secara aman dengan blok `catch` dan fallback query untuk memperbarui aset yang sudah ada.
+     - Jika ada Surat Tugas (SPK) terbuka (`OPEN`, `ASSIGNED`, `IN_PROGRESS`) untuk pelanggan atau nomor teleponnya:
+       - Memperbarui `workOrder.reportData` dengan `{ sn, mac, modemType }` tanpa menimpa data ODP/port yang sudah ada.
+       - Menautkan aset ke work order melalui `assignedAssets: { connect: { id: targetAsset.id } }` dan menghubungkan `linkedUserId`.
+  2. **Data Linking Otomatis pada Penerbitan SPK Admin**:
+     - Lokasi: `src/app/api/admin/work-orders/route.ts` (`POST`).
+     - Saat admin menerbitkan SPK dan `finalLinkedUserId` terdeteksi atau ditemukan melalui pencarian telepon/nama:
+       - Meng-query perangkat modem pelanggan secara berlapis: `inventoryAssets` (assetType: `MODEM`, order by `updatedAt: desc`), `customerDeviceHistory`, `oltOnuStatus`, dan `macAddress` dari `pppoeUser`.
+       - Otomatis mendeteksi vendor dan model modem jika belum terisi via `detectOntVendorAndModel`.
+       - Memasukkan data perangkat langsung ke dalam `reportData: { sn: foundSn, mac: foundMac, modemType: foundModel }` (digabungkan secara aman dengan draft reportData).
+       - Menghubungkan aset ke Surat Tugas via `assignedAssets: { connect: { id: foundAssetId } }` dengan fallback aman tanpa fatal error.
 
 - **Files**:
-  - `src/server/services/mikrotik/client.ts`
-  - `src/server/services/mikrotik/ppp-secret.service.ts`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
   - `src/server/services/pppoe.service.ts`
-  - `src/app/api/pppoe/users/route.ts`
+  - `src/app/api/admin/work-orders/route.ts`
+  - `src/app/api/pppoe/users/[id]/device-history/route.ts`
   - `src/app/api/pppoe/users/[id]/replace-device/route.ts`
-  - `src/app/admin/pppoe/users/new/page.tsx`
+  - `src/app/api/pppoe/users/[id]/sync-radius/route.ts`
+
+### v2.40.44 — 2026-09-20
+
+### Fix Ganti Modem (Next.js 15 Promise Params & Flexible ID Resolution), Router Route Alias, /docs Layout, & One-Time OLT Modem Sync
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Fitur **Ganti Modem** gagal dieksekusi dengan rentetan error pada browser console:
+     - `GET /api/pppoe/routers: 404 (Not Found)`
+     - `GET /api/pppoe/users/37383/device-history: 500 (Internal Server Error)`
+     - `POST /api/pppoe/users/37383/replace-device: 500 (Internal Server Error)`
+     - `GET /docs?_rsc=1bpeg: 404 (Not Found)`
+  2. Pada Next.js 15+, parameter route handler `{ params }` merupakan `Promise`. Karena belum di-`await` pada endpoint `device-history` dan `replace-device`, variabel `id` bernilai `undefined`, yang memicu kegagalan validasi Prisma internal (HTTP 500).
+  3. URL detail pelanggan sering diakses menggunakan username/nomor pelanggan seperti `37383` (bukan CUID/UUID). Pencarian langsung pada `where: { id }` gagal dan foreign key constraint pada tabel relasi menolak nilai string non-UUID.
+  4. Pengguna juga meminta sinkronisasi satu-pintu untuk seluruh modem fisik di OLT ke profil pelanggan (kartu Perangkat ONT) dan master inventori aset.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Next.js 15 Promise Params & Flexible ID Resolution**:
+     - Memperbarui signature `device-history/route.ts` dan `replace-device/route.ts` menjadi `{ params }: { params: Promise<{ id: string }> }` dengan `const { id: rawId } = await params`.
+     - Mengimplementasikan pencarian fleksibel `pppoeUser.findFirst({ where: { OR: [{ id: rawId }, { customerId: rawId }, { username: rawId }] } })` sehingga menjamin didapatkannya `customer.id` bertipe UUID asli untuk foreign key database.
+     - Menambahkan fallback otomatis: jika aset modem belum ada di inventori, sistem mengecek tabel `oltOnuStatus` yang terhubung dengan pelanggan dan menyinkronkannya ke inventori secara instan.
+  2. **Router API Endpoint & User Detail Page**:
+     - Memperbarui pemanggilan router pada `src/app/admin/pppoe/users/[id]/page.tsx` ke `/api/network/routers`.
+     - Membuat endpoint alias resmi `src/app/api/pppoe/routers/route.ts` agar pemanggilan legacy tetap sukses dengan status 200 OK.
+     - Menggunakan `user?.id || id` pada fungsi `fetchDeviceHistory` dan `handleGantiModem`.
+  3. **RSC Prefetch Fix untuk /docs**:
+     - Membuat `src/app/docs/layout.tsx` dengan `export const dynamic = 'force-dynamic'` guna mencegah 404 pada dynamic RSC prefetch `?_rsc=...`.
+     - Menyediakan halaman `src/app/admin/docs/page.tsx` agar dokumentasi dapat diakses langsung dari dashboard admin.
+  4. **One-Time OLT Modem to Customers & Inventory Synchronization Engine**:
+     - Mengimplementasikan `syncAllOltsWithCustomersAndInventory` pada `src/server/services/olt-inventory-sync.service.ts` dengan multi-pass matching (Pass 1: SN pada riwayat & SPK, Pass 2: MAC address, Pass 3: Smart Matcher / Dice similarity pada deskripsi OLT).
+     - Menautkan ONU ke `oltOnuStatus.customerId`, mendaftarkannya ke `inventory_assets` (`IN_USE`, `AVAILABLE`, atau `Fasum`), dan mencatat `customer_device_histories` agar langsung tampil di tab "Perangkat ONT".
+     - Membuat skrip CLI `scripts/sync-olt-modems-to-customers-and-inventory.ts` (`npm run sync:olt-modems`) dan endpoint API admin `POST /api/olt/sync-all-to-customers`.
+     - Menambahkan tombol **Sync ke Pelanggan & Inventori** di halaman panel admin `/admin/network/olts`.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `docs/inventory/PANDUAN_SINKRONISASI_MODEM_OLT_DAN_GANTI_MODEM.md`
+  - `src/app/api/pppoe/users/[id]/device-history/route.ts`
+  - `src/app/api/pppoe/users/[id]/replace-device/route.ts`
+  - `src/app/api/pppoe/routers/route.ts`
   - `src/app/admin/pppoe/users/[id]/page.tsx`
-  - `CHANGELOG.md`
-  - `docs/AI_PROJECT_MEMORY.md`
-
-### v2.40.3 — 2026-09-16
-
-### Navigasi Terpadu Document Maker (/admin/documents), Super Admin Bypass, & Dinamis SKU Generator
-
-- **Latar Belakang / Context**:
-  1. Pengguna mencari UI Document Maker setelah membuka halaman Invoice Manual, namun tidak menemukannya karena menu Dokumen Perusahaan berada di grup terpisah dan sempat terfilter jika akun admin belum memiliki izin `documents.view`.
-  2. Kebutuhan fleksibilitas format SKU: Apakah SKU harus selalu menggunakan awalan `EMG-` jika sistem dipakai oleh ISP/klien lain, atau adakah format standar industri.
-
-- **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Aksesibilitas Document Maker (`/admin/documents`)**:
-     - Ditambahkan menu navigasi **"Dokumen Resmi & Maker"** di sidebar di bawah grup *Tagihan & Transaksi* (`nav.catBillingTransactions`) persis di bawah Invoice Manual, serta tetap dapat diakses di grup *Manajemen* (`nav.catManagement`).
-     - Super Admin Bypass: Pada `AdminClientLayout.tsx`, ditambahkan proteksi bypass `isSuperAdmin` sehingga akun dengan role `SUPER_ADMIN` selalu dapat melihat seluruh menu navigasi baru tanpa terhalang permission database yang belum ter-seed.
-  2. **Top Sub-Navigation Antar Modul Tagihan & Dokumen**:
-     - Pada `/admin/manual-invoices` dan `/admin/documents`, ditambahkan tab navigasi atas yang saling menghubungkan: `Tagihan Bulanan PPPoE` $\leftrightarrow$ `Invoice Manual` $\leftrightarrow$ `Document Maker Resmi (MOU, BAST, SPK, SJ, KWT)`.
-  3. **SKU Generator Dinamis & Standar GS1 (`/admin/inventory/items`)**:
-     - Menghubungkan pembacaan kode perusahaan dari `company.customerIdPrefix` atau inisial nama perusahaan via `useAppStore()`.
-     - Memberikan 2 tombol generator di modal Tambah Barang:
-       1. `Auto ([PREFIX])`: Format `[PREFIX_PERUSAHAAN]-[KAT]-[NAMA]` (misal `EMG-CPE-ZTE-F609`).
-       2. `Standar GS1`: Format standar warehouse internasional tanpa nama perusahaan `[KAT]-[NAMA]` (misal `CPE-ONT-ZTE-F609`).
-
-- **Files**:
-  - `src/app/admin/AdminClientLayout.tsx`
-  - `src/app/admin/manual-invoices/page.tsx`
-  - `src/app/admin/documents/page.tsx`
-  - `src/app/admin/inventory/items/page.tsx`
-  - `src/lib/store.ts`
-  - `src/locales/id.json`
-  - `CHANGELOG.md`
-  - `docs/AI_PROJECT_MEMORY.md`
-
-### v2.40.2 — 2026-09-16
-
-### Dedicated Halaman ONT Modem Pelanggan (/admin/inventory/ont), Seeding Kategori Default, & Import 360 ONT Awal
-
-- **Latar Belakang / Context**:
-  1. Pengguna membutuhkan pemisahan inventori modem ONT pelanggan dengan material/roll kabel lainnya agar 360+ unit ONT terpasang dapat ditinjau dalam satu tabel komprehensif lengkap dengan nama pelanggan PPPoE, router/paket, status, MAC, dan SN.
-  2. Kategori barang di `/admin/inventory/categories` belum memiliki data default ISP setelah skema inventori baru diimplementasikan.
-  3. Pembuatan SKU barang baru di `/admin/inventory/items` membutuhkan format penamaan standar otomatis (`EMG-[KATEGORI]-[SUB]-[VARIAN]`).
-  4. Akun role `WAREHOUSE` ("Staf Gudang") harus dapat mengakses inventori tanpa dependensi izin `settings.view`.
-
-- **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Halaman Khusus ONT Pelanggan (`src/app/admin/inventory/ont/page.tsx`)**:
-     - Metric cards: Total Unit ONT, Terpasang di Pelanggan (`IN_USE`), Ready di Gudang (`AVAILABLE`), dan Rusak (`DEFECTIVE`).
-     - Live filter berdasarkan Vendor (ZTE, Skyworth, Realtek, FiberHome, Huawei, VSOL, dsb), Status, dan Pencarian teks (SN, MAC, Nama Pelanggan, Username PPPoE).
-     - Kolom tabel interaktif dengan fitur salin cepat Serial Number, tautan langsung ke detail pelanggan PPPoE (`/admin/pppoe/users/[id]`), dan modal detail riwayat unit.
-     - Modal Tambah Unit ONT (Mendukung input satuan maupun bulk input banyak SN sekaligus).
-     - Tombol 1-klik "Import 360 ONT Awal" yang langsung memproses dan menghubungkan data ONU PPPoE ke inventori aset.
-  2. **Seeding Kategori Default & Permisi (`src/app/api/admin/inventory/seed-defaults/route.ts`)**:
-     - Menambahkan 10 kategori standar ISP (`HW`, `CPE`, `PAS`, `CAB`, `CON`, `PWR`, `TLS`, `ACC`, `MKT`, `SUP`) ke tabel `inventoryCategory`.
-     - Mengaitkan template SKU katalog barang ke kategori masing-masing.
-     - Memperbarui hak akses `WAREHOUSE` dan relasi permissions `inventory.*` & `documents.*`.
-  3. **Endpoint Import 360 ONT (`src/app/api/admin/inventory/import-initial-modems/route.ts`)**:
-     - Mengekstrak fungsi `runInitialModemImport()` dari skrip CLI agar dapat dipanggil via API admin / antarmuka web.
-  4. **Auto-Generate SKU Helper (`src/app/admin/inventory/items/page.tsx`)**:
-     - Tombol otomatis untuk meracik kode SKU sesuai format standar inventori.
-  5. **Navigasi & Sidebar Terpadu**:
-     - Menambahkan menu `nav.inventoryOnt` ("Modem ONT Pelanggan") di sidebar `AdminClientLayout.tsx`.
-     - Memperbaiki `requiredPermission` menu inventori dari `settings.view` menjadi `inventory.view`.
-     - Menghubungkan top navigation bar di seluruh sub-halaman inventori (`items`, `ont`, `assets`).
-
-- **Files**:
-  - `src/app/admin/inventory/ont/page.tsx` — [NEW]
-  - `src/app/api/admin/inventory/import-initial-modems/route.ts` — [NEW]
-  - `src/app/admin/AdminClientLayout.tsx`
-  - `src/app/admin/inventory/items/page.tsx`
-  - `src/app/admin/inventory/assets/page.tsx`
-  - `src/app/admin/management/page.tsx`
-  - `src/app/api/admin/inventory/seed-defaults/route.ts`
-  - `scripts/import-initial-modems.ts`
-  - `src/locales/id.json`
-  - `CHANGELOG.md`
-  - `docs/AI_PROJECT_MEMORY.md`
-
-### v2.40.1 — 2026-09-16
-
-### Integrasi Vendor OLT Baru: VSOL (V1600GS, V1600GS-ZF, V1600GT) & HSGQ (HSGQ-G02ID)
-
-- **Latar Belakang / Context**:
-  Kebutuhan integrasi monitoring jaringan FTTH untuk OLT seri populer di lapangan:
-  1. **HSGQ-G02ID** (2-Port GPON Mini OLT) dan seri HSGQ lainnya (G008, G016, E04).
-  2. **VSOL V1600GS** (Cortina), **V1600GS-ZF** (ZTE Falcon), **V1600GT** (4/8/16-port GPON), dan seri V1600G/D.
-
-- **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Modul Adapter Vendor VSOL (`src/lib/olt/vendors/vsol.ts`)**:
-     - Mendukung SNMP Private MIB VSOL (`1.3.6.1.4.1.37950`) & Host Resources MIB untuk metrik CPU, Memory, dan Temperatur.
-     - Parser CLI Telnet/SSH multi-pattern untuk `show ont status`, `show gpon onu state`, `show ont info`, serta `show ont optical-info` (Rx/Tx dBm, Distance meter, Voltase).
-  2. **Modul Adapter Vendor HSGQ (`src/lib/olt/vendors/hsgq.ts`)**:
-     - Mendukung SNMP Private MIB HSGQ (`1.3.6.1.4.1.50222`) & Host Resources MIB.
-     - Parser CLI Telnet/SSH untuk `show gpon onu information`, `show gpon onu state`, dan `show pon power onu-rx` / optical-info.
-  3. **Pendaftaran di Poller (`src/lib/olt/poller.ts`)**:
-     - Switch case `getVendorModule()` ditambah `vsol` dan `hsgq`.
-  4. **Antarmuka Admin (`src/app/admin/network/olts/page.tsx`)**:
-     - Penambahan opsi vendor `VSOL` dan `HSGQ` pada form pendaftaran OLT.
-     - Penambahan pemetaan model otomatis di `VENDOR_MODELS` untuk `V1600GS`, `V1600GS-ZF`, `V1600GT`, `V1600G1`, `V1600G2`, `V1600D`, `HSGQ-G02ID`, `HSGQ-G008`, `HSGQ-G016`, `HSGQ-E04`, `HSGQ-E08`.
-  5. **Dukungan Remote Command & Import**:
-     - Menambahkan perintah reboot ONU untuk VSOL (`ont reset <id>`) dan HSGQ (`ont reboot <id>`) di API reboot dan batch-reboot.
-     - Menambahkan `vsol` dan `hsgq` ke daftar vendor yang valid pada API import OLT.
-
-- **Files**:
-  - `src/lib/olt/vendors/vsol.ts` — [NEW]
-  - `src/lib/olt/vendors/hsgq.ts` — [NEW]
-  - `src/lib/olt/poller.ts`
+  - `src/app/docs/layout.tsx`
+  - `src/app/admin/docs/page.tsx`
+  - `src/server/services/olt-inventory-sync.service.ts`
+  - `src/app/api/olt/sync-all-to-customers/route.ts`
   - `src/app/admin/network/olts/page.tsx`
-  - `src/app/api/network/olts/import/route.ts`
-  - `src/app/api/olt/[id]/onus/[onuId]/reboot/route.ts`
-  - `src/app/api/olt/[id]/onus/batch-reboot/route.ts`
-  - `CHANGELOG.md`
-  - `docs/AI_PROJECT_MEMORY.md`
+  - `scripts/sync-olt-modems-to-customers-and-inventory.ts`
 
-### v2.40.0 — 2026-09-16
+### v2.40.43 — 2026-09-19
 
-### Sistem Inventori Aset, Penomoran Dokumen, & Document Maker (Fase A–F)
+### Final Clean Repository Release: Penghapusan Script One-Time Bulk Sync Pasca-Sinkronisasi Sukses
 
-- **Latar Belakang / Context**:
-  Dibutuhkan sistem manajemen inventori fisik (modem ONT, roll kabel dropwire, aksesori) yang terintegrasi langsung dengan alur kerja SPK teknisi, pendaftaran pelanggan baru (PSB), dan penerbitan dokumen resmi perusahaan (MOU, Faktur, KWT, Surat Jalan, BAST, SPK) dengan nomor terstruktur dan bisa di-audit.
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Proses sinkronisasi paket billing dan secret pelanggan MikroTik & FreeRADIUS telah selesai dieksekusi dengan sukses dan seluruh akun aktif telah termigrasi dengan profil kecepatan yang sesuai.
+  2. Pengguna meminta script one-time `scripts/sync-all-to-mikrotik.js` dihapus agar repositori 100% bersih dan siap ditarik (*pull / sync*) ke seluruh client satu per satu tanpa menyisakan file migrasi sementara.
 
 - **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Fase A — Prisma Schema**: Tambah model `inventoryAsset`, `customerDeviceHistory`, `workOrderMaterial`, `numberingRule`, `issuedNumber`, `documentTemplate`, `generatedDocument`. Tambah `WAREHOUSE` ke `AdminRole`. Extend `inventoryItem` dengan `categoryCode`, `subCategory`, `isSerialized`, `stockQuantity`.
-  2. **Fase B — Document Numbering Service**: `document-numbering.service.ts` dengan `previewNextNumber()` (read-only) dan `issueNextNumber()` (consume dalam $transaction). REST API: `/api/documents/numbering/preview`, `/issue`, `/rules`. Manual invoice sudah terintegrasi (FAK/BILL, fallback ke legacy).
-  3. **Fase C — Seed Data & Assets UI**: Endpoint seed `/api/admin/inventory/seed-defaults` (seeds 6 numbering rules + SKU catalog). Admin UI `/admin/inventory/assets` (full Shadcn, summary cards, CABLE_ROLL support). API CRUD `/api/inventory/assets` + `/:id`. Deduct service `inventory-deduct.service.ts` dengan optimistic locking.
-  4. **Fase D — Document Maker**: 7 API routes (templates CRUD, generate preview, generate issue, documents list, void). Admin UI `/admin/documents` dengan 3 tab: Dokumen Terbit, Buat Dokumen (wizard 5 langkah), Kelola Template.
-  5. **Fase E — SPK Wizard & Ganti Modem**: Cable roll picker di wizard teknisi Step 2 (auto-deduct saat complete). PSB baru: SN autocomplete dengan live inventori search + auto-fill MAC. Halaman detail pelanggan: section Perangkat ONT + riwayat device history + modal Ganti Modem. API: `/api/pppoe/users/:id/device-history`, `/replace-device`.
-  6. **Fase F — Validasi & Dokumentasi**: `npx tsc --noEmit` → 0 errors. Fix WAREHOUSE di role-templates route. Fix `isDismantle` used-before-declaration di wizard.
+  1. Menghapus script one-time `scripts/sync-all-to-mikrotik.js`.
+  2. Repositori kini berada dalam kondisi *Pure Clean Production State*, bebas dari skrip migrasi sementara, siap untuk ditribusikan / di-pull oleh seluruh client dan VPS cabang.
 
 - **Files**:
-  - `prisma/schema.prisma` — Schema extensions
-  - `prisma/seeds/permissions.ts` — INVENTORY/DOCUMENTS permissions + WAREHOUSE role
-  - `src/server/services/document-numbering.service.ts` — [NEW]
-  - `src/server/services/inventory-deduct.service.ts` — [NEW]
-  - `src/app/api/documents/numbering/preview/route.ts` — [NEW]
-  - `src/app/api/documents/numbering/issue/route.ts` — [NEW]
-  - `src/app/api/documents/numbering/rules/route.ts` — [NEW]
-  - `src/app/api/documents/templates/route.ts` — [NEW]
-  - `src/app/api/documents/templates/[id]/route.ts` — [NEW]
-  - `src/app/api/documents/generate/preview/route.ts` — [NEW]
-  - `src/app/api/documents/generate/issue/route.ts` — [NEW]
-  - `src/app/api/documents/route.ts` — [NEW]
-  - `src/app/api/documents/[id]/route.ts` — [NEW]
-  - `src/app/api/documents/[id]/void/route.ts` — [NEW]
-  - `src/app/api/inventory/assets/route.ts` — [NEW]
-  - `src/app/api/inventory/assets/[id]/route.ts` — [NEW]
-  - `src/app/api/admin/inventory/seed-defaults/route.ts` — [NEW]
-  - `src/app/api/pppoe/users/[id]/device-history/route.ts` — [NEW]
-  - `src/app/api/pppoe/users/[id]/replace-device/route.ts` — [NEW]
-  - `src/app/api/permissions/role-templates/route.ts` — Fix WAREHOUSE
-  - `src/app/api/manual-invoices/route.ts` — Integrate issueNextNumber
-  - `src/app/admin/documents/page.tsx` — [NEW] Document Maker UI
-  - `src/app/admin/inventory/assets/page.tsx` — [NEW] Asset management UI
-  - `src/app/admin/AdminClientLayout.tsx` — Nav: Inventori Aset + Dokumen Perusahaan
-  - `src/app/admin/pppoe/users/[id]/page.tsx` — Perangkat ONT section + Ganti Modem
-  - `src/app/admin/pppoe/users/new/page.tsx` — ONT SN autocomplete
-  - `src/app/technician/(portal)/work-orders/[id]/page.tsx` — Cable roll picker + fix TS
-  - `src/app/api/technician/work-orders/[id]/complete/route.ts` — Auto-deduct cable
-  - `docs/inventory/INVENTORY_AND_SKU_STANDARDS.md` — [NEW]
-  - `docs/DOCUMENT_NUMBERING_STANDARD.md` — [NEW]
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - Deleted: `scripts/sync-all-to-mikrotik.js`
+
+### v2.40.42 — 2026-09-19
+
+### Repository Deep Clean: Pembersihan Menyeluruh File Sampah, Dead Code, Duplikat, & Perampingan Repo (~30+ MB)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pengguna meminta pembersihan menyeluruh (*full clean up*) terhadap seluruh file yang sudah tidak digunakan lagi (script one-time, installer lama, dead components, build artifacts, dan dokumentasi duplikat/usang) agar ukuran clone/pull pada client dan VPS ramping, bersih, dan cepat.
+  2. Ditemukan file binary Windows `bin/server.exe` (~27 MB) dan dump OID SNMP `ZTE_OID_TABLE.md` (~2.6 MB) yang mengotori root, serta file-file komponen UI yang sudah orphaned dan seed duplikat yang tidak lagi terpakai.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Pembersihan Root & Build Artifacts (Menghemat ~27+ MB)**:
+     - Menghapus binary lokal `bin/server.exe` (26.8 MB).
+     - Menghapus build artifact `tsconfig.tsbuildinfo` (481 KB).
+     - Menghapus konfigurasi testing usang `nginx-frontend.conf` dan log sensitif lama `INSTALLATION_INFO.txt`.
+     - Merelokasi dump SNMP 28.128 baris `ZTE_OID_TABLE.md` ke direktori dokumentasi referensi `docs/references/`.
+     - Menghapus dead script `scripts/migrate-sku.ts` (sudah diserap penuh ke `scripts/run-migrations.ts`).
+  2. **Pembersihan Dokumentasi Usang, Duplikat & Temp Prompts (Menghemat ~600+ KB)**:
+     - Menghapus duplikat beku `docs/getting-started/CHANGELOG.md` (~293 KB).
+     - Menghapus prompt AI sementara: `docs/GO_MIGRATION_PROMPT.md`, `docs/EMG_INVENTORY_DOCUMENT_NUMBERING_SPEC.md`.
+     - Menghapus duplikat dokumentasi lama: `docs/ISOLATION_SYSTEM.md`, `docs/README.md`, `docs/SECURITY_FIXES_APPLIED.md`, `docs/AUDIT_REPORT.md`.
+     - Menghapus roadmap/restrukturisasi lampau yang sudah 100% selesai: `docs/MAINTENANCE_ROADMAP.md`, `docs/RESTRUCTURING_GUIDE.md`, `docs/ROADMAP_RESTRUCTURING.md`, direktori `docs/restructuring/`.
+     - Menghapus dokumentasi sub-project non-aktif: `docs/mobile-app/` (Expo native lama yang telah digantikan PWA Web Push) dan duplikat rusak mojibake `docs/mikrotik/MIKROTIK_RADIUS_COA_COMPLETE_SETUP.md`.
+  3. **Pembersihan Aset Publik & Stray Payments**:
+     - Menghapus file boilerplate default Next.js (`file.svg`, `globe.svg`, `next.svg`, `vercel.svg`, `window.svg`).
+     - Membersihkan stray upload lokal yang melanggar aturan persistent storage: `public/uploads/payments/`.
+     - Menghapus gambar dummy dan duplikat tak terpakai: `public/images/customer_card_bg.png`, `public/images/qris-official-eugine.png`, `public/images/eugine-logo.png`.
+  4. **Pembersihan Dead Components, Utilities & Seeds**:
+     - Menghapus scratch note `src/app/walkthrough.md`.
+     - Menghapus file seed duplikat `prisma/seeds/whatsapp-manual-payment-templates.ts` (sudah dimerge ke `whatsapp-templates.ts`).
+     - Menghapus utility mati tanpa referensi: `src/lib/score-card-canvas.ts`, `src/server/services/company.service.ts`.
+     - Menghapus komponen UI yang tidak pernah di-import (orphaned): `OntRemoteViewerModal.tsx`, `FreeRadiusStatusCard.tsx`, `TrafficMonitor.tsx`, `TrafficChartMonitor.tsx`, `NetworkTopologyMap.tsx`, `AssignCustomerDialog.tsx`, `EditAssignmentDialog.tsx`, `SplicePointsSection.tsx`, `SplitterSection.tsx`, serta direktori `src/components/genieacs/`.
+  5. **Perbaikan Skrip Package.json**:
+     - Memperbaiki path `"db:seed:templates"` ke `prisma/seeds/isolation-templates.ts`.
+     - Menghapus perintah `"db:fix-radius"` yang merujuk pada migration sql yang tidak ada.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - 50+ file dead/unused dieliminasi secara aman (verified `tsc --noEmit` exit code 0).
+
+### v2.40.41 — 2026-09-19
+
+### Hardened Bulk Sync Shield: Zero OFF to MikroTik, Proteksi Ganti User, & Auto-Heal Pelanggan Lunas
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pengguna memberikan peringatan keras bahwa pada database terdapat akun-akun yang berstatus OFF / berhenti namun sudah melakukan pembayaran (lunas), akun OFF yang masa aktifnya belum habis, serta akun-akun lama yang username dasarnya sudah digantikan oleh pelanggan baru (*Ganti User / PPPoE Reuse*).
+  2. Eksekusi sinkronisasi massal DILARANG KERAS memasukkan akun berstatus OFF ke dalam secret MikroTik, DILARANG mengisolir atau mendisable pelanggan yang sudah membayar, dan DILARANG menimpa pelanggan baru yang menggunakan kode EMG yang sama.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Strict Zero-OFF Policy ke MikroTik (`scripts/sync-all-to-mikrotik.js`)**:
+     - Seluruh akun dengan status `stop`, `stopped`, `suspended`, `dismantled`, `dismantle`, `terminated`, `cancelled`, `inactive`, `blocked`, atau username mengandung pola `-OFF-`, `-STOP-`, `-CABUT-`, `_OFF_`, `(OFF)` **100% DILEWATI (SKIP)** dan tidak akan pernah ditulis atau dimasukkan ke MikroTik maupun FreeRADIUS.
+  2. **Safety Shield Ganti User (PPPoE Username Reuse Protection)**:
+     - Skrip secara otomatis memetakan seluruh pelanggan aktif dan membandingkannya dengan `baseUsername` akun-akun OFF.
+     - Jika username dasar telah digunakan oleh pelanggan baru, skrip secara otomatis melindungi pelanggan baru tersebut dan mengabaikan akun lama, mencegah tertimpanya password, profil, atau ID pelanggan baru.
+  3. **Auto-Heal & Perlindungan Anti-Isolir Salah (Sudah Bayar / Expired Belum Habis)**:
+     - Untuk seluruh akun calon aktif, skrip memeriksa riwayat tagihan (`status === 'PAID'`) dan masa aktif (`expiredAt > now`).
+     - Jika sebuah akun di database tercatat berstatus `isolated` namun terbukti sudah lunas atau masa aktifnya masih berlaku, skrip otomatis membatalkan profil isolir, menerapkan profil paket aslinya di MikroTik, dan menyembuhkan (*auto-heal*) status di database menjadi `active`.
+  4. **Audit Anomali & Rekomendasi Administratif Realtime**:
+     - Skrip menampilkan laporan deteksi anomali: mendata secara transparan jika ada akun OFF yang terdeteksi memiliki tagihan lunas agar admin dapat mereaktivasi akun tersebut secara resmi melalui portal tanpa merusak data pelanggan baru.
+  5. **Scoping Ketat Router Cibinong vs Citeureup**:
+     - Memastikan router Cibinong hanya menyinkronkan prefix `EMG` (tanpa `C`) dan menolak seluruh user Citeureup (`EMGC*`), begitupun sebaliknya.
+
+- **Files**:
+  - `package.json`
+  - `scripts/sync-all-to-mikrotik.js`
   - `CHANGELOG.md`
   - `docs/AI_PROJECT_MEMORY.md`
 

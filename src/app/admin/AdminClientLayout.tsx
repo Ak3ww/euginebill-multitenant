@@ -367,8 +367,7 @@ const menuGroups: MenuGroup[] = [
           { titleKey: 'nav.cloudflare_tunnel', href: '/admin/settings/cloudflare-tunnel', requiredPermission: 'settings.view' },
           { titleKey: 'nav.subdomainRouting', href: '/admin/settings/subdomain', requiredPermission: 'settings.view' },
           { titleKey: 'nav.downloadApk', href: '/admin/download-apk', requiredPermission: 'settings.view' },
-          { titleKey: 'Setup Wizard', href: '/setup', badge: 'Wizard', requiredPermission: 'settings.view' },
-          { titleKey: 'Panduan Setup Awal', href: '/docs' },
+          { titleKey: 'Panduan Setup Awal', href: '/admin/docs' },
         ],
       },
       {

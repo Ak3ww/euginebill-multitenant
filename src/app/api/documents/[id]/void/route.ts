@@ -1,4 +1,4 @@
-﻿import { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
@@ -8,14 +8,15 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/api-r
 // The issued number is permanently consumed and not recycled.
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session) return unauthorized();
 
   try {
+    const { id } = await params;
     const document = await prisma.generatedDocument.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
     if (!document) return notFound('Document');
 
@@ -31,7 +32,7 @@ export async function POST(
     }
 
     const updated = await prisma.generatedDocument.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: 'VOID',
         // Store void reason in dataJson alongside existing data

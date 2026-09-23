@@ -15,11 +15,21 @@ export async function POST(
     }
 
     const { id } = await context.params;
+    if (!id || id === 'undefined') {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
 
     // Fetch user with profile data needed for RADIUS restoration
-    const userRecord = await prisma.pppoeUser.findUnique({
-      where: { id },
+    const userRecord = await prisma.pppoeUser.findFirst({
+      where: {
+        OR: [
+          { id },
+          { customerId: id },
+          { username: id },
+        ],
+      },
       select: {
+        id: true,
         username: true,
         password: true,
         ipAddress: true,
@@ -35,10 +45,12 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    const resolvedUserId = userRecord.id;
+
     // Get unpaid invoices for user
     const unpaidInvoices = await prisma.invoice.findMany({
       where: {
-        userId: id,
+        userId: resolvedUserId,
         status: { in: ['PENDING', 'OVERDUE'] },
       },
       orderBy: { dueDate: 'asc' },
