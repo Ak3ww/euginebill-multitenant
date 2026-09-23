@@ -4,6 +4,130 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.51] — 2026-09-23
+### QRIN Payment Gateway in Docs, GenieACS/RADIUS Nav Toggle, dan ONT Inventory Sync Scripts
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. QRIN tidak tercantum di daftar payment gateway pada halaman Panduan Setup Awal dan Setup Wizard, padahal sudah fully integrated.
+  2. Admin membutuhkan kemampuan hide/show menu navigasi ACS (GenieACS) dan FreeRADIUS secara dinamis berdasarkan status aktif di pengaturan, agar sidebar tidak penuh dengan menu yang tidak digunakan.
+  3. Admin membutuhkan script CLI untuk sync ONT dari OLT ke inventori (clean slate), serta script analisis duplikat inventori, tanpa harus melalui UI.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **QRIN di Dokumentasi**:
+     - `src/app/docs/page.tsx` line 168: Tambah QRIN ke kalimat daftar provider.
+     - `src/app/setup/page.tsx`: Grid payment gateway dari 4 menjadi 5 kolom, tambah card QRIN.
+  2. **GenieACS Nav Toggle**:
+     - `src/lib/store.ts`: Tambah field `genieacsEnabled?: boolean` ke `CompanySettings`.
+     - `src/app/api/company/route.ts`: Query `genieacsSettings.isActive` dan return sebagai `genieacsEnabled` ke client.
+     - `src/app/admin/AdminClientLayout.tsx`:
+       - Tambah `requiresGenieACS?: boolean` ke `MenuItem` interface.
+       - ACS nav item (nav.acs) diberi flag `requiresGenieACS: true`.
+       - `CategoryItem` menerima prop `genieacsEnabled: boolean` dan filter item `requiresGenieACS` ketika GenieACS non-aktif.
+       - `menuGroups` render meneruskan `company.genieacsEnabled ?? false` ke `CategoryItem`.
+       - Data `genieacsEnabled` dari API company disimpan ke Zustand store via `setCompany`.
+     - Halaman settings GenieACS (`/admin/settings/genieacs`) TETAP SELALU TAMPIL sebagai control toggle.
+     - FreeRADIUS menu sudah hide via `requiresRadius: true` yang sudah ada sebelumnya.
+  3. **Script Sync ONT Inventori**:
+     - `scripts/sync-ont-inventory.ts`: Query `oltOnuStatus` → upsert `inventoryAsset` + buat `inventoryItem` per vendor/model. Support `--dry-run` dan `--wipe`.
+     - `scripts/analyze-inventory-duplicates.ts`: Analisis duplikat SN, duplikat catalog item, item kosong, dan ONU yang belum di inventori.
+     - `package.json`: Tambah shortcuts `sync:ont-inventory`, `sync:ont-inventory:wipe`, `analyze:inventory`.
+
+- **Files**:
+  - Modified: `src/app/docs/page.tsx`
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/lib/store.ts`
+  - Modified: `src/app/api/company/route.ts`
+  - Modified: `src/app/admin/AdminClientLayout.tsx`
+  - Added: `scripts/sync-ont-inventory.ts`
+  - Added: `scripts/analyze-inventory-duplicates.ts`
+  - Modified: `package.json`
+
+## [2.40.50] — 2026-09-23
+
+### Modul Terpusat Kalkulasi Masa Aktif dan Jatuh Tempo Billing PPPoE (`billing-cycle.service.ts`) & Integrasi ke Seluruh Pintu Pembayaran
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Kalkulasi perpanjangan masa aktif (`expiredAt`) dan tanggal jatuh tempo (`dueDate`) pelanggan PPPoE sebelumnya terfragmentasi di berbagai route API dan cron job dengan logika yang berbeda-beda (`setMonth()`, `addMonths()`, `setDate()`), berisiko menyebabkan pergeseran tanggal (*date drifting* pada bulan 28/30/31 hari) serta format jam kedaluwarsa yang tidak seragam.
+  2. Dibutuhkan satu modul terpusat (`src/server/services/billing/billing-cycle.service.ts`) dengan aturan bisnis ketat:
+     - Hari tagihan (`effectiveDueDay`): `billingDay || fixedBillingDate || 6`.
+     - Hari masa aktif berakhir (`expiryDay`): `effectiveDueDay - 1`. (Jika `effectiveDueDay === 1`, gunakan hari terakhir bulan sebelumnya).
+     - Format jam akhir masa aktif: selalu tepat `23:59:59.999 WIB` (`16:59:59.999 UTC`).
+     - Siklus Terkunci (`shiftBillingDateIfLate === false`): siklus terkunci mati pada `expiryDay`. Pelanggan baru, bayar prorate, atau bayar telat terkunci pada batas `expiryDay` di bulan tagihan berjalan (misal pembayaran di September terkunci ke 5 Oktober 23:59:59 WIB). Pelanggan rutin aktif maju 1 siklus ke 5 November.
+     - Siklus Bergeser (`shiftBillingDateIfLate === true`): masa aktif bergeser dari `paymentDate + validityValue`.
+     - Fungsi pembantu `getCycleDueDate(expiryDate, dueDay)` untuk menghitung `dueDate` invoice (misal expiry 5 Okt -> dueDate 6 Okt).
+  3. Modul ini wajib diintegrasikan ke seluruh pintu pembayaran dan pencatatan masa aktif di platform EugineBill.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Modul Terpusat `billing-cycle.service.ts`**:
+     - Dibuat pada `src/server/services/billing/billing-cycle.service.ts`.
+     - Mengimplementasikan `getWibDateParts`, `createWibEndOfDay`, `getCycleExpiryDate`, `getCycleDueDate`, dan `calculateNextBillingExpiry`.
+     - Mendukung pemanggilan baik melalui Options Object (`CalculateNextBillingExpiryOptions`) maupun positional arguments overload.
+  2. **Integrasi Admin Mark Paid (`src/app/api/pppoe/users/[id]/mark-paid/route.ts`)**:
+     - Menggantikan perhitungan manual dengan `calculateNextBillingExpiry`.
+  3. **Integrasi Admin Extension (`src/app/api/pppoe/users/[id]/extend/route.ts`)**:
+     - Menggunakan `calculateNextBillingExpiry` untuk pembaruan `expiredAt` dan `getCycleDueDate` untuk invoice baru yang diterbitkan.
+  4. **Integrasi Payment Gateway Webhook (`src/app/api/payment/webhook/route.ts`)**:
+     - Menghubungkan kalkulasi terpusat untuk pelunasan Tripay, Midtrans, dan Xendit.
+  5. **Integrasi Manual Payment Approval (`src/app/api/manual-payments/[id]/route.ts`)**:
+     - Menghitung perpanjangan masa aktif via `calculateNextBillingExpiry` saat admin menyetujui transfer manual.
+  6. **Integrasi Cron Auto-Renewal (`src/server/jobs/auto-renewal.ts`)**:
+     - Pemotongan saldo otomatis untuk perpanjangan akun prepaid kini menggunakan `calculateNextBillingExpiry`.
+  7. **Integrasi Pendaftaran Pelanggan Baru (`src/server/services/pppoe.service.ts`)**:
+     - Fungsi `createPppoeUser` menghitung masa aktif awal secara otomatis menggunakan `calculateNextBillingExpiry` (`isNewInstallationOrProrate: true`).
+     - Handler reaktivasi manual pada `updatePPPoEUser` juga diselaraskan menggunakan `calculateNextBillingExpiry`.
+  8. **Integrasi Cron Auto-Isolation (`src/server/jobs/auto-isolation.ts`)**:
+     - Safety guard auto-heal masa aktif menggunakan `calculateNextBillingExpiry`.
+  9. **Unit Testing & Verifikasi Komprehensif (`tests/billing-cycle.test.ts`)**:
+     - 18 skenario uji Vitest mencakup instalasi baru, prorate, pembayaran rutin, pembayaran telat, siklus shift, dueDay = 1, multi-bulan, dan satuan DAYS. Seluruh tes lolos 100%.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/billing/billing-cycle.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `src/server/services/billing/billing-cycle.service.ts`
+  - `tests/billing-cycle.test.ts`
+  - `src/app/api/pppoe/users/[id]/mark-paid/route.ts`
+  - `src/app/api/pppoe/users/[id]/extend/route.ts`
+  - `src/app/api/payment/webhook/route.ts`
+  - `src/app/api/manual-payments/[id]/route.ts`
+  - `src/server/jobs/auto-renewal.ts`
+  - `src/server/services/pppoe.service.ts`
+  - `src/server/jobs/auto-isolation.ts`
+
+## [2.40.49] — 2026-09-23
+### Script Migrasi Mandiri Siklus Billing Oktober 2026 & Un-Isolasi MikroTik/RADIUS VPS (`scripts/migrate-billing-october-2026.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Kebutuhan operasional untuk memindahkan seluruh pelanggan PPPoE ke siklus billing bulan Oktober 2026 secara otomatis langsung di VPS production.
+  2. Wilayah Kp. Tegal (area name atau address mengandung kata 'tegal' case-insensitive) memiliki aturan khusus: jatuh tempo tanggal 10 (`billingDay: 10`, `billingCycleDay: 10`), expiry date 9 Oktober 2026 pukul 23:59:59 WIB (`2026-10-09T16:59:59.999Z`), `autoIsolationEnabled: false` (fitur anti-isolir aktif), dan status `active`.
+  3. Seluruh pelanggan di luar Kp. Tegal mengikuti siklus standar: jatuh tempo tanggal 6 (`billingDay: 6`, `billingCycleDay: 6`), expiry date 5 Oktober 2026 pukul 23:59:59 WIB (`2026-10-05T16:59:59.999Z`), `autoIsolationEnabled: true` (auto-isolir normal), dan status `active`.
+  4. Tagihan invoice belum lunas (PENDING/OVERDUE) untuk siklus Oktober 2026 perlu disesuaikan tanggal jatuh temponya: Kp. Tegal menjadi 2026-10-10 dan wilayah lain menjadi 2026-10-06.
+  5. Seluruh pelanggan aktif yang sebelumnya terisolir harus dipulihkan (un-isolasi) baik pada MikroTik (pembersihan address-list `isolir`, pengembalian profile ke paket aslinya, dan disconnect active session via `PPPSecretService`) maupun pada FreeRADIUS (`radusergroup` dikembalikan dari 'isolir' ke profil paket aslinya).
+  6. Script harus mendukung flag `--dry-run` untuk inspeksi/simulasi sebelum eksekusi dan menampilkan tabel rekapitulasi yang jelas di terminal tanpa menggunakan text emojis.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Script Mandiri VPS (`scripts/migrate-billing-october-2026.ts`)**:
+     - Dilengkapi runtime hook `Module._load` untuk membypass proteksi Next.js `server-only` saat dijalankan via CLI Node/TSX di luar web bundler.
+     - Mode Dry-Run (`--dry-run` / `-d` / `DRY_RUN=true`): Melakukan pemindaian menyeluruh, kalkulasi aturan, dan mencetak simulasi tabel tanpa menulis ke database ataupun menyentuh router.
+     - Fase 1: Pemindaian dan klasifikasi cerdas pelanggan PPPoE (`isKpTegal` memeriksa `area.name`, `address`, dan `pppoeCustomer`).
+     - Fase 2: Pemindaian dan klasifikasi invoice belum lunas (PENDING/OVERDUE) siklus Oktober 2026.
+     - Fase 3: Pembaruan batch database Prisma untuk Kp. Tegal dan Wilayah Lain secara terisolasi dan efisien.
+     - Fase 4: Pembaruan `dueDate` invoice Oktober 2026 (Kp. Tegal: 10 Okt 2026, Wilayah Lain: 06 Okt 2026).
+     - Fase 5: Un-isolasi MikroTik via `PPPSecretService.unisolateUser`, pembersihan firewall address-list `isolir` di seluruh router aktif, dan pemulihan `radusergroup` FreeRADIUS.
+     - Fase 6: Penyajian 3 tabel rekapitulasi terminal yang terstruktur (`console.table`).
+  2. **Perbaikan Tipe Kompilasi TypeScript**:
+     - Memperbaiki deklarasi `currentExpired` pada `src/app/api/pppoe/users/[id]/extend/route.ts`.
+     - Memperbaiki perbandingan literal boolean `autoIsolationEnabled` pada `src/server/jobs/auto-isolation.ts`.
+
+- **Files**:
+  - `package.json`
+  - `CHANGELOG.md`
+  - `docs/AI_PROJECT_MEMORY.md`
+  - `scripts/migrate-billing-october-2026.ts`
+  - `src/app/api/pppoe/users/[id]/extend/route.ts`
+  - `src/server/jobs/auto-isolation.ts`
+
 ## [2.40.48] — 2026-09-23
 ### Master ODP Dropdown & Auto-Locked Tikor GPS SPK Teknisi, Auto-Deduct Inventori PSB, Auto-Fill Modem WO, dan Fix Ganti Modem (Next.js 15 Async Params)
 

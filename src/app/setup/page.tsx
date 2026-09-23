@@ -2046,22 +2046,26 @@ export default function UnifiedSetupWizardPage() {
                   mutasi manual:
                 </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
                   <div className="p-2.5 rounded-lg border border-border bg-white text-center">
                     <div className="text-xs font-bold text-foreground">Midtrans</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Snap / Core API</div>
                   </div>
                   <div className="p-2.5 rounded-lg border border-border bg-white text-center">
                     <div className="text-xs font-bold text-foreground">Tripay</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">QRIS & VA Murah</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">QRIS &amp; VA Murah</div>
                   </div>
                   <div className="p-2.5 rounded-lg border border-border bg-white text-center">
                     <div className="text-xs font-bold text-foreground">Duitku</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">VA & Gerai Retail</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">VA &amp; Gerai Retail</div>
                   </div>
                   <div className="p-2.5 rounded-lg border border-border bg-white text-center">
                     <div className="text-xs font-bold text-foreground">Xendit</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Enterprise Gateway</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
+                    <div className="text-xs font-bold text-foreground">QRIN</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">QRIS Lokal ISP</div>
                   </div>
                 </div>
 

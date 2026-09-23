@@ -3,6 +3,7 @@ import { prisma } from '@/server/db/client'
 import { nanoid } from 'nanoid'
 import { sendAutoRenewalSuccess } from '@/server/services/notifications/whatsapp-templates.service'
 import { sendAutoRenewalEmail } from '@/server/services/notifications/email.service'
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service'
 
 /**
  * Auto-renewal for PREPAID users with balance
@@ -194,16 +195,17 @@ async function payInvoiceFromBalance(user: any, invoice: any) {
         }
       })
 
-      // 3. Extend expiredAt (for prepaid)
-      const validity = user.profile.validityValue
-      const unit = user.profile.validityUnit
-      
-      const newExpiredAt = new Date(user.expiredAt || new Date())
-      if (unit === 'MONTHS') {
-        newExpiredAt.setMonth(newExpiredAt.getMonth() + validity)
-      } else if (unit === 'DAYS') {
-        newExpiredAt.setDate(newExpiredAt.getDate() + validity)
-      }
+      // 3. Extend expiredAt via centralized billing cycle service (23:59:59.999 WIB)
+      const company = await tx.company.findFirst()
+      const newExpiredAt = calculateNextBillingExpiry({
+        currentExpiredAt: user.expiredAt,
+        billingDay: user.billingDay,
+        fixedBillingDate: company?.fixedBillingDate,
+        shiftBillingDateIfLate: company?.shiftBillingDateIfLate,
+        validityValue: user.profile?.validityValue || 1,
+        validityUnit: user.profile?.validityUnit || 'MONTHS',
+        paymentDate: new Date(),
+      })
 
       await tx.pppoeUser.update({
         where: { id: user.id },

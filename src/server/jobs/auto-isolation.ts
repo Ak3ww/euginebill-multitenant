@@ -4,6 +4,8 @@ import { WhatsAppService } from '@/server/services/notifications/whatsapp.servic
 import { EmailService } from '@/server/services/notifications/email.service';
 import { sendPushToUser } from '@/server/services/notifications/push-templates.service';
 import { ensureHttpsUrl } from '@/lib/utils';
+import { nowWIB } from '@/lib/timezone';
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
 
 /**
  * Enhanced Auto-Isolation for expired PPPoE users
@@ -31,10 +33,11 @@ export async function autoIsolateExpiredUsers() {
     console.log(`[AUTO-ISOLATE] Starting auto-isolation check (RADIUS: ${isRadius})...`);
 
     // Find users that should be isolated (strictly respect per-user autoIsolationEnabled setting)
+    const nowCheck = nowWIB();
     const expiredUsers = await prisma.pppoeUser.findMany({
       where: {
         expiredAt: {
-          lte: new Date(), // expired
+          lte: nowCheck, // expired (WIB-as-UTC)
         },
         status: {
           notIn: ['isolated', 'suspended', 'blocked', 'stop'], // not already isolated
@@ -51,11 +54,13 @@ export async function autoIsolateExpiredUsers() {
         expiredAt: true,
         routerId: true,
         waNotificationEnabled: true,
+        autoIsolationEnabled: true,
+        billingDay: true,
       },
     });
 
     if (expiredUsers.length === 0) {
-      console.log('[AUTO-ISOLATE] ✓ No new users need technical isolation. Checking pending H+X isolation notifications...');
+      console.log('[AUTO-ISOLATE] [NOTICE] No new users need technical isolation. Checking pending H+X isolation notifications...');
       const pendingRes = await sendPendingIsolationNotifications().catch(() => ({ sent: 0 }));
       return {
         success: true,
@@ -71,11 +76,26 @@ export async function autoIsolateExpiredUsers() {
     const errors: string[] = [];
 
     const gracePeriodDays = company?.gracePeriodDays ?? 0;
-    const nowCheck = new Date();
 
     for (const user of expiredUsers) {
       try {
-        // 🛑 SAFETY GUARD 1: Verify invoice status before isolating!
+        // [SAFETY GUARD 1] STRICT PROTECTION: Customers with autoIsolationEnabled = false (e.g. Kp. Tegal) MUST NEVER be isolated!
+        if (user.autoIsolationEnabled === false) {
+          console.log(`[AUTO-ISOLATE] [PROTECTED] User ${user.username} has autoIsolationEnabled = false (e.g. Kp. Tegal). Skipping isolation.`);
+          continue;
+        }
+
+        const freshUser = await prisma.pppoeUser.findUnique({
+          where: { id: user.id },
+          select: { autoIsolationEnabled: true, billingDay: true, waNotificationEnabled: true },
+        });
+
+        if (!freshUser || freshUser.autoIsolationEnabled === false) {
+          console.log(`[AUTO-ISOLATE] [PROTECTED] User ${user.username} has autoIsolationEnabled = false in database. Skipping isolation.`);
+          continue;
+        }
+
+        // [SAFETY GUARD 2] Verify invoice status before isolating
         const unpaidInvoices = await prisma.invoice.findMany({
           where: {
             userId: user.id,
@@ -84,19 +104,16 @@ export async function autoIsolateExpiredUsers() {
           orderBy: { dueDate: 'asc' },
         });
 
-        // 🛑 SAFETY GUARD 2: Customer has ZERO unpaid invoices (already paid!)
+        // [SAFETY GUARD 3] Customer has ZERO unpaid invoices (already paid!)
+        // Auto-heal expiredAt to next billing cycle at 23:59:59.999 WIB and JANGAN diisolir!
         if (unpaidInvoices.length === 0) {
-          const userRecord = await prisma.pppoeUser.findUnique({
-            where: { id: user.id },
-            select: { billingDay: true },
+          const nextExpiry = calculateNextBillingExpiry({
+            currentExpiredAt: user.expiredAt,
+            billingDay: freshUser.billingDay,
+            fixedBillingDate: company?.fixedBillingDate,
+            shiftBillingDateIfLate: company?.shiftBillingDateIfLate,
+            paymentDate: nowCheck,
           });
-
-          const bd = userRecord?.billingDay || company?.fixedBillingDate || 6;
-          const nextMonth = nowCheck.getUTCMonth() + 1;
-          const nextYear = nextMonth > 11 ? nowCheck.getUTCFullYear() + 1 : nowCheck.getUTCFullYear();
-          const nm = nextMonth % 12;
-          const nextMonthLastDay = new Date(Date.UTC(nextYear, nm + 1, 0)).getUTCDate();
-          const nextExpiry = new Date(Date.UTC(nextYear, nm, Math.min(bd, nextMonthLastDay), 23, 59, 59, 999));
 
           await prisma.pppoeUser.update({
             where: { id: user.id },
@@ -106,20 +123,17 @@ export async function autoIsolateExpiredUsers() {
             },
           });
 
-          console.log(`[AUTO-ISOLATE] 🛑 PROTECTED: User ${user.username} has 0 unpaid invoices (already paid). Auto-healed expiredAt to ${nextExpiry.toISOString()}`);
+          console.log(`[AUTO-ISOLATE] [PROTECTED] User ${user.username} has 0 unpaid invoices (already paid). Auto-healed expiredAt to ${nextExpiry.toISOString()}`);
           continue; // SKIP ISOLATION!
         }
 
-        // 🛑 SAFETY GUARD 3: Check if invoice dueDate has actually passed
-        const earliestUnpaid = unpaidInvoices[0];
-        const invDue = new Date(earliestUnpaid.dueDate);
-        const effectiveDueEnd = new Date(invDue);
-        effectiveDueEnd.setUTCHours(23, 59, 59, 999);
-        const graceEndMs = effectiveDueEnd.getTime() + (gracePeriodDays * 24 * 60 * 60 * 1000);
-
-        if (nowCheck.getTime() <= graceEndMs) {
-          console.log(`[AUTO-ISOLATE] 🛑 PROTECTED: User ${user.username} invoice ${earliestUnpaid.invoiceNumber} due date (${invDue.toISOString()}) has not yet passed. Skipping isolation.`);
-          continue; // SKIP ISOLATION!
+        // [SAFETY GUARD 4] Check grace period
+        if (user.expiredAt && gracePeriodDays > 0) {
+          const graceEndMs = new Date(user.expiredAt).getTime() + (gracePeriodDays * 24 * 60 * 60 * 1000);
+          if (nowCheck.getTime() <= graceEndMs) {
+            console.log(`[AUTO-ISOLATE] [PROTECTED] User ${user.username} is within grace period (${gracePeriodDays} days). Skipping isolation.`);
+            continue; // SKIP ISOLATION!
+          }
         }
 
         console.log(`[AUTO-ISOLATE] Processing: ${user.username}`);
@@ -135,12 +149,12 @@ export async function autoIsolateExpiredUsers() {
           try {
             const { PPPSecretService } = await import('@/server/services/mikrotik/ppp-secret.service');
             await PPPSecretService.setProfileAndDisconnect(user.routerId, user.username, isolateProfileName);
-            console.log(`[AUTO-ISOLATE] ✓ Swapped profile to '${isolateProfileName}' and kicked ${user.username} via MikroTik API`);
+            console.log(`[AUTO-ISOLATE] [SUCCESS] Swapped profile to '${isolateProfileName}' and kicked ${user.username} via MikroTik API`);
           } catch (mtErr: any) {
-            console.log(`[AUTO-ISOLATE] ⚠️ Direct MikroTik isolation error for ${user.username}: ${mtErr.message}`);
+            console.log(`[AUTO-ISOLATE] [WARNING] Direct MikroTik isolation error for ${user.username}: ${mtErr.message}`);
           }
         } else {
-          console.log(`[AUTO-ISOLATE] ⚠️ Cannot isolate via MikroTik API (no routerId) for ${user.username}`);
+          console.log(`[AUTO-ISOLATE] [WARNING] Cannot isolate via MikroTik API (no routerId) for ${user.username}`);
         }
 
         // 2. SECONDARY: RADIUS ISOLATION (only if RADIUS mode enabled)
@@ -192,14 +206,14 @@ export async function autoIsolateExpiredUsers() {
                   'isolir'
                 );
               } catch (addrErr: any) {
-                console.log(`[AUTO-ISOLATE] ⚠️ Address-list add failed (non-fatal): ${addrErr.message}`);
+                console.log(`[AUTO-ISOLATE] [WARNING] Address-list add failed (non-fatal): ${addrErr.message}`);
               }
             }
 
             const { disconnectPPPoEUser } = await import('@/server/services/radius/coa-handler.service');
             await disconnectPPPoEUser(user.username);
           } catch (coaError: any) {
-            console.log(`[AUTO-ISOLATE] ⚠️ Disconnect failed: ${coaError.message}`);
+            console.log(`[AUTO-ISOLATE] [WARNING] Disconnect failed: ${coaError.message}`);
           }
 
           await prisma.$executeRaw`
@@ -226,22 +240,24 @@ export async function autoIsolateExpiredUsers() {
         }).catch(() => {}); // Ignore if activityLog doesn't exist
 
         isolatedCount++;
-        console.log(`[AUTO-ISOLATE] ? Successfully isolated ${user.username}`);
+        console.log(`[AUTO-ISOLATE] [SUCCESS] Successfully isolated ${user.username}`);
 
-        // 8. Send notification (respect waNotificationEnabled)
-        if (user.waNotificationEnabled === false) {
-          console.log(`[AUTO-ISOLATE] Skipping notification for ${user.username} (waNotificationEnabled = false)`);
+        // 8. Send notification (strictly respect waNotificationEnabled & autoIsolationEnabled)
+        if (freshUser.waNotificationEnabled === false) {
+          console.log(`[AUTO-ISOLATE] [NOTICE] Skipping notification for ${user.username} (waNotificationEnabled = false)`);
+        } else if ((freshUser.autoIsolationEnabled as boolean) === false) {
+          console.log(`[AUTO-ISOLATE] [BLOCKED] DILARANG mengirimkan WA notifikasi isolir untuk ${user.username} (autoIsolationEnabled = false)`);
         } else {
           try {
             await sendIsolationNotification(user);
-          } catch (notifError) {
-            console.log(`[AUTO-ISOLATE] ?? Notification failed for ${user.username}`);
+          } catch (notifError: any) {
+            console.log(`[AUTO-ISOLATE] [WARNING] Notification failed for ${user.username}: ${notifError?.message || notifError}`);
           }
         }
 
       } catch (userError: any) {
         const errorMsg = `Failed to isolate ${user.username}: ${userError.message}`;
-        console.error(`[AUTO-ISOLATE] ? ${errorMsg}`);
+        console.error(`[AUTO-ISOLATE] [ERROR] ${errorMsg}`);
         errors.push(errorMsg);
       }
     }
@@ -258,11 +274,11 @@ export async function autoIsolateExpiredUsers() {
       message: `Successfully isolated ${isolatedCount} out of ${expiredUsers.length} users`,
     };
 
-    console.log(`[AUTO-ISOLATE] ? Complete: ${JSON.stringify(result)}`);
+    console.log(`[AUTO-ISOLATE] [COMPLETE] Complete: ${JSON.stringify(result)}`);
     return result;
 
   } catch (error: any) {
-    console.error('[AUTO-ISOLATE] ? Fatal error:', error);
+    console.error('[AUTO-ISOLATE] [ERROR] Fatal error:', error);
     return {
       success: false,
       error: error.message,
@@ -295,10 +311,16 @@ export async function sendIsolationNotification(
     let realCustomerId = user.customerId;
     const dbUser = await prisma.pppoeUser.findUnique({
       where: { id: user.id },
-      select: { customerId: true, pppoeCustomerId: true, waNotificationEnabled: true },
+      select: { customerId: true, pppoeCustomerId: true, waNotificationEnabled: true, autoIsolationEnabled: true },
     });
     if (!realCustomerId || realCustomerId === user.username) {
       realCustomerId = dbUser?.customerId || dbUser?.pppoeCustomerId || user.customerId || user.username;
+    }
+
+    // STRICT INVARIANT: Customers with autoIsolationEnabled = false DILARANG KERAS dikirimkan notifikasi isolir!
+    if (dbUser?.autoIsolationEnabled === false) {
+      console.log(`[sendIsolationNotification] [BLOCKED] Customer ${user.username} has autoIsolationEnabled = false. DILARANG KERAS mengirimkan notifikasi isolir!`);
+      return { success: true, skipped: true };
     }
 
     // Fetch latest pending/overdue invoice for totalUnpaid calculation
@@ -361,7 +383,7 @@ export async function sendIsolationNotification(
         const isolationDelayDays = (reminderSettings as any)?.isolationDelayDays ?? 7;
         const maxTotalMessages = (reminderSettings as any)?.maxTotalMessagesPerCycle ?? 3;
 
-        // 🛑 STRICT CHECK 1: H+X Delay Check (unless force=true)
+        // [CHECK 1] H+X Delay Check (unless force=true)
         // Customer is isolated on day 0, but isolation WA is sent on H+X (default: H+7)
         if (!options?.force && user.expiredAt && isolationDelayDays > 0) {
           const expDate = new Date(user.expiredAt);
@@ -371,7 +393,7 @@ export async function sendIsolationNotification(
           const daysSinceExpired = msSinceExpired / (24 * 60 * 60 * 1000);
 
           if (daysSinceExpired < isolationDelayDays) {
-            console.log(`[sendIsolationNotification] ⏳ DEFERRED for ${user.username}: At H+${Math.max(0, Math.floor(daysSinceExpired))}, waiting for H+${isolationDelayDays}.`);
+            console.log(`[sendIsolationNotification] [DEFERRED] for ${user.username}: At H+${Math.max(0, Math.floor(daysSinceExpired))}, waiting for H+${isolationDelayDays}.`);
             waResult = { success: true, deferred: true };
           }
         }
@@ -385,7 +407,7 @@ export async function sendIsolationNotification(
           const phonePlus62 = `+${phone62}`;
           const phoneCandidates = Array.from(new Set([rawPhone, digitsOnly, phone62, phone08, phonePlus62, `+${digitsOnly}`]));
 
-          // 🛑 STRICT IDEMPOTENCY GUARD: Guarantee isolation WhatsApp is sent at most 1X across current billing cycle
+          // [IDEMPOTENCY GUARD] Guarantee isolation WhatsApp is sent at most 1X across current billing cycle
           const cycleStart = unpaidInvoice?.createdAt
             ? new Date(unpaidInvoice.createdAt)
             : (user.expiredAt ? new Date(new Date(user.expiredAt).getTime() - 15 * 24 * 60 * 60 * 1000) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
@@ -423,13 +445,13 @@ export async function sendIsolationNotification(
           );
 
           if (existingIsoWa) {
-            console.log(`[sendIsolationNotification] 🛑 SKIPPED duplicate isolation WA for ${user.username} (${user.phone}). Already sent at ${existingIsoWa.sentAt.toISOString()} (Log ID: ${existingIsoWa.id}, Status: ${existingIsoWa.status}). Max 1X rule enforced.`);
+            console.log(`[sendIsolationNotification] [SKIPPED] Duplicate isolation WA for ${user.username} (${user.phone}). Already sent at ${existingIsoWa.sentAt.toISOString()} (Log ID: ${existingIsoWa.id}, Status: ${existingIsoWa.status}). Max 1X rule enforced.`);
             waResult = { success: true, skipped: true };
           } else {
-            // 🛑 STRICT QUOTA CHECK: Overall customer cycle quota (maxTotalMessages, default 3)
+            // [QUOTA CHECK] Overall customer cycle quota (maxTotalMessages, default 3)
             const successfulCycleCount = recentMessages.filter(m => m.status !== 'failed').length;
             if (successfulCycleCount >= maxTotalMessages) {
-              console.log(`[sendIsolationNotification] 🛑 SKIPPED for ${user.username}: Total cycle message cap reached (${successfulCycleCount}/${maxTotalMessages}).`);
+              console.log(`[sendIsolationNotification] [SKIPPED] for ${user.username}: Total cycle message cap reached (${successfulCycleCount}/${maxTotalMessages}).`);
               waResult = { success: true, skipped: true };
             } else {
               // Prefer DB isolation template; fall back to plain message
@@ -446,29 +468,29 @@ export async function sendIsolationNotification(
                 }
               } else {
                 message =
-                  `⚠️ *Layanan Internet Diisolir*\n\n` +
+                  `*Layanan Internet Diisolir*\n\n` +
                   `Halo ${templateVars.customerName},\n\n` +
                   `Akun internet Anda (*${realCustomerId}*) telah diisolir karena masa berlangganan habis.\n\n` +
-                  `📅 Expired: ${expiredDate}\n\n` +
-                  `Untuk mengaktifkan kembali, buka halaman berikut dan lakukan pembayaran:\n🔗 ${paymentLink}\n\n` +
-                  `Butuh bantuan?\n📞 ${company.phone || '-'}\n\n` +
+                  `Expired: ${expiredDate}\n\n` +
+                  `Untuk mengaktifkan kembali, buka halaman berikut dan lakukan pembayaran:\n${paymentLink}\n\n` +
+                  `Butuh bantuan?\n${company.phone || '-'}\n\n` +
                   `Terima kasih,\n*${company.name}*`;
               }
 
               const sendRes = await WhatsAppService.sendMessage({ phone: user.phone, message });
               if (sendRes && !sendRes.success) {
-                console.error(`[Isolation] ✗ WhatsApp failed for ${user.username}:`, sendRes.error);
+                console.error(`[Isolation] [ERROR] WhatsApp failed for ${user.username}:`, sendRes.error);
                 // "gagal tidak termasuk, gagal boleh ulang": next cron run will retry
                 waResult = { success: false, error: sendRes.error };
               } else {
-                console.log(`[Isolation] ✓ WhatsApp sent to ${user.username} (${user.phone})`);
+                console.log(`[Isolation] [SUCCESS] WhatsApp sent to ${user.username} (${user.phone})`);
                 waResult = { success: true };
               }
             }
           }
         }
       } catch (err: any) {
-        console.error(`[Isolation] ✗ WhatsApp error for ${user.username}:`, err.message);
+        console.error(`[Isolation] [ERROR] WhatsApp error for ${user.username}:`, err.message);
         waResult = { success: false, error: err.message };
       }
     }
@@ -484,13 +506,13 @@ export async function sendIsolationNotification(
         let subject: string;
         if (emailTemplate?.message) {
           htmlBody = emailTemplate.message;
-          subject = emailTemplate.subject || `⚠️ Akun Anda Telah Diisolir - ${user.username}`;
+          subject = emailTemplate.subject || `Akun Anda Telah Diisolir - ${user.username}`;
           for (const [key, val] of Object.entries(templateVars)) {
             htmlBody = htmlBody.replace(new RegExp(`{{${key}}}`, 'g'), val);
             subject = subject.replace(new RegExp(`{{${key}}}`, 'g'), val);
           }
         } else {
-          subject = `⚠️ Layanan Internet Diisolir - ${user.username}`;
+          subject = `Layanan Internet Diisolir - ${user.username}`;
           htmlBody = `
             <h2>Layanan Internet Diisolir</h2>
             <p>Halo <strong>${templateVars.customerName}</strong>,</p>
@@ -509,9 +531,9 @@ export async function sendIsolationNotification(
           subject,
           html: htmlBody,
         });
-        console.log(`[Isolation] ✓ Email sent to ${user.username} (${user.email})`);
+        console.log(`[Isolation] [SUCCESS] Email sent to ${user.username} (${user.email})`);
       } catch (emailErr: any) {
-        console.error(`[Isolation] ✗ Email failed for ${user.username}:`, emailErr.message);
+        console.error(`[Isolation] [ERROR] Email failed for ${user.username}:`, emailErr.message);
       }
     }
 
@@ -526,14 +548,14 @@ export async function sendIsolationNotification(
         companyPhone: company.phone || '',
         paymentLink: paymentLink,
       });
-      console.log(`[Isolation] ✓ Push notification dispatched for ${user.username}`);
+      console.log(`[Isolation] [SUCCESS] Push notification dispatched for ${user.username}`);
     } catch (pushErr: any) {
-      console.log(`[Isolation] ℹ️ Push notice skipped or failed for ${user.username}:`, pushErr.message);
+      console.log(`[Isolation] [NOTICE] Push notice skipped or failed for ${user.username}:`, pushErr.message);
     }
 
     return waResult;
   } catch (error: any) {
-    console.error('[Isolation] ✗ Fatal notification error:', error.message);
+    console.error('[Isolation] [ERROR] Fatal notification error:', error.message);
     return { success: false, error: error.message };
   }
 }
@@ -554,6 +576,7 @@ export async function sendPendingIsolationNotifications(): Promise<{
       where: {
         status: 'isolated',
         waNotificationEnabled: true,
+        autoIsolationEnabled: true,
         phone: { not: '' },
       },
       select: {
@@ -565,6 +588,7 @@ export async function sendPendingIsolationNotifications(): Promise<{
         expiredAt: true,
         customerId: true,
         pppoeCustomerId: true,
+        autoIsolationEnabled: true,
       },
     });
 
@@ -573,6 +597,10 @@ export async function sendPendingIsolationNotifications(): Promise<{
     let skipped = 0;
 
     for (const user of isolatedUsers) {
+      if (user.autoIsolationEnabled === false) {
+        skipped++;
+        continue;
+      }
       try {
         const res = await sendIsolationNotification(user);
         if (res && res.success && !res.skipped && !res.deferred) sent++;

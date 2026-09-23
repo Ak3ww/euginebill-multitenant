@@ -594,8 +594,8 @@ export async function sendInvoiceReminder(data: {
     if (!templateContent) {
       console.warn(`[WA] No template found for ${templateType}, using default fallback template`);
       templateContent = isOverdue
-        ? `📄 *TAGIHAN INTERNET (JATUH TEMPO)*\n\nHalo *{{customerName}}*,\nTagihan internet Anda telah melewati tanggal jatuh tempo (*{{dueDate}}*).\n\nNo. Tagihan: *{{invoiceNumber}}*\nPaket: *{{profileName}}*\nTotal: *{{amount}}*\n\nSilakan lakukan pembayaran melalui link berikut:\n{{paymentLink}}\n\n*{{companyName}}*`
-        : `📄 *TAGIHAN INTERNET*\n\nHalo *{{customerName}}*,\nBerikut adalah rincian tagihan internet Anda:\n\nNo. Tagihan: *{{invoiceNumber}}*\nPaket: *{{profileName}}*\nJatuh Tempo: *{{dueDate}}*\nTotal: *{{amount}}*\n\nSilakan lakukan pembayaran melalui link berikut:\n{{paymentLink}}\n\n*{{companyName}}*`;
+        ? `*TAGIHAN INTERNET (JATUH TEMPO)*\n\nHalo *{{customerName}}*,\nTagihan internet Anda telah melewati tanggal jatuh tempo (*{{dueDate}}*).\n\nNo. Tagihan: *{{invoiceNumber}}*\nPaket: *{{profileName}}*\nTotal: *{{amount}}*\n\nSilakan lakukan pembayaran melalui link berikut:\n{{paymentLink}}\n\n*{{companyName}}*`
+        : `*TAGIHAN INTERNET*\n\nHalo *{{customerName}}*,\nBerikut adalah rincian tagihan internet Anda:\n\nNo. Tagihan: *{{invoiceNumber}}*\nPaket: *{{profileName}}*\nJatuh Tempo: *{{dueDate}}*\nTotal: *{{amount}}*\n\nSilakan lakukan pembayaran melalui link berikut:\n{{paymentLink}}\n\n*{{companyName}}*`;
     }
 
     // Fetch bank accounts for payment templates
@@ -631,7 +631,7 @@ export async function sendInvoiceReminder(data: {
     });
 
     if (!waRes.success) {
-      // ❌ GAGAL: Selalu increment waRetryCount agar UI bisa deteksi kegagalan
+      // [GAGAL]: Selalu increment waRetryCount agar UI bisa deteksi kegagalan
       if (data.invoiceNumber) {
         await prisma.invoice.updateMany({
           where: { invoiceNumber: data.invoiceNumber },
@@ -641,7 +641,7 @@ export async function sendInvoiceReminder(data: {
       throw new Error(waRes.error || 'WhatsApp provider failed to send message');
     }
 
-    // ✅ SUKSES: Hanya Update waNotifiedAt (Jangan increment waRetryCount lagi)
+    // [SUKSES]: Hanya Update waNotifiedAt (Jangan increment waRetryCount lagi)
     if (data.invoiceNumber) {
       await prisma.invoice.updateMany({
         where: { invoiceNumber: data.invoiceNumber },
@@ -652,10 +652,10 @@ export async function sendInvoiceReminder(data: {
     }
 
     const status = isOverdue ? 'overdue' : 'reminder';
-    console.log(`[WA] ✅ Invoice ${status} sent to ${data.phone}`);
+    console.log(`[WA] [SUCCESS] Invoice ${status} sent to ${data.phone}`);
     return { success: true };
   } catch (error) {
-    console.error(`[WA] ❌ Failed to send invoice reminder:`, error);
+    console.error(`[WA] [ERROR] Failed to send invoice reminder:`, error);
     return { success: false, error: (error as any)?.message || String(error) };
   }
 }

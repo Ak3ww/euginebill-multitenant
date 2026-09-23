@@ -70,6 +70,7 @@ interface MenuItem {
   badge?: string;
   requiredPermission?: string;
   requiresRadius?: boolean;
+  requiresGenieACS?: boolean;
 }
 
 interface MenuGroup {
@@ -229,6 +230,7 @@ const menuGroups: MenuGroup[] = [
         titleKey: 'nav.acs',
         icon: <Router className="w-4 h-4" />,
         requiredPermission: 'network.view',
+        requiresGenieACS: true,
         children: [
           { titleKey: 'nav.devices', href: '/admin/acs', requiredPermission: 'network.view' },
         ],
@@ -431,7 +433,7 @@ const menuGroups: MenuGroup[] = [
   },
 ];
 
-function CategoryItem({ titleKey, items, pendingCount, manualPaymentsCount, unreadNotifications, userPermissions, radiusEnabled, isSuperAdmin, t, onNavigate }: {
+function CategoryItem({ titleKey, items, pendingCount, manualPaymentsCount, unreadNotifications, userPermissions, radiusEnabled, genieacsEnabled, isSuperAdmin, t, onNavigate }: {
   titleKey: string;
   items: MenuItem[];
   pendingCount: number;
@@ -439,6 +441,7 @@ function CategoryItem({ titleKey, items, pendingCount, manualPaymentsCount, unre
   unreadNotifications: number;
   userPermissions: string[];
   radiusEnabled: boolean;
+  genieacsEnabled: boolean;
   isSuperAdmin?: boolean;
   t: (key: string, params?: Record<string, string | number>) => string;
   onNavigate?: () => void;
@@ -452,6 +455,7 @@ function CategoryItem({ titleKey, items, pendingCount, manualPaymentsCount, unre
   const visibleItems = items
     .filter(item => isSuperAdmin || !item.requiredPermission || userPermissions.includes(item.requiredPermission))
     .filter(item => !(item.requiresRadius && radiusEnabled === false))
+    .filter(item => !(item.requiresGenieACS && genieacsEnabled === false))
     .map(item => ({
       ...item,
       children: item.children?.filter(child => isSuperAdmin || !child.requiredPermission || userPermissions.includes(child.requiredPermission)),
@@ -856,6 +860,7 @@ function AdminLayoutContent({
             radiusEnabled: data.radiusEnabled,
             radiusHotspotEnabled: data.radiusHotspotEnabled,
             radiusPppoeEnabled: data.radiusPppoeEnabled,
+            genieacsEnabled: data.genieacsEnabled,
           });
         }
       })
@@ -1107,6 +1112,7 @@ function AdminLayoutContent({
                 unreadNotifications={unreadNotifications}
                 userPermissions={userPermissions}
                 radiusEnabled={company.radiusEnabled ?? false}
+                genieacsEnabled={company.genieacsEnabled ?? false}
                 isSuperAdmin={(session?.user as any)?.role === 'SUPER_ADMIN'}
                 t={t}
                 onNavigate={() => setSidebarOpen(false)}

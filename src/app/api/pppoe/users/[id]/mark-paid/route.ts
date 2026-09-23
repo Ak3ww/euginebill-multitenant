@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
 import { generateTransactionId, generateCategoryId } from '@/server/services/billing/invoice.service';
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
 
 export async function POST(
   request: NextRequest,
@@ -109,30 +110,19 @@ export async function POST(
       });
     }
 
-    // Calculate new expiredAt for user (extend to next billing cycle at 23:59:59 WIB)
+    // Calculate new expiredAt for user via centralized billing cycle service (23:59:59.999 WIB)
     const companySettings = await prisma.company.findFirst();
-    const bd = userRecord.billingDay || companySettings?.fixedBillingDate || 6;
-    
-    let newExpiredAt: Date;
-    if (userRecord.subscriptionType === 'PREPAID') {
-      const baseDate = (userRecord.expiredAt && userRecord.expiredAt > now) ? new Date(userRecord.expiredAt) : new Date(now);
-      const val = userRecord.profile?.validityValue || 1;
-      const unit = userRecord.profile?.validityUnit || 'MONTHS';
-      if (unit === 'DAYS') {
-        baseDate.setDate(baseDate.getDate() + val);
-      } else {
-        baseDate.setMonth(baseDate.getMonth() + val);
-      }
-      baseDate.setUTCHours(23, 59, 59, 999);
-      newExpiredAt = baseDate;
-    } else {
-      // POSTPAID: next month's billingDay at 23:59:59 WIB
-      const nextMonth = now.getUTCMonth() + 1;
-      const nextYear = nextMonth > 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
-      const nm = nextMonth % 12;
-      const nextMonthLastDay = new Date(Date.UTC(nextYear, nm + 1, 0)).getUTCDate();
-      newExpiredAt = new Date(Date.UTC(nextYear, nm, Math.min(bd, nextMonthLastDay), 23, 59, 59, 999));
-    }
+    const isInstallation = unpaidInvoices.some(inv => inv.invoiceType === 'INSTALLATION');
+    const newExpiredAt = calculateNextBillingExpiry({
+      currentExpiredAt: userRecord.expiredAt,
+      billingDay: userRecord.billingDay,
+      fixedBillingDate: companySettings?.fixedBillingDate,
+      shiftBillingDateIfLate: companySettings?.shiftBillingDateIfLate,
+      validityValue: userRecord.profile?.validityValue || 1,
+      validityUnit: userRecord.profile?.validityUnit || 'MONTHS',
+      paymentDate: now,
+      isNewInstallationOrProrate: isInstallation,
+    });
 
     // Update user status to active and advance expiredAt
     const updatedUser = await prisma.pppoeUser.update({

@@ -930,7 +930,7 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
 
         // Skip if user has disabled WA notifications (Toggle WA OFF)
         if (invoice.user && invoice.user.waNotificationEnabled === false) {
-          console.log(`[Invoice Reminder] 🛑 Skipped ${invoice.invoiceNumber}: WA notification toggle is OFF for user (${invoice.user.username})`)
+          console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: WA notification toggle is OFF for user (${invoice.user.username})`)
           skippedCount++
           continue
         }
@@ -947,9 +947,9 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
           continue
         }
 
-        // 🛑 QUOTA CHECK 1: Max invoice reminders reached for this invoice (enforced in strict mode)
+        // [QUOTA CHECK 1] Max invoice reminders reached for this invoice (enforced in strict mode)
         if (isStrictQuota && invoiceSentReminders.length >= maxInvoiceReminders) {
-          console.log(`[Invoice Reminder] 🛑 Skipped ${invoice.invoiceNumber}: Max invoice reminders quota reached (${invoiceSentReminders.length}/${maxInvoiceReminders})`)
+          console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: Max invoice reminders quota reached (${invoiceSentReminders.length}/${maxInvoiceReminders})`)
           skippedCount++
           continue
         }
@@ -957,36 +957,39 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
         // Limit automatic cron retries for permanently failed numbers (max 4 failed attempts)
         const totalRetryCount = (invoice as any).waRetryCount || 0
         if (totalRetryCount >= 4 && !invoice.waNotifiedAt) {
-          console.log(`[Invoice Reminder] 🛑 SKIPPED ${invoice.invoiceNumber}: Max 4 failed cron retries reached`)
+          console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: Max 4 failed cron retries reached`)
           skippedCount++
           continue
         }
 
-        // 🛑 SAFETY GUARD: Check if customer's actual service expiredAt is in the future
-        if (invoice.user?.expiredAt) {
+        // [SAFETY GUARD] Check if customer's actual service expiredAt is in the future
+        // ONLY for PREPAID subscriptions: invoice dueDate tracks user.expiredAt.
+        // For POSTPAID subscriptions: invoice dueDate is strictly based on billingDay (tanggal 6 for general, tanggal 10 for Kp. Tegal)
+        // and MUST NEVER be overwritten with user.expiredAt!
+        if (invoice.user?.subscriptionType === 'PREPAID' && invoice.user?.expiredAt) {
           const userExpMs = new Date(invoice.user.expiredAt).getTime();
           const isUserActiveInFuture = userExpMs > Date.now();
 
-          // If customer expired date is in the future:
-          if (isUserActiveInFuture) {
-            // Auto-sync invoice.dueDate to match user.expiredAt in DB
-            if (new Date(invoice.dueDate).getTime() !== userExpMs) {
-              await prisma.invoice.update({
-                where: { id: invoice.id },
-                data: { 
-                  dueDate: new Date(userExpMs),
-                  status: 'PENDING',
-                },
-              }).catch(() => {});
-            }
+          if (isUserActiveInFuture && new Date(invoice.dueDate).getTime() !== userExpMs) {
+            await prisma.invoice.update({
+              where: { id: invoice.id },
+              data: { 
+                dueDate: new Date(userExpMs),
+                status: 'PENDING',
+              },
+            }).catch(() => {});
+          }
+        }
 
-            // If this iteration is checking overdue days (reminderDay > 0):
-            // DO NOT SEND OVERDUE/ISOLIR REMINDER! Customer is NOT expired!
-            if (reminderDay > 0) {
-              console.log(`[Invoice Reminder] 🛑 SKIPPED Overdue reminder for ${invoice.invoiceNumber}: User (${invoice.user.username}) is active with future expiry (${new Date(userExpMs).toISOString()})`);
-              skippedCount++;
-              continue;
-            }
+        // If customer expired date is in the future and this iteration is checking overdue days (reminderDay > 0):
+        // DO NOT SEND OVERDUE/ISOLIR REMINDER! Customer is NOT expired!
+        if (invoice.user?.expiredAt) {
+          const userExpMs = new Date(invoice.user.expiredAt).getTime();
+          const isUserActiveInFuture = userExpMs > Date.now();
+          if (isUserActiveInFuture && reminderDay > 0) {
+            console.log(`[Invoice Reminder] [SKIPPED] Overdue reminder for ${invoice.invoiceNumber}: User (${invoice.user.username}) is active with future expiry (${new Date(userExpMs).toISOString()})`);
+            skippedCount++;
+            continue;
           }
         }
 
@@ -1004,7 +1007,7 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
           continue;
         }
 
-        // 🛑 QUOTA CHECK 2: Overall customer cycle quota (maxTotalMessages)
+        // [QUOTA CHECK 2] Overall customer cycle quota (maxTotalMessages)
         // If flexible mode (maxTotalMessages >= 99), do not block additional messages per cycle
         if (isStrictQuota && maxTotalMessages < 99) {
           const cycleStart = invoice.createdAt ? new Date(invoice.createdAt) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -1022,7 +1025,7 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
           });
 
           if (successfulCycleMessages >= maxTotalMessages) {
-            console.log(`[Invoice Reminder] 🛑 Skipped ${invoice.invoiceNumber}: Total cycle message cap reached (${successfulCycleMessages}/${maxTotalMessages})`);
+            console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: Total cycle message cap reached (${successfulCycleMessages}/${maxTotalMessages})`);
             skippedCount++;
             continue;
           }
@@ -1091,9 +1094,9 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
         const result = await sendWithRateLimit(
           messagesToSend,
           async (msg) => {
-            // 🛑 EMERGENCY KILL SWITCH CHECK: Immediately stop sending if admin triggered kill switch
+            // [KILL SWITCH] Immediately stop sending if admin triggered kill switch
             if (activeAbortedJobs.has('invoice_reminder') || activeAbortedJobs.has('all')) {
-              console.log(`[Invoice Reminder] 🛑 KILL SWITCH ACTIVATED: Stopping batch sending for ${msg.data.invoice.invoiceNumber}`);
+              console.log(`[Invoice Reminder] [KILL SWITCH] Stopping batch sending for ${msg.data.invoice.invoiceNumber}`);
               skippedCount++;
               return;
             }
@@ -1109,7 +1112,20 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
               areaName,
             } = msg.data;
 
-            // 🛡️ ATOMIC CONCURRENCY CHECK: Re-verify DB & Pre-mark sentReminders BEFORE sending WA message
+            // [SAFETY GUARD] Verify fresh user waNotificationEnabled toggle
+            if (invoice.user?.id) {
+              const freshUser = await prisma.pppoeUser.findUnique({
+                where: { id: invoice.user.id },
+                select: { waNotificationEnabled: true },
+              });
+              if (freshUser?.waNotificationEnabled === false) {
+                console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: waNotificationEnabled is false for ${invoice.user.username}`);
+                skippedCount++;
+                return;
+              }
+            }
+
+            // [CONCURRENCY CHECK] Re-verify DB & Pre-mark sentReminders BEFORE sending WA message
             const freshInvoice = await prisma.invoice.findUnique({
               where: { id: invoice.id },
               select: { sentReminders: true, waNotifiedAt: true },
@@ -1120,28 +1136,49 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
               : [];
 
             if (currentSent.includes(reminderDay)) {
-              console.log(`[Invoice Reminder] 🛡️ Skipped ${invoice.invoiceNumber}: H${reminderDay} already sent (atomic concurrency check)`);
+              console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: H${reminderDay} already sent (atomic concurrency check)`);
               skippedCount++;
               return;
             }
 
             if (isStrictQuota && currentSent.length >= maxInvoiceReminders) {
-              console.log(`[Invoice Reminder] 🛡️ Skipped ${invoice.invoiceNumber}: Max invoice reminders quota reached (${currentSent.length}/${maxInvoiceReminders}) (atomic concurrency check)`);
+              console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: Max invoice reminders quota reached (${currentSent.length}/${maxInvoiceReminders}) (atomic concurrency check)`);
               skippedCount++;
               return;
             }
 
-            if (freshInvoice?.waNotifiedAt) {
-              const hoursSinceLast = (Date.now() - new Date(freshInvoice.waNotifiedAt).getTime()) / (1000 * 60 * 60);
-              if (hoursSinceLast < 4) {
-                console.log(`[Invoice Reminder] 🛡️ Skipped ${invoice.invoiceNumber}: reminder sent ${hoursSinceLast.toFixed(1)}h ago`);
+            if (isStrictQuota && maxTotalMessages < 99) {
+              const cycleStart = invoice.createdAt ? new Date(invoice.createdAt) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+              const digitsOnly = targetPhone.replace(/[^0-9]/g, '');
+              const phone62 = digitsOnly.startsWith('0') ? `62${digitsOnly.slice(1)}` : (digitsOnly.startsWith('62') ? digitsOnly : `62${digitsOnly}`);
+              const phone08 = digitsOnly.startsWith('62') ? `0${digitsOnly.slice(2)}` : digitsOnly;
+              const phoneCandidates = Array.from(new Set([targetPhone, digitsOnly, phone62, phone08, `+${phone62}`]));
+
+              const cycleMsgCount = await prisma.whatsapp_history.count({
+                where: {
+                  phone: { in: phoneCandidates },
+                  status: { not: 'failed' },
+                  sentAt: { gte: cycleStart },
+                },
+              });
+
+              if (cycleMsgCount >= maxTotalMessages) {
+                console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: Total cycle message cap reached (${cycleMsgCount}/${maxTotalMessages}) (atomic check)`);
                 skippedCount++;
                 return;
               }
             }
 
-            // 🛡️ PRE-MARK DB ATOMICALLY BEFORE CALLING WA API:
-            // Push reminderDay to sentReminders to prevent concurrent double-send
+            if (freshInvoice?.waNotifiedAt) {
+              const hoursSinceLast = (Date.now() - new Date(freshInvoice.waNotifiedAt).getTime()) / (1000 * 60 * 60);
+              if (hoursSinceLast < 4) {
+                console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: reminder sent ${hoursSinceLast.toFixed(1)}h ago`);
+                skippedCount++;
+                return;
+              }
+            }
+
+            // [PRE-MARK] Update DB atomically before calling WA API to prevent duplicate sends
             const newSentReminders = [...currentSent, reminderDay];
             await prisma.invoice.update({
               where: { id: invoice.id },
@@ -1176,8 +1213,8 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
               // and waRetryCount (on failure) accurately.
               waSuccess = true;
             } catch (waErr: any) {
-              console.error(`[Invoice Reminder] ❌ WA failed for ${invoice.invoiceNumber}:`, waErr);
-              // 🔄 ROLLBACK: WA gagal - kembalikan sentReminders ke sebelumnya, CLEAR waNotifiedAt
+              console.error(`[Invoice Reminder] [ERROR] WA failed for ${invoice.invoiceNumber}:`, waErr);
+              // [ROLLBACK] WA failed - rollback sentReminders and restore waNotifiedAt
               await prisma.invoice.update({
                 where: { id: invoice.id },
                 data: {

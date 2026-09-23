@@ -6,6 +6,7 @@ import { WhatsAppService } from '@/server/services/notifications/whatsapp.servic
 import { EmailService } from '@/server/services/notifications/email.service';
 import { addMonths } from 'date-fns';
 import { generateTransactionId } from '@/server/services/billing/invoice.service';
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
 import { disconnectPPPoEUser } from '@/server/services/radius/coa-handler.service';
 import { sendPushToUser } from '@/server/services/notifications/push-templates.service';
 import { nowWIB } from '@/lib/timezone';
@@ -143,28 +144,18 @@ export async function PATCH(
       // Approve payment
       const company = await prisma.company.findFirst();
 
-      // Compute expiry before transaction (reads)
+      // Compute expiry via centralized billing cycle service (23:59:59.999 WIB)
       const isInstallation = manualPayment.invoice?.invoiceType === 'INSTALLATION' || (manualPayment.invoice as any)?.type === 'INSTALLATION' || manualPayment.user.status === 'PENDING_INSTALLATION';
-      const currentExpiry = (manualPayment.user.expiredAt && !isInstallation && manualPayment.user.status === 'active') ? new Date(manualPayment.user.expiredAt) : new Date();
-      const validityValue = manualPayment.user.profile.validityValue;
-      const validityUnit = manualPayment.user.profile.validityUnit;
-
-      let newExpiry = new Date(currentExpiry);
-
-      switch (validityUnit) {
-        case 'MONTHS':
-          newExpiry = addMonths(newExpiry, validityValue);
-          break;
-        case 'DAYS':
-          newExpiry.setDate(newExpiry.getDate() + validityValue);
-          break;
-        case 'HOURS':
-          newExpiry.setHours(newExpiry.getHours() + validityValue);
-          break;
-        case 'MINUTES':
-          newExpiry.setMinutes(newExpiry.getMinutes() + validityValue);
-          break;
-      }
+      const newExpiry = calculateNextBillingExpiry({
+        currentExpiredAt: manualPayment.user.expiredAt,
+        billingDay: manualPayment.user.billingDay,
+        fixedBillingDate: company?.fixedBillingDate,
+        shiftBillingDateIfLate: company?.shiftBillingDateIfLate,
+        validityValue: manualPayment.user.profile?.validityValue || 1,
+        validityUnit: manualPayment.user.profile?.validityUnit || 'MONTHS',
+        paymentDate: nowWIB(),
+        isNewInstallationOrProrate: isInstallation,
+      });
 
       // ============================================
       // CHECK FOR PACKAGE CHANGE IN INVOICE METADATA
@@ -196,7 +187,7 @@ export async function PATCH(
       }
 
       // For package change: preserve existing expiredAt, do NOT extend
-      const finalExpiry = isPackageChange ? currentExpiry : newExpiry;
+      const finalExpiry = isPackageChange ? (manualPayment.user.expiredAt || newExpiry) : newExpiry;
       const paymentId = await generateTransactionId();
       const approvedAt = new Date();
 

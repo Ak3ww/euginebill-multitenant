@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.48
+- **Version**: 2.40.50
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 23, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,47 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 23, 2026 — v2.40.50: Centralized PPPoE Billing Cycle & Expiry Calculator Service)
+
+- **Hard Invariant: Centralized PPPoE Expiry & Due Date Calculator (`src/server/services/billing/billing-cycle.service.ts`)**:
+  - DILARANG KERAS melakukan perhitungan masa aktif manual (`setMonth(getMonth() + 1)`, `addMonths`, atau `setDate`) di route handler API atau cron job manapun. Seluruh perhitungan `expiredAt` dan `dueDate` WAJIB mengimpor dan menggunakan fungsi terpusat `calculateNextBillingExpiry` dan `getCycleDueDate`.
+  - **Format Jam Akhir Masa Aktif**: Selalu seragam tepat **23:59:59.999 WIB** (Western Indonesia Time, UTC+7), yaitu **16:59:59.999 UTC** pada tanggal kalender yang sama.
+  - **Hari Tagihan (`effectiveDueDay`)**: Diambil dari `billingDay || fixedBillingDate || 6` (rentang 1-31).
+  - **Batas Masa Aktif Berakhir (`expiryDay`)**: `effectiveDueDay - 1`. Jika `effectiveDueDay === 1`, maka `expiryDay` adalah hari terakhir bulan sebelumnya (siklus kalender murni 1 bulan penuh).
+  - **Siklus Terkunci (`shiftBillingDateIfLate === false`)**:
+    - Siklus terkunci mati pada `expiryDay`.
+    - Pelanggan baru / bayar prorate / bayar telat: masa aktif jatuh tepat pada batas `expiryDay` di bulan tagihan berjalan. Misal pembayaran/pendaftaran di bulan September, batas siklus berikutnya adalah **5 Oktober pukul 23:59:59.999 WIB** (atau 30 September jika `dueDay = 1`).
+    - Pelanggan rutin (masih aktif sampai 5 Oktober dan bayar di tanggal 1-5 Okt): masa aktif maju tepat 1 siklus ke **5 November pukul 23:59:59.999 WIB**.
+  - **Siklus Bergeser (`shiftBillingDateIfLate === true`)**:
+    - Jika fitur pergeseran diaktifkan oleh perusahaan, masa aktif bergeser mengikuti tanggal bayar: `paymentDate + validityValue` pada pukul 23:59:59.999 WIB.
+  - **Fungsi Pembantu `getCycleDueDate(expiryDate, dueDay)`**:
+    - Menghitung tanggal jatuh tempo invoice dari tanggal masa aktif.
+    - Expiry 5 Okt -> Due Date 6 Okt 23:59:59.999 WIB. Expiry 30 Sept (dueDay 1) -> Due Date 1 Okt 23:59:59.999 WIB.
+  - **Pintu Integrasi Wajib**:
+    1. `src/app/api/pppoe/users/[id]/mark-paid/route.ts` (Admin mark paid)
+    2. `src/app/api/pppoe/users/[id]/extend/route.ts` (Admin extend paket)
+    3. `src/app/api/payment/webhook/route.ts` (Payment gateway webhook: Tripay, Midtrans, Xendit)
+    4. `src/app/api/manual-payments/[id]/route.ts` (Admin approve transfer manual)
+    5. `src/server/jobs/auto-renewal.ts` (Auto-debet saldo prepaid)
+    6. `src/server/services/pppoe.service.ts` (Kalkulasi masa aktif awal pada `createPppoeUser` dan `updatePPPoEUser`)
+    7. `src/server/jobs/auto-isolation.ts` (Safety guard auto-heal masa aktif)
+
+### Recent Patch Log (September 23, 2026 — v2.40.49: Standalone October 2026 Billing Migration Script & MikroTik/RADIUS Un-Isolation)
+
+- **Hard Invariant: October 2026 Standalone Billing Migration Script (`scripts/migrate-billing-october-2026.ts`)**:
+  - Script migrasi mandiri harus dapat dieksekusi langsung di VPS via `npx tsx scripts/migrate-billing-october-2026.ts` atau `npm run migrate:october-2026`.
+  - **Node/TSX CLI `server-only` Bypass**: Saat script mandiri mengimpor file server (`client.ts`, `ppp-secret.service.ts`), modul Next.js `server-only` akan melempar eksepsi fatal jika berada di luar web bundler. Wajib pasang module hook `Module._load` di awal script untuk membypass `server-only`.
+  - **Aturan Wilayah Kp. Tegal vs Wilayah Lain**:
+    - Deteksi Kp. Tegal: Case-insensitive regex pada `user.area?.name`, `user.address`, dan `user.pppoeCustomer?.address`.
+    - Kp. Tegal: `expiredAt = 2026-10-09T16:59:59.999Z` (09 Okt 2026 23:59:59 WIB), `billingDay = 10`, `billingCycleDay = 10`, `autoIsolationEnabled = false` (anti-isolir aktif), `status = 'active'`, dan invoice unpaid dueDate = `2026-10-10`.
+    - Wilayah Lain: `expiredAt = 2026-10-05T16:59:59.999Z` (05 Okt 2026 23:59:59 WIB), `billingDay = 6`, `billingCycleDay = 6`, `autoIsolationEnabled = true` (normal), `status = 'active'`, dan invoice unpaid dueDate = `2026-10-06`.
+  - **Un-Isolasi MikroTik & RADIUS**:
+    - MikroTik: Menggunakan `PPPSecretService.unisolateUser` untuk memulihkan secret ke paket aslinya, kick active session, dan membersihkan firewall address-list `isolir`.
+    - Menyapu seluruh router aktif untuk memastikan tidak ada address-list `isolir` yang tertinggal dan profile `isolir` dikembalikan ke profile asli.
+    - FreeRADIUS: Membersihkan tabel `radusergroup` di mana `groupname = 'isolir'`, memulihkan ke group paket asli (`user.profile.groupName`), dan menghapus reply message isolir.
+  - **Strictly No Text Emojis**: Sesuai aturan global, script tidak boleh mencetak emoji teks apa pun. Gunakan penanda teks terstruktur `[INFO]`, `[SUKSES]`, `[SIMULASI]`, `[ERROR]` dan `console.table`.
+  - **Dry-Run Safety**: Argumen `--dry-run` atau `-d` wajib disupport untuk simulasi pratinjau tanpa menulis ke database ataupun MikroTik.
 
 ### Recent Patch Log (September 23, 2026 — v2.40.48: Master ODP Dropdown & Auto-Locked Tikor GPS SPK Teknisi, Auto-Deduct Inventory PSB, Auto-Fill Modem WO, Next.js 15 Async Params Fix)
 

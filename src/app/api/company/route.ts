@@ -8,6 +8,10 @@ export async function GET() {
   try {
     const company = await prisma.company.findFirst();
     
+    // Load genieacs enabled state
+    const genieacsSettings = await prisma.genieacsSettings.findFirst();
+    const genieacsEnabled = Boolean(genieacsSettings?.isActive);
+
     if (!company) {
       // Return default if no company exists
       return NextResponse.json({
@@ -31,10 +35,11 @@ export async function GET() {
         fixedBillingDate: 6,
         shiftBillingDateIfLate: false,
         isolateProfileName: null,
+        genieacsEnabled: false,
       });
     }
 
-    return NextResponse.json(company);
+    return NextResponse.json({ ...company, genieacsEnabled });
   } catch (error) {
     console.error('Error fetching company:', error);
     return NextResponse.json(

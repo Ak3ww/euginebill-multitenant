@@ -165,7 +165,7 @@ export default function DocsPage({ embedded = false }: DocsPageProps = {}) {
         href: '/admin/payment-gateway',
       },
       actionItems: [
-        'Masuk ke halaman Payment Gateway, pilih provider yang Anda gunakan (Midtrans, Tripay, Xendit, atau Duitku).',
+        'Masuk ke halaman Payment Gateway, pilih provider yang Anda gunakan (Midtrans, Tripay, Xendit, Duitku, atau QRIN).',
         'Masukkan Server Key / Merchant Code dari akun payment gateway Anda.',
         'Salin URL Callback Webhook yang tertera di halaman setting tersebut, lalu tempelkan di dashboard payment gateway Anda.',
         'Selesai! Ketika pelanggan scan QRIS atau transfer VA, tagihan otomatis lunas dan internet pelanggan yang terisolir aktif kembali dalam 2 detik.',

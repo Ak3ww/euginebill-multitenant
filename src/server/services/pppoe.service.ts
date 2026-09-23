@@ -9,6 +9,7 @@ import { sendAdminCreateUser } from '@/server/services/notifications/whatsapp-te
 import { changePPPoERateLimit } from '@/server/services/mikrotik/rate-limit';
 import { generateUniqueReferralCode } from '@/server/services/referral.service';
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service';
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
 import crypto, { randomBytes, randomUUID } from 'crypto';
 import { PPPSecretService } from '@/server/services/mikrotik/ppp-secret.service';
 import { detectOntVendorAndModel } from '@/lib/olt/ont-detector';
@@ -324,36 +325,25 @@ export async function createPppoeUser(
   const profile = await prisma.pppoeProfile.findUnique({ where: { id: profileId } });
   if (!profile) throw Object.assign(new Error('Profile not found'), { code: 'NOT_FOUND' });
 
-  // Calculate expiredAt
+  // Calculate expiredAt via centralized billing cycle service (23:59:59.999 WIB)
   const registrationDate = registeredAt ? new Date(registeredAt + 'T00:00:00') : new Date();
-  registrationDate.setHours(0, 0, 0, 0);
-  const currentDay = registrationDate.getDate();
-  const year = registrationDate.getFullYear();
-  const month = registrationDate.getMonth();
-  let finalExpiredAt: Date;
-  
-  const defaultBillingDay = company?.fixedBillingDate || 1;
+  const defaultBillingDay = company?.fixedBillingDate || 6;
   const validBillingDay = billingDay ? Math.min(Math.max(parseInt(String(billingDay)), 1), 31) : defaultBillingDay;
-  
-  if (subscriptionType === 'POSTPAID') {
-    const targetDay = validBillingDay || 5;
-    if (currentDay < targetDay) {
-      finalExpiredAt = new Date(year, month, targetDay, 23, 59, 59, 999);
-    } else {
-      finalExpiredAt = new Date(year, month + 1, targetDay, 23, 59, 59, 999);
-    }
+
+  let finalExpiredAt: Date;
+  if (expiredAt) {
+    finalExpiredAt = new Date(expiredAt);
   } else {
-    if (expiredAt) {
-      finalExpiredAt = new Date(expiredAt);
-    } else {
-      finalExpiredAt = new Date(registrationDate);
-      if (profile.validityUnit === 'MONTHS') {
-        finalExpiredAt.setMonth(finalExpiredAt.getMonth() + profile.validityValue);
-      } else {
-        finalExpiredAt.setDate(finalExpiredAt.getDate() + profile.validityValue);
-      }
-      finalExpiredAt.setHours(23, 59, 59, 999);
-    }
+    finalExpiredAt = calculateNextBillingExpiry({
+      currentExpiredAt: null,
+      billingDay: validBillingDay,
+      fixedBillingDate: company?.fixedBillingDate,
+      shiftBillingDateIfLate: company?.shiftBillingDateIfLate,
+      validityValue: profile.validityValue || 1,
+      validityUnit: profile.validityUnit || 'MONTHS',
+      paymentDate: registrationDate,
+      isNewInstallationOrProrate: true,
+    });
   }
 
   // Auto-resolve router if not provided
@@ -1023,17 +1013,12 @@ export async function updatePppoeUser(
         }
         if (data.status === 'active' && currentUser.expiredAt && new Date(currentUser.expiredAt) <= new Date()) {
           const now = new Date();
-          const bd = Number(data.billingDay ?? currentUser.billingDay ?? 6);
-          let nextYear = now.getUTCFullYear();
-          let nextMonth = now.getUTCMonth() + 1;
-          if (nextMonth > 11) {
-            nextYear += 1;
-            nextMonth = 0;
-          }
-          const maxDays = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
-          const validDay = Math.min(bd, maxDays);
-          const nextExp = new Date(Date.UTC(nextYear, nextMonth, validDay, 16, 59, 59, 999));
-          console.log(`[updatePPPoEUser] 🛡️ Auto-advanced expiredAt for ${currentUser.username} to ${nextExp.toISOString()} on manual reactivation`);
+          const nextExp = calculateNextBillingExpiry({
+            currentExpiredAt: currentUser.expiredAt,
+            billingDay: Number(data.billingDay ?? currentUser.billingDay ?? 6),
+            paymentDate: now,
+          });
+          console.log(`[updatePPPoEUser] Auto-advanced expiredAt for ${currentUser.username} to ${nextExp.toISOString()} on manual reactivation`);
           return { expiredAt: nextExp };
         }
         return {};

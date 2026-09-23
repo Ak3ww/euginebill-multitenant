@@ -347,7 +347,18 @@ export async function autoIsolatePPPoEUsers(): Promise<{
 
     for (const user of expiredUsers) {
       try {
-        // 🛑 SAFETY GUARD 1: Verify invoice status before isolating!
+        // [SAFETY GUARD 1] STRICT PROTECTION: Customers with autoIsolationEnabled = false (e.g. Kp. Tegal) MUST NEVER be isolated!
+        const freshUser = await prisma.pppoeUser.findUnique({
+          where: { id: user.id },
+          select: { autoIsolationEnabled: true, billingDay: true, waNotificationEnabled: true },
+        });
+
+        if (!freshUser || freshUser.autoIsolationEnabled === false) {
+          console.log(`[PPPoE Auto-Isolir] [PROTECTED] User ${user.username} has autoIsolationEnabled = false. Skipping isolation.`);
+          continue;
+        }
+
+        // [SAFETY GUARD 2] Verify invoice status before isolating!
         // Never isolate a customer who has already paid their invoices!
         const unpaidInvoices = await prisma.invoice.findMany({
           where: {
@@ -357,21 +368,20 @@ export async function autoIsolatePPPoEUsers(): Promise<{
           orderBy: { dueDate: 'asc' },
         });
 
-        // 🛑 SAFETY GUARD 2: Customer has ZERO unpaid invoices (already paid!)
+        // [SAFETY GUARD 3] Customer has ZERO unpaid invoices (already paid!)
         if (unpaidInvoices.length === 0) {
           // Auto-heal: calculate proper next month billing expiry (23:59:59 WIB)
           const now = new Date();
-          const userRecord = await prisma.pppoeUser.findUnique({
-            where: { id: user.id },
-            select: { billingDay: true },
-          });
+          const bd = freshUser.billingDay || company?.fixedBillingDate || 6;
+          // In EugineBill, if dueDate / billingDay is 6 (general area), expiredAt is tanggal 5 at 23:59:59 WIB.
+          // If dueDate is 10 (Kp. Tegal), target is tanggal 9 at 23:59:59 WIB.
+          const targetDay = (bd === 6 || bd === 5) ? 5 : (bd === 10 ? 9 : (bd > 1 ? bd - 1 : 1));
 
-          const bd = userRecord?.billingDay || company?.fixedBillingDate || 6;
           const nextMonth = now.getUTCMonth() + 1;
           const nextYear = nextMonth > 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
           const nm = nextMonth % 12;
           const nextMonthLastDay = new Date(Date.UTC(nextYear, nm + 1, 0)).getUTCDate();
-          const nextExpiry = new Date(Date.UTC(nextYear, nm, Math.min(bd, nextMonthLastDay), 23, 59, 59, 999));
+          const nextExpiry = new Date(Date.UTC(nextYear, nm, Math.min(targetDay, nextMonthLastDay), 23, 59, 59, 999));
 
           await prisma.pppoeUser.update({
             where: { id: user.id },
@@ -381,23 +391,18 @@ export async function autoIsolatePPPoEUsers(): Promise<{
             },
           });
 
-          console.log(`[PPPoE Auto-Isolir] 🛑 PROTECTED: User ${user.username} has 0 unpaid invoices (already paid). Auto-healed expiredAt to ${nextExpiry.toISOString()}`);
+          console.log(`[PPPoE Auto-Isolir] [PROTECTED] User ${user.username} has 0 unpaid invoices (already paid). Auto-healed expiredAt to ${nextExpiry.toISOString()}`);
           continue; // SKIP ISOLATION!
         }
 
-        // 🛑 SAFETY GUARD 3: Customer has unpaid invoice. Check if invoice is ACTUALLY overdue!
-        // A customer has until end of day (23:59:59 WIB) on their dueDate + gracePeriodDays
-        const earliestUnpaid = unpaidInvoices[0];
-        const invDue = new Date(earliestUnpaid.dueDate);
-        // Normalize to end of day (23:59:59.999)
-        const effectiveDueEnd = new Date(invDue);
-        effectiveDueEnd.setUTCHours(23, 59, 59, 999);
-        const graceEndMs = effectiveDueEnd.getTime() + (gracePeriodDays * 24 * 60 * 60 * 1000);
-        const nowMs = startedAt.getTime();
-
-        if (nowMs <= graceEndMs) {
-          console.log(`[PPPoE Auto-Isolir] 🛑 PROTECTED: User ${user.username} invoice ${earliestUnpaid.invoiceNumber} due date (${invDue.toISOString()}) has not yet passed with grace (${gracePeriodDays}d). Skipping isolation.`);
-          continue; // SKIP ISOLATION!
+        // [SAFETY GUARD 4] Check grace period
+        if (user.expiredAt && gracePeriodDays > 0) {
+          const graceEndMs = new Date(user.expiredAt).getTime() + (gracePeriodDays * 24 * 60 * 60 * 1000);
+          const nowMs = startedAt.getTime();
+          if (nowMs <= graceEndMs) {
+            console.log(`[PPPoE Auto-Isolir] [PROTECTED] User ${user.username} is within grace period (${gracePeriodDays}d). Skipping isolation.`);
+            continue; // SKIP ISOLATION!
+          }
         }
 
         // 1. Update user status to isolated (not suspended!)
@@ -478,7 +483,7 @@ export async function autoIsolatePPPoEUsers(): Promise<{
 
         isolatedCount++
         console.log(
-          `? [PPPoE Auto-Isolir] User ${user.username} isolated (expired: ${
+          `[PPPoE Auto-Isolir] [SUCCESS] User ${user.username} isolated (expired: ${
             user.expiredAt ? new Date(user.expiredAt).toISOString().split('T')[0] : 'N/A'
           })`
         )
@@ -495,7 +500,7 @@ export async function autoIsolatePPPoEUsers(): Promise<{
         }
 
         // Send customer notification via WhatsApp, Email, and Push (respect waNotificationEnabled)
-        if (user.waNotificationEnabled === 0 || user.waNotificationEnabled === false) {
+        if (freshUser.waNotificationEnabled === false) {
           console.log(`[PPPoE Auto-Isolir] Skipping customer WA notification for ${user.username} (waNotificationEnabled = false)`);
         } else {
           try {
@@ -513,7 +518,7 @@ export async function autoIsolatePPPoEUsers(): Promise<{
           }
         }
       } catch (error: any) {
-        console.error(`? [PPPoE Auto-Isolir] Failed to isolate ${user.username}:`, error.message)
+        console.error(`[PPPoE Auto-Isolir] [ERROR] Failed to isolate ${user.username}:`, error.message)
       }
     }
 
@@ -530,7 +535,7 @@ export async function autoIsolatePPPoEUsers(): Promise<{
       },
     })
 
-    console.log(`[PPPoE Auto-Isolir] ? Completed: ${message}`)
+    console.log(`[PPPoE Auto-Isolir] [COMPLETE] Completed: ${message}`)
 
     // Check and send pending H+X isolation notifications for all currently isolated users
     try {

@@ -7,6 +7,7 @@ import { formatWIB } from '@/lib/timezone';
 import { formatInTimeZone } from 'date-fns-tz';
 import { logActivity } from '@/server/services/activity-log.service';
 import { disconnectPPPoEUser } from '@/server/services/radius/coa-handler.service';
+import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 
@@ -1419,39 +1420,19 @@ export async function handleInvoicePayment(
         const now = new Date();
         const normalizedStatus = (user.status || '').toLowerCase();
 
-        // PREPAID vs POSTPAID logic
-        let newExpiredAt: Date | null = null;
-
-        // Both PREPAID and POSTPAID: Extend expiredAt by validity period
-        // Base date: use current expiredAt if still in the future, otherwise use now (payment date)
-        // This ensures user always gets a full validity period after each payment
-        {
-          const companySettings = await prisma.company.findFirst();
-          const shiftBillingDate = companySettings?.shiftBillingDateIfLate ?? false;
-
-          const isInstallation = invoice.invoiceType === 'INSTALLATION' || (invoice as any).type === 'INSTALLATION' || user.status === 'PENDING_INSTALLATION';
-          let baseDate = (user.expiredAt && !isInstallation && user.status === 'active') ? new Date(user.expiredAt) : now;
-          if (shiftBillingDate && baseDate < now) {
-            baseDate = now; // Expired already → start fresh from payment date
-          }
-
-          newExpiredAt = new Date(baseDate);
-
-          switch (profile.validityUnit) {
-            case 'DAYS':
-              newExpiredAt.setDate(newExpiredAt.getDate() + profile.validityValue);
-              break;
-            case 'MONTHS':
-              newExpiredAt.setMonth(newExpiredAt.getMonth() + profile.validityValue);
-              break;
-            case 'HOURS':
-              newExpiredAt.setHours(newExpiredAt.getHours() + profile.validityValue);
-              break;
-            case 'MINUTES':
-              newExpiredAt.setMinutes(newExpiredAt.getMinutes() + profile.validityValue);
-              break;
-          }
-        }
+        // Centralized billing cycle expiry calculation (23:59:59.999 WIB)
+        const companySettings = await prisma.company.findFirst();
+        const isInstallation = invoice.invoiceType === 'INSTALLATION' || (invoice as any).type === 'INSTALLATION' || user.status === 'PENDING_INSTALLATION';
+        const newExpiredAt: Date = calculateNextBillingExpiry({
+          currentExpiredAt: user.expiredAt,
+          billingDay: user.billingDay,
+          fixedBillingDate: companySettings?.fixedBillingDate,
+          shiftBillingDateIfLate: companySettings?.shiftBillingDateIfLate,
+          validityValue: profile.validityValue || 1,
+          validityUnit: profile.validityUnit || 'MONTHS',
+          paymentDate: paidAt || now,
+          isNewInstallationOrProrate: isInstallation,
+        });
 
         // Determine if user should be activated (include blocked/stop status)
         const wasDisabled = ['isolated', 'suspended', 'blocked', 'stop'].includes(normalizedStatus);

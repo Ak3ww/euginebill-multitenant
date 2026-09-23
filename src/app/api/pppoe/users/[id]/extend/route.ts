@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
 import { generateInvoiceNumber, generateInvoiceId, generateTransactionId, generateCategoryId } from '@/server/services/billing/invoice.service';
+import { calculateNextBillingExpiry, getCycleDueDate } from '@/server/services/billing/billing-cycle.service';
 import crypto from 'crypto';
 
 export async function POST(
@@ -48,12 +49,18 @@ export async function POST(
 
     const profileChanged = user.profileId !== profileId;
     const now = new Date();
-    const currentExpired = user.expiredAt ? new Date(user.expiredAt) : now;
+    const company = await prisma.company.findFirst();
     
-    // Calculate new expiry date (extend from current expiry or now, whichever is later)
-    const baseDate = currentExpired > now ? currentExpired : now;
-    const newExpiredAt = new Date(baseDate);
-    newExpiredAt.setMonth(newExpiredAt.getMonth() + 1); // Extend by 1 month
+    // Calculate new expiry date via centralized billing cycle service (23:59:59.999 WIB)
+    const newExpiredAt = calculateNextBillingExpiry({
+      currentExpiredAt: user.expiredAt,
+      billingDay: user.billingDay,
+      fixedBillingDate: company?.fixedBillingDate,
+      shiftBillingDateIfLate: company?.shiftBillingDateIfLate,
+      validityValue: newProfile.validityValue || 1,
+      validityUnit: newProfile.validityUnit || 'MONTHS',
+      paymentDate: now,
+    });
 
     // Update user
     const updatedUser = await prisma.pppoeUser.update({
@@ -137,8 +144,6 @@ export async function POST(
       console.error('[Extend] Network restore error (non-fatal):', radiusError?.message);
     }
 
-    const company = await prisma.company.findFirst();
-
     // Calculate PPN if enabled on profile
     const extendBaseAmount = newProfile.price;
     let extendAmount = extendBaseAmount;
@@ -207,7 +212,7 @@ export async function POST(
           baseAmount: extendBaseAmount,
           ...(extendTaxRate !== null && { taxRate: extendTaxRate }),
           status: 'PAID',
-          dueDate: newExpiredAt,
+          dueDate: getCycleDueDate(newExpiredAt, user.billingDay || company?.fixedBillingDate || 6),
           paidAt: now,
           customerName: user.name,
           customerPhone: user.phone,
@@ -246,7 +251,8 @@ export async function POST(
       },
     });
 
-    const extendedDays = Math.ceil((newExpiredAt.getTime() - currentExpired.getTime()) / (1000 * 60 * 60 * 24));
+    const baseExpired = user.expiredAt ? new Date(user.expiredAt) : now;
+    const extendedDays = Math.max(1, Math.ceil((newExpiredAt.getTime() - baseExpired.getTime()) / (1000 * 60 * 60 * 24)));
     
     // Format data for template variables
     const formattedExpiredAt = new Intl.DateTimeFormat('id-ID', {

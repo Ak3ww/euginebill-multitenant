@@ -16,6 +16,7 @@ interface CompanySettings {
   radiusHotspotEnabled?: boolean;
   radiusPppoeEnabled?: boolean;
   customerIdPrefix?: string;
+  genieacsEnabled?: boolean;
 }
 
 interface AppState {
