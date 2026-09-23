@@ -4,7 +4,38 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.53] — 2026-09-23
+### Fix OLT SNMP Status: HSGQ rxPower-Based Offline Detection + VSOL Per-PON Walk untuk V1600GT
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. HSGQ masih menampilkan **190 Online, 0 Offline** padahal aktual di GUI OLT: **182 Online, 8 Offline**.
+     - Root cause: OID status `1.3.6.1.4.1.50224.3.12.2.1.3` adalah *registration flag* yang selalu mengembalikan `'1'` untuk semua 190 ONT terdaftar (termasuk yang offline). Bukan indikator online/offline.
+     - BotRedaman mengandalkan hysteresis/state historis. Untuk single-shot polling tanpa history, satu-satunya indikator real-time adalah **rx power** (absen = offline).
+  2. VSOL-1600GT masih hanya mendapat **79 ONT** (harusnya **123 ONT** = 43 PON1 + 80 PON2).
+     - Root cause: Single root SNMP walk ke base OID dipotong firmware VSOL di ~79 entri. PON 1 (43 ONT) tidak ter-capture sama sekali.
+     - BotRedaman `get_snmp_walk()` mendeteksi struktur OID (ada slot atau tidak) lalu walk **per-PON 1–8** secara terpisah untuk menghindari truncation ini.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **HSGQ Offline Detection (`src/lib/olt/vendors/hsgq.ts`)**:
+     - Ganti pengecekan `rawStatusVal === '1'` dengan logika berbasis rx power:
+       `if (rawStatusVal !== undefined && rawStatusVal !== '1') → offline` (explicit state dari OLT),
+       `else if (rxPower !== null) → online` (ada sinyal optik = online),
+       `else → offline` (tidak ada rx power = offline, sesuai BotRedaman fallback ketika tidak ada history).
+     - Hasil yang diharapkan: **190 ONT, 182 Online, 8 Offline**.
+  2. **VSOL Per-PON Walk (`src/lib/olt/vendors/vsol.ts`)**:
+     - Menambahkan fungsi `vsolWalkPerPon(cfg, baseOid)` yang mengimplementasikan persis logika `get_snmp_walk()` BotRedaman:
+       - **Step 1**: Root walk untuk mendeteksi struktur OID (suffix 2 parts = no slot/V1600GS, suffix ≥ 3 parts = ada slot/V1600GT) dan mengumpulkan data awal.
+       - **Step 2**: Walk per PON 1–8 secara paralel (`base_oid.slot.pon` atau `base_oid.pon`) dengan timeout 4 detik (port PON kosong gagal cepat).
+       - Merge semua hasil — per-PON walks bersifat autoritatif untuk menimpa data root walk yang terpotong.
+     - Semua 6 OID (Name, Rx, Tx, SN, Uptime, Downtime) kini menggunakan `vsolWalkPerPon` sebagai pengganti `snmpWalk`.
+     - Hasil yang diharapkan: **V1600GS: 65 ONT (64 Online, 1 Offline)**, **V1600GT: 123 ONT (43 PON1 + 80 PON2)**.
+
+- **Files**:
+  - Modified: `src/lib/olt/vendors/hsgq.ts`
+  - Modified: `src/lib/olt/vendors/vsol.ts`
+
 ## [2.40.52] — 2026-09-23
+
 ### Fix Presisi Polling SNMP OLT HSGQ & VSOL Berdasarkan Logika BotRedaman (Eliminasi Duplikasi OID)
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:

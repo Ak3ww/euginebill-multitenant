@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.52
+- **Version**: 2.40.53
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 23, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,16 +20,39 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 23, 2026 — v2.40.52: 1:1 BotRedaman Engine Alignment for HSGQ & VSOL OLT)
+### Recent Patch Log (September 23, 2026 — v2.40.53: HSGQ rxPower Offline + VSOL Per-PON Walk for GT)
+
+- **Hard Invariant: HSGQ Online/Offline Detection**:
+  - OID `1.3.6.1.4.1.50224.3.12.2.1.3` (column .3) adalah **registration flag**, bukan online/offline indicator.
+  - OID ini SELALU mengembalikan `'1'` untuk semua 190 ONT terdaftar, termasuk yang offline. Jangan gunakan untuk status!
+  - **Deteksi offline untuk single-shot polling**: gunakan **rx power** sebagai proxy.
+    - `rxPower !== null` → online (OLT aktif melaporkan sinyal optik)
+    - `rxPower === null` → offline (tidak ada data optik = offline, sesuai BotRedaman fallback tanpa historical state)
+    - Pengecualian: jika status OID secara eksplisit mengembalikan nilai `!= '1'` → offline (honour explicit OLT state)
+  - BotRedaman menggunakan hysteresis/historical state dari `alert_states` table. EugineBill tidak punya itu, sehingga rx power adalah satu-satunya opsi yang bisa diandalkan.
+
+- **Hard Invariant: VSOL V1600GT Multi-PON Firmware Truncation Bug**:
+  - VSOL firmware memotong root SNMP walk di sekitar 79 entri. Walk root OID saja **TIDAK CUKUP** untuk multi-PON OLT.
+  - **Solusi**: Fungsi `vsolWalkPerPon(cfg, baseOid)` di `src/lib/olt/vendors/vsol.ts`.
+  - **Algoritma** (persis `get_snmp_walk()` di `C:\BotRedaman\backend\collector.py`):
+    1. Root walk untuk deteksi struktur OID dari entri pertama:
+       - `suffixLen == 2` → tidak ada slot (V1600GS: `base.pon.onu`) → `hasSlot = false`
+       - `suffixLen >= 3` → ada slot (V1600GT: `base.slot.pon.onu`) → `hasSlot = true`, `detectedSlot = parts[baseParts.length]`
+    2. Walk per PON 1–8 secara paralel (`base.slot.pon` atau `base.pon`) dengan timeout 4 detik.
+    3. Merge semua hasil, per-PON walk bersifat autoritatif.
+  - Semua 6 OID (Name, Rx, Tx, SN, Uptime, Downtime) WAJIB menggunakan `vsolWalkPerPon`, bukan `snmpWalk` langsung.
+  - Jangan pernah revert ke single root walk untuk VSOL — akan menghasilkan data terpotong untuk multi-PON OLT.
 
 - **Hard Invariant: VSOL & HSGQ Collector Engine (100% 1:1 dengan `C:\BotRedaman\backend\collector.py`)**:
   - **VSOL Key Extraction**: Key VSOL diekstrak murni sebagai `${parts[-2]}.${parts[-1]}` (yaitu `${pon}.${onuId}`).
   - **VSOL Status Logic**: `isOffline = (validUp && validDown) ? (lastDown > lastUp) : (rxPower === null)` di mana `rxPower` divalidasi oleh `normalize_dbm` di rentang `-38.0 <= dbm <= -5.0`.
   - **Master Database Counts (Verified via BotRedaman SQLite `redaman.db`)**:
-    - HSGQ-G02ID: Tepat **190 ONT** (`1` s/d `190`).
-    - VSOL-GPON (V1600GS): Tepat **65 ONT** (`1.1` s/d `1.65`).
-    - VSOL-1600GT: Tepat **123 ONT** (`1.1` s/d `1.46` pada PON 1 dan `2.1` s/d `2.82` pada PON 2).
+    - HSGQ-G02ID: Tepat **190 ONT** (`1` s/d `190`) — **182 Online, 8 Offline** (aktual GUI OLT).
+    - VSOL-GPON (V1600GS): Tepat **65 ONT** (`1.1` s/d `1.65`) — **64 Online, 1 Offline**.
+    - VSOL-1600GT: Tepat **123 ONT** (`1.1` s/d `1.46` PON1, `2.1` s/d `2.82` PON2) — **120 Online, 3 Offline**.
   - Total ONT Master di seluruh OLT: **378 ONT**.
+
+
 
 ### Recent Patch Log (September 23, 2026 — v2.40.51: QRIN Docs, GenieACS/RADIUS Nav Toggle, ONT Inventory Sync)
 
