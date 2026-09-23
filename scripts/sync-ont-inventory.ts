@@ -127,9 +127,12 @@ async function getOrCreateOntItem(
 }
 
 // ==========================
-// Main
+// Main Sync Engine
 // ==========================
-async function main() {
+export async function runSyncOntInventory(opts?: { isDryRun?: boolean; isWipe?: boolean }) {
+  const isDryRun = opts?.isDryRun ?? process.argv.includes('--dry-run');
+  const isWipe = opts?.isWipe ?? process.argv.includes('--wipe');
+
   console.log('=== Sync ONT Inventory from OLT ===');
   console.log(`Mode: ${isDryRun ? 'DRY RUN' : isWipe ? 'WIPE + SYNC' : 'INCREMENTAL SYNC'}`);
   console.log('');
@@ -295,11 +298,13 @@ async function main() {
   console.log(`  Updated: ${updated} assets diupdate`);
   console.log(`  Skipped: ${skipped} (error)`);
 
-  await prisma.$disconnect();
+  return { created, updated, skipped };
 }
 
-main().catch(async (err) => {
-  console.error('[FATAL]', err);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+if (require.main === module) {
+  runSyncOntInventory().catch(async (err) => {
+    console.error('[FATAL]', err);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+}

@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.51
+- **Version**: 2.40.52
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 23, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,13 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 23, 2026 — v2.40.52: BotRedaman 1:1 OID Index Parsing Fix for HSGQ & VSOL OLT)
+
+- **Hard Invariant: HSGQ & VSOL SNMP OID Index Matching**:
+  - **HSGQ OID Indexing**: OID MIB HSGQ `1.3.6.1.4.1.50224.3.12.2.1.<col>.<onuIndex>` menggunakan komponen OID paling akhir (`parts[-1]`) langsung sebagai `<onuIndex>` (1 s/d 200). DILARANG KERAS mengartikan `parts[-2]` sebagai `port` karena `parts[-2]` adalah index nomor kolom MIB (`.15` = SN, `.2` = Name) yang menyebabkan 1 ONU terduplikasi 2x (menjadi 380 unit).
+  - **BotRedaman 1:1 Mapping**: `snByIdx` (HSGQ) dan `snByKey` (VSOL) di-looping **1:1 berbasis serial number fisik terdaftar**. Seluruh slot kosong (phantom) atau SN zero langsung diabaikan secara ketat.
+  - **Presisi ONT Output**: Guaranteed exact counts: HSGQ = 190 ONTs, VSOL GS = 65 ONTs, VSOL GT = 123 ONTs (Total 378 - 388 ONTs).
 
 ### Recent Patch Log (September 23, 2026 — v2.40.51: QRIN Docs, GenieACS/RADIUS Nav Toggle, ONT Inventory Sync)
 

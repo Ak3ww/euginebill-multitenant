@@ -4,6 +4,33 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.52] — 2026-09-23
+### Fix Presisi Polling SNMP OLT HSGQ & VSOL Berdasarkan Logika BotRedaman (Eliminasi Duplikasi OID)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pada full-refresh OLT HSGQ-G02ID, hasil SNMP walk membaca 380 ONT padahal jumlah ONT fisik terdaftar hanya 190 unit (terjadi duplikasi 2x lipat).
+  2. Hasil audit mendalam terhadap `C:\BotRedaman\backend\collector.py` menemukan akar masalah:
+     - HSGQ OID MIB `1.3.6.1.4.1.50224.3.12.2.1.<col>.<onuIndex>` menggunakan komponen OID paling akhir (`parts[-1]`) langsung sebagai `<onuIndex>` (1 s/d 200).
+     - Pada implementasi sebelumnya, parser TS mencoba mengekstrak `parts[-2]` sebagai `port` (yang sebenarnya adalah index kolom OID `.15` untuk SN dan `.2` untuk Nama), sehingga 1 unit ONU terbuat 2 key terpisah (`15.N` dan `2.N`) dan terduplikasi menjadi 380 baris.
+  3. VSOL juga berisiko duplikasi jika menggunakan perulangan fallback OID yang longgar.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **HSGQ SNMP Parser (`src/lib/olt/vendors/hsgq.ts`)**:
+     - Fungsi `getHsgqIdx(oid)` mengekstrak `<onuIndex>` dari OID (menangani suffix `.0.0` pada OID redaman optik `50224.3.12.3.1.4`).
+     - Map `snByIdx` mengumpulkan serial number bersih dari OID `.15`. Membuang string kosong atau zero-phantom.
+     - Hasil akhir `onus` di-looping **1:1 berbasis `snByIdx`** (persis seperti `collector.py` pada BotRedaman). Menggaransi tepat 190 ONT untuk HSGQ.
+  2. **VSOL SNMP Parser (`src/lib/olt/vendors/vsol.ts`)**:
+     - Helper `getVsolKey(oid)` mengekstrak key `${rawPort}.${onuId}`.
+     - Map `snByKey` mengunci entitas ONT 1:1 berdasarkan serial number terdaftar.
+  3. **Script Inventory Sync (`scripts/sync-ont-inventory.ts`)**:
+     - Ekspor fungsi `runSyncOntInventory` agar dapat dipanggil secara terprogram dari route API (`/api/admin/inventory/import-initial-modems`).
+
+- **Files**:
+  - Modified: `src/lib/olt/vendors/hsgq.ts`
+  - Modified: `src/lib/olt/vendors/vsol.ts`
+  - Modified: `scripts/sync-ont-inventory.ts`
+  - Modified: `src/app/api/admin/inventory/import-initial-modems/route.ts`
+
 ## [2.40.51] — 2026-09-23
 ### QRIN Payment Gateway in Docs, GenieACS/RADIUS Nav Toggle, dan ONT Inventory Sync Scripts
 

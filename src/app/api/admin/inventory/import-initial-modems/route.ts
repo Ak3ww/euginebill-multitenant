@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
-import { runInitialModemImport } from '../../../../../../scripts/import-initial-modems';
+import { runSyncOntInventory } from '../../../../../../scripts/sync-ont-inventory';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await runInitialModemImport();
+    const result = await runSyncOntInventory();
 
     return NextResponse.json({
       success: true,
-      message: `Berhasil mengimpor ${result.importedCount} ONT pelanggan. ${result.linkedCustomerCount} ONT langsung terhubung ke akun PPPoE pelanggan!`,
+      message: `Berhasil sinkronisasi ONT dari OLT ke inventori. ${result?.created ?? 0} unit baru ditambahkan, ${result?.updated ?? 0} unit diperbarui.`,
       data: result,
     });
   } catch (error: any) {

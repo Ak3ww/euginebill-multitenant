@@ -348,91 +348,82 @@ export async function discoverONUsSNMP(
   const snMap = snRes.results || {};
   const statusMap = statusRes.results || {};
 
-  // Build a unique set of OID suffixes from snMap, nameRes, statusRes
-  const keyMap = new Map<string, { port: number; onuId: number }>();
-
-  const processOidDict = (dict: Record<string, string>) => {
-    for (const oid of Object.keys(dict)) {
-      const parts = oid.split('.');
-      if (parts.length >= 2) {
-        const onuIdx = parseInt(parts[parts.length - 1]);
-        const rawPort = parseInt(parts[parts.length - 2]);
-        if (!isNaN(onuIdx) && !isNaN(rawPort)) {
-          const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
-          const key = `${rawPort}.${onuIdx}`;
-          if (!keyMap.has(key)) {
-            keyMap.set(key, { port, onuId: onuIdx });
-          }
-        }
+  // Helper to extract VSOL key (PON.onuId) from OID
+  const getVsolKey = (oid: string): { key: string; port: number; onuId: number } | null => {
+    const parts = oid.split('.');
+    if (parts.length >= 2) {
+      const onuId = parseInt(parts[parts.length - 1]);
+      const rawPort = parseInt(parts[parts.length - 2]);
+      if (!isNaN(onuId) && !isNaN(rawPort)) {
+        const port = rawPort > 100 ? ((rawPort & 0xFF) || (rawPort % 100) || 1) : rawPort;
+        return { key: `${rawPort}.${onuId}`, port, onuId };
       }
     }
+    return null;
   };
 
-  processOidDict(snMap);
-  processOidDict(names);
+  // Build key -> SN map (filtering out empty/zero phantom SNs)
+  const snByKey = new Map<string, { sn: string; port: number; onuId: number }>();
+  for (const [oid, val] of Object.entries(snMap)) {
+    const item = getVsolKey(oid);
+    if (item) {
+      const sn = val.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+      if (sn && sn.length >= 6 && !/^0+$/.test(sn)) {
+        snByKey.set(item.key, { sn, port: item.port, onuId: item.onuId });
+      }
+    }
+  }
 
-  if (keyMap.size === 0) {
-    return [];
+  // Name / Description map
+  const nameByKey = new Map<string, string>();
+  for (const [oid, val] of Object.entries(names)) {
+    const item = getVsolKey(oid);
+    if (item && val.trim()) nameByKey.set(item.key, val.trim());
+  }
+
+  // Rx Power map (scale 10: -256 -> -25.6)
+  const rxByKey = new Map<string, number>();
+  for (const [oid, val] of Object.entries(rxMap)) {
+    const item = getVsolKey(oid);
+    if (item) {
+      const raw = parseFloat(val);
+      if (!isNaN(raw)) {
+        const scaled = raw > 0 || raw < -100 ? raw / 10.0 : raw;
+        if (scaled >= -40 && scaled <= -5) rxByKey.set(item.key, parseFloat(scaled.toFixed(2)));
+      }
+    }
+  }
+
+  // Tx Power map (scale 10)
+  const txByKey = new Map<string, number>();
+  for (const [oid, val] of Object.entries(txMap)) {
+    const item = getVsolKey(oid);
+    if (item) {
+      const raw = parseFloat(val);
+      if (!isNaN(raw)) {
+        const scaled = raw > 50 || raw < -50 ? raw / 10.0 : raw;
+        if (scaled >= -10 && scaled <= 15) txByKey.set(item.key, parseFloat(scaled.toFixed(2)));
+      }
+    }
+  }
+
+  // Status map
+  const statusByKey = new Map<string, string>();
+  for (const [oid, val] of Object.entries(statusMap)) {
+    const item = getVsolKey(oid);
+    if (item) statusByKey.set(item.key, val);
   }
 
   const onus: any[] = [];
-
-  for (const [key, { port, onuId }] of Array.from(keyMap.entries())) {
-    // SN
-    let sn: string | undefined = undefined;
-    for (const [sOid, sVal] of Object.entries(snMap)) {
-      if (sOid.endsWith(`.${key}`) || sOid.endsWith(`.${onuId}`)) {
-        sn = sVal.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
-        if (sn) break;
-      }
-    }
-
-    // Name / Description
-    let name: string | undefined = undefined;
-    for (const [nOid, nVal] of Object.entries(names)) {
-      if (nOid.endsWith(`.${key}`) || nOid.endsWith(`.${onuId}`)) {
-        name = nVal.trim();
-        if (name) break;
-      }
-    }
-
-    // Rx Power (scale 10: -256 -> -25.6)
-    let rxPower: number | undefined = undefined;
-    for (const [rOid, rVal] of Object.entries(rxMap)) {
-      if (rOid.endsWith(`.${key}`) || rOid.endsWith(`.${onuId}`)) {
-        const raw = parseFloat(rVal);
-        if (!isNaN(raw)) {
-          const scaled = raw > 0 || raw < -100 ? raw / 10.0 : raw;
-          if (scaled >= -40 && scaled <= -5) rxPower = parseFloat(scaled.toFixed(2));
-        }
-        break;
-      }
-    }
-
-    // Tx Power (scale 10)
-    let txPower: number | undefined = undefined;
-    for (const [tOid, tVal] of Object.entries(txMap)) {
-      if (tOid.endsWith(`.${key}`) || tOid.endsWith(`.${onuId}`)) {
-        const raw = parseFloat(tVal);
-        if (!isNaN(raw)) {
-          const scaled = raw > 50 || raw < -50 ? raw / 10.0 : raw;
-          if (scaled >= -10 && scaled <= 15) txPower = parseFloat(scaled.toFixed(2));
-        }
-        break;
-      }
-    }
-
-    // Status
-    let rawStatusVal: string | undefined = undefined;
-    for (const [stOid, stVal] of Object.entries(statusMap)) {
-      if (stOid.endsWith(`.${key}`) || stOid.endsWith(`.${onuId}`)) {
-        rawStatusVal = stVal;
-        break;
-      }
-    }
+  // Loop strictly over registered SNs (1:1 with BotRedaman)
+  for (const [key, { sn, port, onuId }] of Array.from(snByKey.entries())) {
+    const description = nameByKey.get(key) || null;
+    const rxPower = rxByKey.get(key) ?? null;
+    const txPower = txByKey.get(key) ?? null;
+    const rawStatusVal = statusByKey.get(key);
 
     let status = 'offline';
-    if (rawStatusVal === '1' || rawStatusVal === '11' || (rxPower !== undefined && rxPower < 0)) {
+    if (rawStatusVal === '1' || rawStatusVal === '11' || (rxPower !== null && rxPower < 0)) {
       status = 'online';
     }
 
@@ -441,11 +432,11 @@ export async function discoverONUsSNMP(
       slot: 0,
       port,
       onuId,
-      serialNumber: sn || null,
-      description: name || null,
+      serialNumber: sn,
+      description,
       status,
-      rxPower: rxPower ?? null,
-      txPower: txPower ?? null,
+      rxPower,
+      txPower,
     });
   }
 

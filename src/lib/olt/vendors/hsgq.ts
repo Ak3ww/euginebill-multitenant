@@ -318,11 +318,11 @@ export async function discoverONUsSNMP(
   };
 
   const [nameRes, rxRes, txRes, snRes, statusRes] = await Promise.all([
-    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.2'),
-    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.3.1.4'),
-    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.3.1.3'),
-    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.15'),
-    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.3'),
+    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.2'),   // Name/Description
+    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.3.1.4'),   // Rx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.3.1.3'),   // Tx Power
+    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.15'),  // Serial Number
+    snmpWalk(cfg, '1.3.6.1.4.1.50224.3.12.2.1.3'),   // Status
   ]);
 
   const names = nameRes.results || {};
@@ -331,107 +331,85 @@ export async function discoverONUsSNMP(
   const snMap = snRes.results || {};
   const statusMap = statusRes.results || {};
 
-  const keyMap = new Map<string, { port: number; onuId: number }>();
-
-  const processOidDict = (dict: Record<string, string>) => {
-    for (const oid of Object.keys(dict)) {
-      const parts = oid.split('.');
-      if (parts.length >= 2) {
-        const onuIdx = parseInt(parts[parts.length - 1]);
-        const port = parseInt(parts[parts.length - 2]);
-        if (!isNaN(onuIdx) && !isNaN(port)) {
-          const key = `${port}.${onuIdx}`;
-          if (!keyMap.has(key)) {
-            keyMap.set(key, { port, onuId: onuIdx });
-          }
-        }
-      }
+  // Helper to extract HSGQ index from OID (handles .0.0 suffix on optical OIDs)
+  const getHsgqIdx = (oid: string): string => {
+    const parts = oid.split('.');
+    if (parts.length >= 3 && parts[parts.length - 2] === '0' && parts[parts.length - 1] === '0') {
+      return parts[parts.length - 3];
     }
+    return parts[parts.length - 1];
   };
 
-  processOidDict(snMap);
-  processOidDict(names);
+  // Build index -> SN map (filtering out empty/zero phantom SNs)
+  const snByIdx = new Map<string, string>();
+  for (const [oid, val] of Object.entries(snMap)) {
+    const idx = getHsgqIdx(oid);
+    const sn = val.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+    if (sn && sn.length >= 6 && !/^0+$/.test(sn)) {
+      snByIdx.set(idx, sn);
+    }
+  }
 
-  if (keyMap.size === 0) {
-    return [];
+  // Name / Description
+  const nameByIdx = new Map<string, string>();
+  for (const [oid, val] of Object.entries(names)) {
+    const idx = getHsgqIdx(oid);
+    if (val.trim()) nameByIdx.set(idx, val.trim());
+  }
+
+  // Rx Power (scale 100: -2600 -> -26.0)
+  const rxByIdx = new Map<string, number>();
+  for (const [oid, val] of Object.entries(rxMap)) {
+    const idx = getHsgqIdx(oid);
+    const raw = parseFloat(val);
+    if (!isNaN(raw)) {
+      const scaled = raw > 0 || raw < -100 ? raw / 100.0 : raw;
+      if (scaled >= -40 && scaled <= -5) rxByIdx.set(idx, parseFloat(scaled.toFixed(2)));
+    }
+  }
+
+  // Tx Power (scale 100)
+  const txByIdx = new Map<string, number>();
+  for (const [oid, val] of Object.entries(txMap)) {
+    const idx = getHsgqIdx(oid);
+    const raw = parseFloat(val);
+    if (!isNaN(raw)) {
+      const scaled = raw > 50 || raw < -50 ? raw / 100.0 : raw;
+      if (scaled >= -10 && scaled <= 10) txByIdx.set(idx, parseFloat(scaled.toFixed(2)));
+    }
+  }
+
+  // Status
+  const statusByIdx = new Map<string, string>();
+  for (const [oid, val] of Object.entries(statusMap)) {
+    const idx = getHsgqIdx(oid);
+    statusByIdx.set(idx, val);
   }
 
   const onus: any[] = [];
-
-  for (const [key, { port, onuId }] of Array.from(keyMap.entries())) {
-    // SN
-    let sn: string | undefined = undefined;
-    for (const [sOid, sVal] of Object.entries(snMap)) {
-      if (sOid.endsWith(`.${key}`) || sOid.endsWith(`.${onuId}`)) {
-        sn = sVal.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
-        if (sn) break;
-      }
-    }
-
-    // Skip phantom/unallocated entries without a real serial number
-    if (!sn || sn.length < 6 || /^0+$/.test(sn)) {
-      continue;
-    }
-
-    // Name / Description
-    let name: string | undefined = undefined;
-    for (const [nOid, nVal] of Object.entries(names)) {
-      if (nOid.endsWith(`.${key}`) || nOid.endsWith(`.${onuId}`)) {
-        name = nVal.trim();
-        if (name) break;
-      }
-    }
-
-    // Rx Power (scale 100: -2600 -> -26.0)
-    let rxPower: number | undefined = undefined;
-    for (const [rOid, rVal] of Object.entries(rxMap)) {
-      if (rOid.endsWith(`.${key}`) || rOid.endsWith(`.${onuId}`)) {
-        const raw = parseFloat(rVal);
-        if (!isNaN(raw)) {
-          const scaled = raw > 0 || raw < -100 ? raw / 100.0 : raw;
-          if (scaled >= -40 && scaled <= -5) rxPower = parseFloat(scaled.toFixed(2));
-        }
-        break;
-      }
-    }
-
-    // Tx Power (scale 100)
-    let txPower: number | undefined = undefined;
-    for (const [tOid, tVal] of Object.entries(txMap)) {
-      if (tOid.endsWith(`.${key}`) || tOid.endsWith(`.${onuId}`)) {
-        const raw = parseFloat(tVal);
-        if (!isNaN(raw)) {
-          const scaled = raw > 50 || raw < -50 ? raw / 100.0 : raw;
-          if (scaled >= -10 && scaled <= 10) txPower = parseFloat(scaled.toFixed(2));
-        }
-        break;
-      }
-    }
-
-    // Status: 1 = online
-    let rawStatusVal: string | undefined = undefined;
-    for (const [stOid, stVal] of Object.entries(statusMap)) {
-      if (stOid.endsWith(`.${key}`) || stOid.endsWith(`.${onuId}`)) {
-        rawStatusVal = stVal;
-        break;
-      }
-    }
+  // Loop strictly over registered SNs (1:1 with BotRedaman)
+  for (const [idxStr, sn] of Array.from(snByIdx.entries())) {
+    const onuIdx = parseInt(idxStr) || 1;
+    const description = nameByIdx.get(idxStr) || null;
+    const rxPower = rxByIdx.get(idxStr) ?? null;
+    const txPower = txByIdx.get(idxStr) ?? null;
+    const rawStatusVal = statusByIdx.get(idxStr);
 
     let status = 'offline';
-    if (rawStatusVal === '1' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up')) || (rxPower !== undefined && rxPower < 0)) {
+    if (rawStatusVal === '1' || (rawStatusVal && rawStatusVal.toLowerCase().includes('up')) || (rxPower !== null && rxPower < 0)) {
       status = 'online';
     }
 
     onus.push({
       frame: 0,
       slot: 0,
-      port,
-      onuId,
-      serialNumber: sn || null,
-      description: name || null,
+      port: 1,
+      onuId: onuIdx,
+      serialNumber: sn,
+      description,
       status,
-      rxPower: rxPower ?? null,
-      txPower: txPower ?? null,
+      rxPower,
+      txPower,
     });
   }
 
