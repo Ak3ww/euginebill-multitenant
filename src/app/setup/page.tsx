@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import Link from 'next/link';
 import {
   Server,
@@ -395,10 +395,25 @@ export default function UnifiedSetupWizardPage() {
         throw new Error(data.error || 'Gagal melakukan inisialisasi.');
       }
 
-      // Successfully initialized! Redirect to login with setup callback
-      router.push('/admin/login?setup=success&callbackUrl=/setup');
+      // Automatically sign in superadmin credential so the session is active
+      const authRes = await signIn('credentials', {
+        redirect: false,
+        username: initFormData.adminUsername,
+        password: initFormData.adminPassword,
+      });
+
+      if (authRes?.error) {
+        // Fallback: If auto sign-in fails, redirect to admin login
+        router.push('/admin/login?setup=success&callbackUrl=/setup');
+        return;
+      }
+
+      // Update state and transition continuously to Step 1 in the wizard
+      setIsInitialized(true);
+      setCurrentStep(1);
     } catch (err: any) {
       setInitError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
       setInitSubmitting(false);
     }
   };

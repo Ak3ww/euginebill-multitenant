@@ -305,62 +305,58 @@
 :root {
   --radius: 0.625rem;
 
-  /* Deep navy with subtle blue tint — richer than plain slate-950 */
-  --background: #0a1428;
-  --foreground: #e8eef9;
+  --background: #f8fafc;    /* slate-50: off-white so cards/inputs float */
+  --foreground: #0f172a;
 
-  /* Elevated card — visible hierarchy from background */
-  --card: #162033;
-  --card-foreground: #e8eef9;
-  --popover: #162033;
-  --popover-foreground: #e8eef9;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
 
-  /* Brand primary: TailAdmin brand-500 (#465fff) */
+  /* Brand TailAdmin brand-500 (#465fff) */
   --primary: #465fff;
   --primary-foreground: #ffffff;
 
-  --secondary: #1e2a44;
-  --secondary-foreground: #e8eef9;
+  --secondary: #ecf3ff;           /* brand-50 — brand-tinted secondary */
+  --secondary-foreground: #2a31d8; /* brand-700 */
 
-  --muted: #1e2a44;
-  --muted-foreground: #9ba8c4;
+  --muted: #f2f4f7;               /* gray-100 */
+  --muted-foreground: #475467;    /* gray-600 — readable */
 
-  /* Violet accent — dynamic complement to brand */
-  --accent: #7a5af8;
+  --accent: #7a5af8;              /* theme-purple-500 */
   --accent-foreground: #ffffff;
 
-  --destructive: #f04438;
+  --destructive: #f04438;         /* error-500 */
   --destructive-foreground: #ffffff;
-  --success: #12b76a;
+  --success: #039855;             /* success-600 */
   --success-foreground: #ffffff;
-  --warning: #f79009;
+  --warning: #dc6803;             /* warning-600 */
   --warning-foreground: #ffffff;
-  --info: #0ba5ec;
+  --info: #0086c9;                /* blue-light-600 */
   --info-foreground: #ffffff;
 
-  /* More visible borders for card/layout separation */
-  --border: #27374f;
-  --input: #1e2a44;
-  --ring: #465fff;
+  --border: #e4e7ec;              /* gray-200 — TailAdmin border */
+  --input: #ffffff;               /* white inputs on gray-50 bg */
+  --ring: #465fff;                /* brand focus ring */
 
   /* Brand-aligned chart palette */
   --chart-1: #465fff;
   --chart-2: #7a5af8;
-  --chart-3: #f79009;
-  --chart-4: #12b76a;
+  --chart-3: #dc6803;
+  --chart-4: #039855;
   --chart-5: #ee46bc;
 
-  /* Sidebar deeper than bg for visual hierarchy */
-  --sidebar: #091020;
-  --sidebar-foreground: #e8eef9;
-  --sidebar-primary: #465fff;
+  /* Light sidebar — TailAdmin style: white sidebar, dark text */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #344054;       /* gray-700 */
+  --sidebar-primary: #465fff;          /* brand-500 */
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #162033;
-  --sidebar-accent-foreground: #e8eef9;
-  --sidebar-border: #27374f;
+  --sidebar-accent: #f2f4f7;           /* gray-100 hover */
+  --sidebar-accent-foreground: #101828; /* gray-900 */
+  --sidebar-border: #e4e7ec;           /* gray-200 */
   --sidebar-ring: #465fff;
 
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .dark {
@@ -403,65 +399,6 @@
   --sidebar-border: #27374f;
   --sidebar-ring: #465fff;
   color-scheme: dark;
-}
-
-/* ===========================================
-   LIGHT MODE — Modern Clean Brand-Aligned
-   Slate-50 base + Cyan-600/Violet-600 accents
-   =========================================== */
-:root:not(.dark) {
-  --background: #f8fafc;    /* slate-50: off-white so cards/inputs float */
-  --foreground: #0f172a;
-
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-
-  /* Brand TailAdmin brand-500 (#465fff) — unified with dark mode */
-  --primary: #465fff;
-  --primary-foreground: #ffffff;
-
-  --secondary: #ecf3ff;           /* brand-50 — brand-tinted secondary */
-  --secondary-foreground: #2a31d8; /* brand-700 */
-
-  --muted: #f2f4f7;               /* gray-100 */
-  --muted-foreground: #475467;    /* gray-600 — readable */
-
-  --accent: #7a5af8;              /* theme-purple-500 — dynamic complement */
-  --accent-foreground: #ffffff;
-
-  --destructive: #f04438;         /* error-500 */
-  --destructive-foreground: #ffffff;
-  --success: #039855;             /* success-600 */
-  --success-foreground: #ffffff;
-  --warning: #dc6803;             /* warning-600 */
-  --warning-foreground: #ffffff;
-  --info: #0086c9;                /* blue-light-600 */
-  --info-foreground: #ffffff;
-
-  --border: #e4e7ec;              /* gray-200 — TailAdmin border */
-  --input: #ffffff;               /* white inputs on gray-50 bg */
-  --ring: #465fff;                /* brand focus ring */
-
-  /* Brand-aligned chart palette */
-  --chart-1: #465fff;
-  --chart-2: #7a5af8;
-  --chart-3: #dc6803;
-  --chart-4: #039855;
-  --chart-5: #ee46bc;
-
-  /* Light sidebar — TailAdmin style: white sidebar, dark text */
-  --sidebar: #ffffff;
-  --sidebar-foreground: #344054;       /* gray-700 */
-  --sidebar-primary: #465fff;          /* brand-500 */
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2f4f7;           /* gray-100 hover */
-  --sidebar-accent-foreground: #101828; /* gray-900 */
-  --sidebar-border: #e4e7ec;           /* gray-200 */
-  --sidebar-ring: #465fff;
-
-  color-scheme: light;
 }
 
 /* ============================================================

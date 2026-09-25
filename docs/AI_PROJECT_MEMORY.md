@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.70
+- **Version**: 2.40.71
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,12 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.70: Fix Missing Root SessionProvider)
+### Recent Patch Log (September 25, 2026 — v2.40.71: Continuous Setup Wizard & Light Theme Standard)
+
+- **Hard Invariant: Continuous Setup Wizard Flow (`src/app/setup/page.tsx`)**:
+  - Setelah pengiriman Step 0 (`handleInitialSubmit`), handler wajib mengeksekusi `signIn('credentials', { redirect: false, username, password })` dan memperbarui `isInitialized(true)` untuk melanjutkan ke Step 1-6 secara kontinyu tanpa melempar admin ke halaman `/admin/login`.
+- **Hard Invariant: Default Light Theme Standard (`src/app/globals.css`, `src/app/admin/login/page.tsx`)**:
+  - CSS `:root` memegang variabel *Light Mode* (`#f8fafc` background, slate-50 base, `#ffffff` cards, hairline borders `--border: #e4e7ec`, crisp typography) secara bawaan. Pemaksaan `localStorage.setItem('theme', 'dark')` pada `login/page.tsx` dihapus untuk memastikan Admin Panel & Setup Wizard selalu tampil dalam standar Light SaaS yang bersih.
 
 - **Hard Invariant: Root Layout SessionProvider Wrapping (`src/app/layout.tsx`, `src/components/client-providers.tsx`)**:
   - `RootLayout` wajib membungkus seluruh rute `{children}` dengan `<SessionProvider>` via `ClientProviders` untuk mencegah `TypeError: Cannot destructure property 'data' of 'useSession(...)' as it is undefined`.

@@ -4,6 +4,27 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.71] — 2026-09-25
+
+### Continuous Onboarding Setup Flow & Admin Light SaaS Standard Enforcement (`src/app/setup/page.tsx`, `src/app/admin/login/page.tsx`, `src/app/globals.css`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Setelah menyelesaikan form inisialisasi awal (Step 0) di Setup Wizard (`/setup`), sistem mengeksekusi `router.push('/admin/login')` yang memaksa admin melakukan login ulang secara manual di tengah alur setup, terputus dari langkah 1-6.
+  2. Tampilan Admin Panel dan Setup Wizard sering kali memuat tema gelap (*Dark Mode*) secara paksa karena CSS `:root` memegang variabel tema gelap sebagai default bawaan dan script `admin/login/page.tsx` menulis `localStorage.setItem('theme', 'dark')` ketika variabel theme belum diset.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Continuous Onboarding Flow (`src/app/setup/page.tsx`)**:
+     - Memperbarui handler `handleInitialSubmit` agar mengeksekusi `signIn('credentials', { redirect: false, username, password })` secara otomatis pasca inisialisasi `/api/setup` berhasil.
+     - Mengubah state `isInitialized(true)` dan `currentStep(1)` tanpa pengalihan halaman ke `/admin/login`, sehingga admin dapat langsung melanjutkan konfigurasi Profil ISP, Router MikroTik, Paket PPPoE, Pelanggan Trial, WhatsApp Bot, dan Payment Gateway secara utuh tanpa hambatan login.
+  2. **Clean Light SaaS Standard (`src/app/globals.css`, `src/app/admin/login/page.tsx`)**:
+     - Mengubah CSS `:root` di `globals.css` agar memegang token *Clean Light SaaS* (`#f8fafc` background, slate-50 base, `#ffffff` cards, hairline borders `--border: #e4e7ec`, crisp text `#0f172a`, Oceanic Blue accents) sebagai tema default utama.
+     - Menghapus pemaksaan `localStorage.setItem('theme', 'dark')` pada `src/app/admin/login/page.tsx` sehingga Admin Portal & Setup Wizard selalu tampil bersih, profesional, dan sesuai dengan standar UI Light Mode EugineBill.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `src/app/globals.css`
+
 ## [2.40.70] — 2026-09-25
 
 ### Fix Missing Root SessionProvider & TypeError `useSession` is undefined (`src/app/layout.tsx`, `src/components/client-providers.tsx`)
