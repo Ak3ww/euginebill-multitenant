@@ -12,6 +12,7 @@
     "reseed:inventory": "tsx scripts/reseed-clean-inventory.ts",
     "sync:ont-inventory": "tsx scripts/sync-ont-inventory.ts",
     "sync:ont-inventory:wipe": "tsx scripts/sync-ont-inventory.ts --wipe",
+    "reconcile": "tsx scripts/reconcile-invoices.ts",
     "olt:full-refresh": "tsx scripts/olt-full-refresh.ts",
     "olt:full-refresh:dry": "tsx scripts/olt-full-refresh.ts --dry-run",
     "olt:full-refresh:olt-only": "tsx scripts/olt-full-refresh.ts --olt-only",

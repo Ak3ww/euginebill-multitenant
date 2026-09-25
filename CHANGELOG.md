@@ -24,6 +24,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
      - Memperbarui komponen footer pada portal Admin, Customer, Teknisi, dan Agent sehingga teks `"Powered by EugineBill"` membungkus `"EugineBill"` dengan tag link `<a href="https://euginemediagroup.com">`.
 
 - **Files**:
+  - Added: `scripts/reconcile-invoices.ts`
+  - Modified: `package.json`
   - Modified: `src/app/setup/page.tsx`
   - Modified: `src/server/jobs/voucher-sync.ts`
   - Modified: `src/app/api/admin/invoices/reconcile/route.ts`

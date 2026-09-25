@@ -27,7 +27,8 @@
   - Jika pelanggan terdaftar di bulan berjalan (PSB Sept) atau belum memiliki tagihan bulan berjalan, tanggal jatuh tempo (`dueDate`) WAJIB berada pada bulan berjalan (cth: Sept 2026), BUKAN melompati ke bulan berikutnya (Oktober 2026).
   - Tagihan bulan berikutnya (Oktober 2026) HANYA boleh dibuat jika tagihan bulan berjalan (September 2026) SUDAH ADA/LUNAS dan tanggal hari ini telah memasuki rentang `invoiceGenerateDays` menjelang jatuh tempo bulan depan.
 
-- **Hard Invariant: Automated Reconcile Due Date Repair (`src/app/api/admin/invoices/reconcile/route.ts`)**:
+- **Hard Invariant: Automated & CLI Reconcile Engine (`src/app/api/admin/invoices/reconcile/route.ts`, `scripts/reconcile-invoices.ts`)**:
+  - Rekonsiliasi keuangan dan pemulihan jatuh tempo tagihan dapat dijalankan dari Web Admin (`/api/admin/invoices/reconcile`) maupun via CLI di VPS menggunakan `npm run reconcile` atau `npx tsx scripts/reconcile-invoices.ts`. Script ini aman dan idempoten (bebas efek samping jika dijalankan berulang).
   - Fitur Rekonsiliasi Database Keuangan Admin (`POST /api/admin/invoices/reconcile`) WAJIB menyertakan Seksi 6 untuk mengidentifikasi dan memulihkan tagihan PSB September yang jatuh temponya salah terlempar ke bulan Oktober kembali ke bulan September (`2026-09-05` / `2026-09-06`).
 
 - **Hard Invariant: 13-Step Onboarding Journey (`src/app/setup/page.tsx`)**:
