@@ -4,6 +4,26 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.85] — 2026-09-25
+
+### Setup Wizard 100% Admin Parity: Dedicated Step 2 Client VPN & Step 3 Router MikroTik, Real VPS Host IP Injection in Scripts, Single-Token QRIN Gateway (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Pemisahan Step 2 (Client VPN) & Step 3 (Koneksi Router MikroTik)**: Alur onboarding sebelumnya menggabungkan form VPN Client dan Router MikroTik dalam 1 step yang membingungkan. Wizard sekarang dipisah menjadi step mandiri berurutan: Step 2 khusus *Client VPN Setup* (WireGuard/L2TP/Direct IP) $\rightarrow$ Step 3 khusus *Koneksi Router MikroTik* (API credentials & auth mode).
+  2. **Injeksi Host VPS Asli pada Generator Skrip**: Skrip RouterOS sebelumnya memiliki placeholder `<VPS_IP_ADDRESS>`. Kini diinject secara dinamis dari `window.location.hostname` atau domain `companyForm.baseUrl`.
+  3. **Pengsembunyian Total Kartu FreeRADIUS**: Kartu FreeRADIUS disembunyikan secara mutlak jika router mode `local` atau `radiusEnabled === false`.
+  4. **Single-Field Token QRIN (`qrin.web.id`)**: Form QRIN disederhanakan menjadi 1 field saja (`Token QRIN`), sesuai standar service `src/server/services/payment/qrin.service.ts` tanpa field `merchantCode` / `webhookSecret`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Refaktor `ALL_STEPS` (`src/app/setup/page.tsx`)**: Menambah Step 2 (Client VPN Setup) dengan icon `Cable` dan menggeser seluruh step berikutnya secara presisi (Total 13 steps: Step 0–12).
+  2. **Dynamic Script Generator (`src/app/setup/page.tsx`)**: Mengimplementasikan injeksi `vpsHost` otomatis untuk skrip WireGuard dan L2TP (UltraVPN).
+  3. **QRIN Single-Field UI (`src/app/setup/page.tsx`)**: Mengatur tampilan form QRIN hanya meminta input Token QRIN dari merchant portal `qrin.web.id`.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.84] — 2026-09-25
 
 ### Setup Wizard 100% Original Parity: Step 2 Two-Phase VPN Router Flow, Step 3 Full Isolation Settings & ROS 6/7 Generator, Conditional FreeRADIUS Hiding, and Step 6 QRIN Gateway (`src/app/setup/page.tsx`)

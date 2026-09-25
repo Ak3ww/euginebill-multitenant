@@ -98,16 +98,17 @@ interface CreatedUser {
 const ALL_STEPS = [
   { id: 0, title: 'Inisialisasi Sistem', icon: ShieldCheck, desc: 'Akun Superadmin & ISP' },
   { id: 1, title: 'Profil & Kontak ISP', icon: Building2, desc: 'Identitas & Footer Login' },
-  { id: 2, title: 'Koneksi MikroTik', icon: Server, desc: 'API Router & VPN Tunnel' },
-  { id: 3, title: 'Sistem Isolir', icon: Shield, desc: 'Firewall & Web Proxy 8080' },
-  { id: 4, title: 'Paket PPPoE', icon: Package, desc: 'Tarif & Kecepatan' },
-  { id: 5, title: 'Pelanggan Trial', icon: Users, desc: 'Akun Tes PPPoE' },
-  { id: 6, title: 'Payment Gateway', icon: CreditCard, desc: 'Bank & Automatic Gateways' },
-  { id: 7, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
-  { id: 8, title: 'RADIUS Server', icon: Radio, desc: 'Switch Auth & Port 1812/1813' },
-  { id: 9, title: 'TR-069 & GenieACS', icon: Globe, desc: 'Auto Config ONT (VLAN 4000)' },
-  { id: 10, title: 'Tim & SPK', icon: UserCheck, desc: 'Akun Teknisi & Role' },
-  { id: 11, title: 'Peluncuran Sistem', icon: Sparkles, desc: 'Turnkey Readiness Recap' },
+  { id: 2, title: 'Client VPN Setup', icon: Cable, desc: 'WireGuard / L2TP Tunnel' },
+  { id: 3, title: 'Koneksi MikroTik', icon: Server, desc: 'API Router & Credentials' },
+  { id: 4, title: 'Sistem Isolir', icon: Shield, desc: 'Firewall & Web Proxy 8080' },
+  { id: 5, title: 'Paket PPPoE', icon: Package, desc: 'Tarif & Kecepatan' },
+  { id: 6, title: 'Pelanggan Trial', icon: Users, desc: 'Akun Tes PPPoE' },
+  { id: 7, title: 'Payment Gateway', icon: CreditCard, desc: 'Bank, QRIN & Gateway' },
+  { id: 8, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
+  { id: 9, title: 'RADIUS Server', icon: Radio, desc: 'Switch Auth & Port 1812/1813' },
+  { id: 10, title: 'TR-069 & GenieACS', icon: Globe, desc: 'Auto Config ONT (VLAN 4000)' },
+  { id: 11, title: 'Tim & SPK', icon: UserCheck, desc: 'Akun Teknisi & Role' },
+  { id: 12, title: 'Peluncuran Sistem', icon: Sparkles, desc: 'Turnkey Readiness Recap' },
 ];
 
 export default function UnifiedSetupWizardPage() {
@@ -490,32 +491,57 @@ export default function UnifiedSetupWizardPage() {
     loadData();
   }, [isInitialized, sessionStatus]);
 
-  // Generate RouterOS script
+  // Generate RouterOS script using REAL VPS IP/Host
   useEffect(() => {
     const port = routerForm.port || '8728';
     const winbox = routerForm.winboxPort || '8291';
-    const u = routerForm.username;
-    const p = routerForm.password;
-    const ip = routerForm.ipAddress;
+    const www = routerForm.wwwPort || '80';
+    const u = routerForm.username || 'euginebill_api';
+    const p = routerForm.password || 'EB@ApiSecret2026';
+    const ip = routerForm.ipAddress || '10.254.1.2';
+    const nasName = routerForm.name || 'MikroTik-Router';
+    const safeLabel = nasName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 12) || 'vpn';
+
+    // Resolve real VPS Host IP
+    let vpsHost = '43.173.14.236';
+    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      vpsHost = window.location.hostname;
+    } else if (companyForm.baseUrl) {
+      try {
+        const parsedUrl = new URL(companyForm.baseUrl);
+        if (parsedUrl.hostname && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+          vpsHost = parsedUrl.hostname;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
 
     let script = `# ========================================================\n`;
     script += `# SKRIP SETUP MIKROTIK UNTUK EUGINEBILL\n`;
     script += `# Metode Koneksi: ${connectionMethod.toUpperCase()}\n`;
-    script += `# Router: ${routerForm.name} (IP: ${ip})\n`;
-    script += `# Port API: ${port} | Winbox: ${winbox}\n`;
+    script += `# Router        : ${nasName} (IP: ${ip})\n`;
+    script += `# VPS Server    : ${vpsHost}\n`;
+    script += `# Port API      : ${port} | Winbox: ${winbox} | WWW: ${www}\n`;
     script += `# ========================================================\n\n`;
 
     if (connectionMethod === 'wireguard') {
+      const ifaceName = `ebwg-${safeLabel}`;
       script += `# --- 1. Konfigurasi WireGuard Client (Tunnel Aman VPS) ---\n`;
-      script += `/interface wireguard add listen-port=13231 name=wg0-euginebill comment="EugineBill WireGuard"\n`;
-      script += `/ip address add address=${ip}/24 interface=wg0-euginebill comment="EugineBill VPN IP"\n`;
-      script += `# Catatan: Hubungkan peer server WireGuard sesuai IP publik VPS EugineBill\n\n`;
+      script += `:do { /interface wireguard remove [find comment~"EugineBill"] } on-error={}\n`;
+      script += `:do { /interface wireguard remove [find name="${ifaceName}"] } on-error={}\n`;
+      script += `/interface wireguard add listen-port=13231 name=${ifaceName} comment="EugineBill WireGuard"\n`;
+      script += `/ip address add address=${ip}/24 interface=${ifaceName} comment="EugineBill VPN IP"\n`;
+      script += `/interface wireguard peers add interface=${ifaceName} endpoint-address="${vpsHost}" endpoint-port=51820 allowed-address=10.200.0.0/24,${routerForm.allowedIps || '10.200.0.0/24'} persistent-keepalive=25s comment="VPS EugineBill Server"\n\n`;
     } else if (connectionMethod === 'l2tp') {
+      const ifaceName = `ebl2-${safeLabel}`;
       script += `# --- 1. Konfigurasi L2TP Client (UltraVPN Standard) ---\n`;
+      script += `:do { /interface l2tp-client remove [find comment~"EugineBill"] } on-error={}\n`;
+      script += `:do { /interface l2tp-client remove [find name="${ifaceName}"] } on-error={}\n`;
       script += `:if ([:len [/ppp profile find name="ebvpn-remote"]] = 0) do={\n`;
       script += `    /ppp profile add name=ebvpn-remote use-encryption=no change-tcp-mss=yes only-one=no\n`;
       script += `}\n`;
-      script += `/interface l2tp-client add name=l2tp-euginebill connect-to="<VPS_IP_ADDRESS>" user="${u}" password="${p}" profile=ebvpn-remote disabled=no comment="EugineBill L2TP"\n\n`;
+      script += `/interface l2tp-client add name=${ifaceName} connect-to="${vpsHost}" user="${u}" password="${p}" profile=ebvpn-remote use-ipsec=no allow=chap,mschap2 disabled=no add-default-route=no dial-on-demand=no comment="EugineBill L2TP"\n\n`;
     }
 
     script += `# --- 2. Buat Group Akses Khusus API & Winbox ---\n`;
@@ -526,24 +552,25 @@ export default function UnifiedSetupWizardPage() {
     script += `:do { /user remove [find name="${u}"] } on-error={}\n`;
     script += `/user add name="${u}" group=api-users password="${p}" comment="API User EugineBill"\n\n`;
 
-    script += `# --- 4. Aktifkan Service Port API & Winbox ---\n`;
+    script += `# --- 4. Aktifkan Service Port API & Winbox & Web ---\n`;
     script += `:do { /ip service set api port=${port} address="" disabled=no } on-error={}\n`;
-    script += `:do { /ip service set winbox port=${winbox} address="" disabled=no } on-error={}\n\n`;
+    script += `:do { /ip service set winbox port=${winbox} address="" disabled=no } on-error={}\n`;
+    script += `:do { /ip service set www port=${www} address="" disabled=no } on-error={}\n\n`;
 
     script += `# --- 5. Buka Akses Firewall Filter di Posisi Teratas ---\n`;
     script += `:do { /ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}\n`;
     if (connectionMethod === 'wireguard') {
-      script += `:do { /ip firewall filter add chain=input action=accept in-interface=wg0-euginebill place-before=0 comment="Allow EugineBill WG VPN" } on-error={}\n`;
+      script += `:do { /ip firewall filter add chain=input action=accept in-interface=ebwg-${safeLabel} place-before=0 comment="Allow EugineBill WG VPN" } on-error={}\n`;
     } else if (connectionMethod === 'l2tp') {
-      script += `:do { /ip firewall filter add chain=input action=accept in-interface=l2tp-euginebill place-before=0 comment="Allow EugineBill L2TP VPN" } on-error={}\n`;
+      script += `:do { /ip firewall filter add chain=input action=accept in-interface=ebl2-${safeLabel} place-before=0 comment="Allow EugineBill L2TP VPN" } on-error={}\n`;
     }
 
     script += `\n# ========================================================\n`;
-    script += `# SELESAI! Tempel skrip ini di Terminal Winbox Anda.\n`;
+    script += `# SELESAI! Salin dan Tempel skrip ini di Terminal Winbox MikroTik Anda.\n`;
     script += `# ========================================================`;
 
     setGeneratedScript(script);
-  }, [connectionMethod, routerForm]);
+  }, [connectionMethod, routerForm, companyForm.baseUrl]);
 
   const markStepCompleted = (stepNumber: number) => {
     if (!completedSteps.includes(stepNumber)) {
@@ -616,7 +643,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 2: Save VPN Client (Phase 1 for WireGuard / L2TP)
+  // Step 2: Save VPN Client
   const handleSaveVpnClient = async () => {
     setIsSavingVpnClient(true);
     try {
@@ -652,18 +679,19 @@ export default function UnifiedSetupWizardPage() {
           }));
         }
       } else {
-        // If client exists or fallback
         setVpnClientSaved(true);
       }
+      markStepCompleted(2);
     } catch (err) {
       console.error('Failed to save VPN Client:', err);
       setVpnClientSaved(true);
+      markStepCompleted(2);
     } finally {
       setIsSavingVpnClient(false);
     }
   };
 
-  // Step 2: Test & Save Router
+  // Step 3: Test & Save Router
   const handleTestRouter = async () => {
     setIsTestingRouter(true);
     setTestResult(null);
@@ -726,12 +754,12 @@ export default function UnifiedSetupWizardPage() {
       if (res.ok && data.router) {
         setSavedRouterId(data.router.id);
         setRouterSaved(true);
-        markStepCompleted(2);
-        setCurrentStep(3);
+        markStepCompleted(3);
+        setCurrentStep(4);
       } else if (res.status === 409) {
         setRouterSaved(true);
-        markStepCompleted(2);
-        setCurrentStep(3);
+        markStepCompleted(3);
+        setCurrentStep(4);
       }
     } catch (err) {
       console.error('Failed to save router:', err);
@@ -740,7 +768,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 3: Save Isolation Settings
+  // Step 4: Save Isolation Settings
   const handleSaveIsolationSettings = async () => {
     setIsSavingIsolation(true);
     try {
@@ -752,8 +780,8 @@ export default function UnifiedSetupWizardPage() {
 
       const data = await res.json();
       if (data.success) {
-        markStepCompleted(3);
-        setCurrentStep(4);
+        markStepCompleted(4);
+        setCurrentStep(5);
       } else {
         throw new Error(data.error || 'Gagal menyimpan sistem isolir');
       }
@@ -764,9 +792,9 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 3: Fetch Router Resources
+  // Step 5: Fetch Router Resources for PPPoE Profile
   useEffect(() => {
-    if (currentStep === 3 && savedRouterId) {
+    if (currentStep === 5 && savedRouterId) {
       const fetchResources = async () => {
         setLoadingResources(true);
         try {
@@ -792,7 +820,7 @@ export default function UnifiedSetupWizardPage() {
     }
   }, [currentStep, savedRouterId]);
 
-  // Step 3: Save PPPoE Profile
+  // Step 5: Save PPPoE Profile
   const handleSaveProfile = async () => {
     setIsSavingProfile(true);
     try {
@@ -827,8 +855,8 @@ export default function UnifiedSetupWizardPage() {
       }
       const data = await res.json();
       setCreatedProfile(data.profile || data);
-      markStepCompleted(4);
-      setCurrentStep(5);
+      markStepCompleted(5);
+      setCurrentStep(6);
     } catch (err: any) {
       alert(err.message || 'Gagal menyimpan paket');
     } finally {
@@ -836,7 +864,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 5: Save Customer
+  // Step 6: Save Customer
   const handleSaveCustomer = async () => {
     setIsSavingCustomer(true);
     try {
@@ -856,8 +884,8 @@ export default function UnifiedSetupWizardPage() {
       if (!res.ok) throw new Error('Gagal membuat akun pelanggan');
       const data = await res.json();
       setCreatedCustomer(data.user || data);
-      markStepCompleted(5);
-      setCurrentStep(6);
+      markStepCompleted(6);
+      setCurrentStep(7);
     } catch (err: any) {
       alert(err.message || 'Gagal membuat pelanggan');
     } finally {
@@ -1537,25 +1565,25 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 2: KONEKSI MIKROTIK ROUTER & VPN CLIENT */}
+            {/* STEP 2: CLIENT VPN SETUP (WIREGUARD / L2TP / DIRECT IP) */}
             {currentStep === 2 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                        <Server className="w-5 h-5" />
+                        <Cable className="w-5 h-5" />
                       </div>
                       <div>
-                        <CardTitle>Koneksi Router MikroTik & Client VPN</CardTitle>
+                        <CardTitle>Client VPN Setup (MikroTik Tunnel)</CardTitle>
                         <CardDescription>
-                          Hubungkan VPS Billing EugineBill dengan router MikroTik via API / VPN Tunnel WireGuard.
+                          Pilih protokol VPN (WireGuard / L2TP) atau Direct IP untuk menghubungkan VPS EugineBill dengan router MikroTik.
                         </CardDescription>
                       </div>
                     </div>
-                    {routerSaved && (
+                    {vpnClientSaved && (
                       <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
-                        <Check className="w-3 h-3 text-emerald-600" /> Terhubung
+                        <Check className="w-3 h-3 text-emerald-600" /> Client VPN Siap
                       </Badge>
                     )}
                   </div>
@@ -1565,22 +1593,22 @@ export default function UnifiedSetupWizardPage() {
                   {/* Connection Method Toggle */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Server VPN & Protokol *</Label>
-                    <div className="grid grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
                       <button
                         type="button"
                         onClick={() => { setConnectionMethod('wireguard'); setVpnClientSaved(false); }}
-                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           connectionMethod === 'wireguard'
                             ? 'bg-background text-foreground shadow-xs'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        [VPS Native] WireGuard Server (Rekomendasi Utama)
+                        [VPS Native] WireGuard Server
                       </button>
                       <button
                         type="button"
                         onClick={() => { setConnectionMethod('l2tp'); setVpnClientSaved(false); }}
-                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           connectionMethod === 'l2tp'
                             ? 'bg-background text-foreground shadow-xs'
                             : 'text-muted-foreground hover:text-foreground'
@@ -1591,7 +1619,7 @@ export default function UnifiedSetupWizardPage() {
                       <button
                         type="button"
                         onClick={() => setConnectionMethod('direct')}
-                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           connectionMethod === 'direct'
                             ? 'bg-background text-foreground shadow-xs'
                             : 'text-muted-foreground hover:text-foreground'
@@ -1614,20 +1642,33 @@ export default function UnifiedSetupWizardPage() {
                     </div>
                     {connectionMethod === 'direct' ? (
                       <p className="text-muted-foreground leading-relaxed">
-                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 lokasi LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung.
+                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 lokasi LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung. Anda dapat langsung melanjutkan ke langkah konfigurasi router.
                       </p>
                     ) : (
                       <p className="text-muted-foreground leading-relaxed">
-                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk meremote MikroTik menembus NAT ISP. Tambahkan Client VPN terlebih dahulu, lalu <strong className="text-foreground">Salin Skrip</strong> yang di-generate dan <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
+                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> digunakan VPS untuk meremote MikroTik menembus NAT ISP. Tambahkan Client VPN terlebih dahulu, lalu <strong className="text-foreground">Salin Skrip</strong> yang di-generate dan <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
                       </p>
                     )}
                   </div>
 
-                  {/* PHASE 1: TAMBAH CLIENT VPN (WireGuard / L2TP) ATAU DIRECT IP */}
-                  {connectionMethod !== 'direct' && !vpnClientSaved && (
+                  {connectionMethod === 'direct' ? (
+                    <div className="p-6 text-center rounded-xl border border-dashed border-border bg-muted/20 space-y-3">
+                      <Globe className="w-8 h-8 text-primary mx-auto" />
+                      <div className="space-y-1">
+                        <div className="text-sm font-bold text-foreground">Mode Direct IP API Aktif</div>
+                        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                          Tidak diperlukan tunnel VPN. Klik tombol di bawah untuk langsung mengisi kredensial login API MikroTik Anda.
+                        </p>
+                      </div>
+                      <Button onClick={() => { markStepCompleted(2); setCurrentStep(3); }} className="bg-[#002C60] hover:bg-[#1b437c] text-white text-xs gap-1.5">
+                        <span>Lanjut ke Koneksi Router MikroTik</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
                     <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
                       <div className="text-xs font-bold uppercase tracking-wider text-primary">
-                        1. Tambah Client VPN ({connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'})
+                        Form Tambah Client VPN ({connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'})
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -1647,6 +1688,7 @@ export default function UnifiedSetupWizardPage() {
                             onChange={(e) => setRouterForm({ ...routerForm, allowedIps: e.target.value })}
                             placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
                           />
+                          <p className="text-[11px] text-muted-foreground">Pisahkan dengan koma. Diperlukan untuk remote ONT di balik MikroTik.</p>
                         </div>
                       </div>
 
@@ -1683,20 +1725,20 @@ export default function UnifiedSetupWizardPage() {
                         </div>
                       </div>
 
-                      <Button onClick={handleSaveVpnClient} disabled={isSavingVpnClient} className="w-full bg-primary text-primary-foreground gap-2">
-                        {isSavingVpnClient ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        <span>Simpan & Buat Client VPN</span>
-                      </Button>
-                    </div>
-                  )}
+                      <div className="pt-2">
+                        <Button onClick={handleSaveVpnClient} disabled={isSavingVpnClient} className="w-full bg-[#002C60] hover:bg-[#1b437c] text-white gap-2">
+                          {isSavingVpnClient ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          <span>Simpan & Buat Client VPN</span>
+                        </Button>
+                      </div>
 
-                  {/* PHASE 2: GENERATED SCRIPT & SAVE ROUTER MIKROTIK */}
-                  {(connectionMethod === 'direct' || vpnClientSaved) && (
-                    <div className="space-y-6">
-                      {connectionMethod !== 'direct' && (
-                        <div className="space-y-2 pt-2 border-t border-border">
+                      {vpnClientSaved && (
+                        <div className="space-y-3 pt-4 border-t border-border">
                           <div className="flex items-center justify-between">
-                            <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS Terminal</Label>
+                            <div>
+                              <Label className="text-xs font-bold text-foreground">Skrip Generator RouterOS MikroTik Terminal</Label>
+                              <p className="text-[11px] text-muted-foreground">Salin skrip di bawah dan tempel di terminal MikroTik Anda.</p>
+                            </div>
                             <Button
                               type="button"
                               variant="outline"
@@ -1714,127 +1756,203 @@ export default function UnifiedSetupWizardPage() {
                           </div>
                           <textarea
                             readOnly
-                            rows={6}
+                            rows={8}
                             value={generatedScript}
-                            className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                            className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/60 text-foreground focus:outline-none"
                           />
                         </div>
                       )}
+                    </div>
+                  )}
+                </CardContent>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="routerName">Nama Client / Identitas Router *</Label>
-                          <Input
-                            id="routerName"
-                            value={routerForm.name}
-                            onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                            placeholder="cth: MIKROTIK SITE CIBINONG"
-                          />
-                        </div>
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                    Kembali
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      markStepCompleted(2);
+                      setCurrentStep(3);
+                    }}
+                    className="bg-[#002C60] hover:bg-[#1b437c] text-white"
+                  >
+                    <span>Lanjut ke Koneksi Router MikroTik</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
 
-                        <div className="space-y-2">
-                          <Label htmlFor="routerIp">
-                            {connectionMethod === 'direct' ? 'Alamat IP (LAN / Publik Static) *' : 'IP VPN Client Tunnel *'}
-                          </Label>
-                          <Input
-                            id="routerIp"
-                            disabled={connectionMethod !== 'direct'}
-                            value={routerForm.ipAddress}
-                            onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
-                            placeholder="cth: 10.254.1.2"
-                          />
-                        </div>
+            {/* STEP 3: KONEKSI ROUTER MIKROTIK (API & CREDENTIALS) */}
+            {currentStep === 3 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Server className="w-5 h-5" />
                       </div>
-
-                      {/* Auth Mode Section */}
-                      <div className="space-y-2 pt-2">
-                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                          Mode Autentikasi Pelanggan *
-                        </Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <label
-                            className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                              routerForm.authMode === 'local'
-                                ? 'border-primary bg-primary/5 text-foreground font-medium'
-                                : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="authMode"
-                              value="local"
-                              checked={routerForm.authMode === 'local'}
-                              onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
-                              className="mt-1"
-                            />
-                            <div className="text-xs space-y-0.5">
-                              <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
-                              <p className="text-muted-foreground text-[11px]">
-                                Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
-                              </p>
-                            </div>
-                          </label>
-
-                          <label
-                            className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                              routerForm.authMode === 'radius'
-                                ? 'border-primary bg-primary/5 text-foreground font-medium'
-                                : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="authMode"
-                              value="radius"
-                              checked={routerForm.authMode === 'radius'}
-                              onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
-                              className="mt-1"
-                            />
-                            <div className="text-xs space-y-0.5">
-                              <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
-                              <p className="text-muted-foreground text-[11px]">
-                                Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
-                              </p>
-                            </div>
-                          </label>
-                        </div>
+                      <div>
+                        <CardTitle>Koneksi Router MikroTik</CardTitle>
+                        <CardDescription>
+                          Konfigurasi kredensial API dan parameter koneksi MikroTik untuk billing & manajemen pelanggan.
+                        </CardDescription>
                       </div>
+                    </div>
+                    {routerSaved && (
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" /> Terhubung
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
 
-                      {/* Credentials Section */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="routerUsername">Username API MikroTik *</Label>
-                          <Input
-                            id="routerUsername"
-                            value={routerForm.username}
-                            onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
-                            placeholder="euginebill_api"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="routerPassword">Password API MikroTik *</Label>
-                          <Input
-                            id="routerPassword"
-                            type="password"
-                            value={routerForm.password}
-                            onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
-                            placeholder="Password API"
-                          />
-                        </div>
-                      </div>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerName">Nama Router / Identitas *</Label>
+                      <Input
+                        id="routerName"
+                        value={routerForm.name}
+                        onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
+                        placeholder="cth: MikroTik-Utama"
+                      />
+                    </div>
 
-                      {/* FreeRADIUS Integration Card — HIDE COMPLETELY UNLESS radiusEnabled && authMode === 'radius' */}
-                      {radiusEnabled && routerForm.authMode === 'radius' && (
-                        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 space-y-2 text-xs">
-                          <div className="font-bold flex items-center gap-2">
-                            <Radio className="w-4 h-4 text-amber-600" />
-                            <span>FreeRADIUS Server Integration</span>
-                          </div>
-                          <p>
-                            RADIUS Secret: <code className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{routerForm.secret}</code>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerIp">
+                        {connectionMethod === 'direct' ? 'Alamat IP (LAN / Publik Static) *' : 'IP VPN Client Tunnel *'}
+                      </Label>
+                      <Input
+                        id="routerIp"
+                        value={routerForm.ipAddress}
+                        onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
+                        placeholder="cth: 10.254.1.2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerApiPort">Port API MikroTik *</Label>
+                      <Input
+                        id="routerApiPort"
+                        type="number"
+                        value={routerForm.port}
+                        onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
+                        placeholder="8728"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerWinboxPort">Port Winbox</Label>
+                      <Input
+                        id="routerWinboxPort"
+                        type="number"
+                        value={routerForm.winboxPort}
+                        onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
+                        placeholder="8291"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerWwwPort">Port WWW / WebFig</Label>
+                      <Input
+                        id="routerWwwPort"
+                        type="number"
+                        value={routerForm.wwwPort}
+                        onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
+                        placeholder="80"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Credentials Section */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerUsername">Username API MikroTik *</Label>
+                      <Input
+                        id="routerUsername"
+                        value={routerForm.username}
+                        onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
+                        placeholder="euginebill_api"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerPassword">Password API MikroTik *</Label>
+                      <Input
+                        id="routerPassword"
+                        type="password"
+                        value={routerForm.password}
+                        onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
+                        placeholder="Password API"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Auth Mode Section */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      Mode Autentikasi Pelanggan *
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                          routerForm.authMode === 'local'
+                            ? 'border-primary bg-primary/5 text-foreground font-medium'
+                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="authMode"
+                          value="local"
+                          checked={routerForm.authMode === 'local'}
+                          onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
+                          className="mt-1"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
+                          <p className="text-muted-foreground text-[11px]">
+                            Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
                           </p>
                         </div>
-                      )}
+                      </label>
+
+                      <label
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                          routerForm.authMode === 'radius'
+                            ? 'border-primary bg-primary/5 text-foreground font-medium'
+                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="authMode"
+                          value="radius"
+                          checked={routerForm.authMode === 'radius'}
+                          onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
+                          className="mt-1"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
+                          <p className="text-muted-foreground text-[11px]">
+                            Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* FreeRADIUS Integration Card — STRICTLY HIDDEN UNLESS radiusEnabled && authMode === 'radius' */}
+                  {radiusEnabled && routerForm.authMode === 'radius' && (
+                    <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 space-y-2 text-xs">
+                      <div className="font-bold flex items-center gap-2">
+                        <Radio className="w-4 h-4 text-amber-600" />
+                        <span>FreeRADIUS Server Integration</span>
+                      </div>
+                      <p>
+                        RADIUS Secret: <code className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{routerForm.secret}</code>
+                      </p>
                     </div>
                   )}
 
@@ -1856,7 +1974,7 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
                     Kembali
                   </Button>
                   <div className="flex items-center gap-2">
@@ -1864,7 +1982,7 @@ export default function UnifiedSetupWizardPage() {
                       {isTestingRouter ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4 text-primary" />}
                       <span>Uji Koneksi API</span>
                     </Button>
-                    <Button onClick={handleSaveRouter} disabled={isSavingRouter}>
+                    <Button onClick={handleSaveRouter} disabled={isSavingRouter} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                       <span>Lanjut ke Sistem Isolir</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
@@ -1872,7 +1990,9 @@ export default function UnifiedSetupWizardPage() {
                 </CardFooter>
               </Card>
             )}
-            {currentStep === 3 && (
+
+            {/* STEP 4: SISTEM ISOLIR */}
+            {currentStep === 4 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2054,10 +2174,10 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(3)}>
                     Kembali
                   </Button>
-                  <Button onClick={handleSaveIsolationSettings} disabled={isSavingIsolation}>
+                  <Button onClick={handleSaveIsolationSettings} disabled={isSavingIsolation} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     {isSavingIsolation ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                     <span>Simpan & Lanjut ke Paket PPPoE</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2066,8 +2186,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 4: KONFIGURASI PAKET PPPOE */}
-            {currentStep === 4 && (
+            {/* STEP 5: KONFIGURASI PAKET PPPOE */}
+            {currentStep === 5 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -2358,10 +2478,10 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(4)}>
                     Kembali
                   </Button>
-                  <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+                  <Button onClick={handleSaveProfile} disabled={isSavingProfile} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     {isSavingProfile ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                     <span>Simpan Paket & Lanjut Ke Pelanggan</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2370,8 +2490,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 5: PELANGGAN TRIAL */}
-            {currentStep === 5 && (
+            {/* STEP 6: PELANGGAN TRIAL */}
+            {currentStep === 6 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2434,20 +2554,20 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(3)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(5)}>
                     Kembali
                   </Button>
-                  <Button onClick={handleSaveCustomer} disabled={isSavingCustomer}>
+                  <Button onClick={handleSaveCustomer} disabled={isSavingCustomer} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     {isSavingCustomer ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                    <span>Buat Akun & Lanjut ke WhatsApp</span>
+                    <span>Buat Akun & Lanjut ke Payment Gateway</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </CardFooter>
               </Card>
             )}
 
-            {/* STEP 6: REKENING BANK & PAYMENT GATEWAY */}
-            {currentStep === 6 && (
+            {/* STEP 7: REKENING BANK & PAYMENT GATEWAY */}
+            {currentStep === 7 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -2458,7 +2578,7 @@ export default function UnifiedSetupWizardPage() {
                       <div>
                         <CardTitle>Rekening Bank & Payment Gateway</CardTitle>
                         <CardDescription>
-                          Integrasi pembayaran otomatis via Midtrans, Tripay, Xendit, atau Transfer Bank Manual.
+                          Integrasi pembayaran otomatis via Midtrans, Tripay, Xendit, QRIN, Duitku, iPaymu, atau Transfer Bank Manual.
                         </CardDescription>
                       </div>
                     </div>
@@ -2534,7 +2654,29 @@ export default function UnifiedSetupWizardPage() {
                       ))}
                     </div>
 
-                    {paymentForm.gatewayProvider !== 'manual' && (
+                    {/* QRIN Mode: Exactly 1 Field Only */}
+                    {paymentForm.gatewayProvider === 'qrin' && (
+                      <div className="space-y-2 pt-2 border border-primary/20 bg-primary/5 p-4 rounded-xl">
+                        <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                          <QrCode className="w-4 h-4" />
+                          <span>Integrasi QRIN (QRIS Dinamis & Otomatis)</span>
+                        </div>
+                        <Label htmlFor="tokenQrin">Token QRIN *</Label>
+                        <Input
+                          id="tokenQrin"
+                          type="password"
+                          value={paymentForm.apiKey}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, apiKey: e.target.value })}
+                          placeholder="Masukkan Token QRIN dari dashboard qrin.web.id"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Dapatkan token integrasi langsung dari dashboard merchant QRIN Anda (qrin.web.id). Tidak memerlukan Merchant Code tambahan.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Other Automated Gateways */}
+                    {paymentForm.gatewayProvider !== 'manual' && paymentForm.gatewayProvider !== 'qrin' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                         <div className="space-y-2">
                           <Label htmlFor="merchantCode">Merchant ID / Code</Label>
@@ -2542,7 +2684,7 @@ export default function UnifiedSetupWizardPage() {
                             id="merchantCode"
                             value={paymentForm.merchantCode}
                             onChange={(e) => setPaymentForm({ ...paymentForm, merchantCode: e.target.value })}
-                            placeholder={paymentForm.gatewayProvider === 'qrin' ? 'QRIN Merchant Code' : 'Kode merchant gateway'}
+                            placeholder="Kode merchant gateway"
                           />
                         </div>
                         <div className="space-y-2">
@@ -2571,18 +2713,18 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(5)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(6)}>
                     Kembali
                   </Button>
                   <div className="flex items-center gap-2">
                     <Button variant="secondary" onClick={() => {
                       if (typeof window !== 'undefined') localStorage.setItem('euginebill_wizard_completed', 'true');
-                      markStepCompleted(6);
+                      markStepCompleted(7);
                       router.push('/admin');
                     }}>
                       <span>Ke Dashboard Admin</span>
                     </Button>
-                    <Button onClick={() => { markStepCompleted(6); setCurrentStep(7); }}>
+                    <Button onClick={() => { markStepCompleted(7); setCurrentStep(8); }} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                       <span>Lanjut ke Bot WhatsApp</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
@@ -2591,8 +2733,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 7: BOT WHATSAPP */}
-            {currentStep === 7 && (
+            {/* STEP 8: BOT WHATSAPP */}
+            {currentStep === 8 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between flex-wrap gap-3">
@@ -2761,7 +2903,7 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(6)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(7)}>
                     Kembali
                   </Button>
                   <div className="flex items-center gap-2">
@@ -2769,7 +2911,7 @@ export default function UnifiedSetupWizardPage() {
                       {waLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4 text-primary" />}
                       <span>Cek Status WA</span>
                     </Button>
-                    <Button onClick={() => { markStepCompleted(7); setCurrentStep(radiusEnabled ? 8 : 9); }}>
+                    <Button onClick={() => { markStepCompleted(8); setCurrentStep(radiusEnabled ? 9 : 10); }} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                       <span>{radiusEnabled ? 'Lanjut ke RADIUS Server' : 'Lanjut ke TR-069 & GenieACS'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
@@ -2778,8 +2920,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 8: RADIUS SERVER */}
-            {currentStep === 8 && (
+            {/* STEP 9: RADIUS SERVER */}
+            {currentStep === 9 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2835,10 +2977,10 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(7)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(8)}>
                     Kembali
                   </Button>
-                  <Button onClick={handleSaveRadius} disabled={isSavingRadius}>
+                  <Button onClick={handleSaveRadius} disabled={isSavingRadius} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     {isSavingRadius ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                     <span>Simpan & Lanjut ke TR-069</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2847,8 +2989,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 9: TR-069 & GENIEACS */}
-            {currentStep === 9 && (
+            {/* STEP 10: TR-069 & GENIEACS */}
+            {currentStep === 10 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2903,10 +3045,10 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(radiusEnabled ? 8 : 7)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(radiusEnabled ? 9 : 8)}>
                     Kembali
                   </Button>
-                  <Button onClick={() => { markStepCompleted(9); setCurrentStep(10); }}>
+                  <Button onClick={() => { markStepCompleted(10); setCurrentStep(11); }} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     <span>Lanjut ke Tim & SPK</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
@@ -2914,8 +3056,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 10: TIM & SPK TEKNISI */}
-            {currentStep === 10 && (
+            {/* STEP 11: TIM & SPK TEKNISI */}
+            {currentStep === 11 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2981,7 +3123,7 @@ export default function UnifiedSetupWizardPage() {
                   <Button variant="outline" onClick={() => setCurrentStep(10)}>
                     Kembali
                   </Button>
-                  <Button onClick={handleSaveTechnician} disabled={isSavingTech}>
+                  <Button onClick={handleSaveTechnician} disabled={isSavingTech} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
                     {isSavingTech ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                     <span>Buat Akun & Lanjut ke Peluncuran</span>
                     <ArrowRight className="w-4 h-4" />
@@ -2990,8 +3132,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 11: PELUNCURAN SISTEM */}
-            {currentStep === 11 && (
+            {/* STEP 12: PELUNCURAN SISTEM */}
+            {currentStep === 12 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -3004,7 +3146,7 @@ export default function UnifiedSetupWizardPage() {
                           Sistem Billing EugineBill Siap Diluncurkan!
                         </CardTitle>
                         <CardDescription>
-                          Semua 11 modul utama infrastruktur jaringan dan operasional ISP telah terkonfigurasi 100%.
+                          Semua 12 modul utama infrastruktur jaringan dan operasional ISP telah terkonfigurasi 100%.
                         </CardDescription>
                       </div>
                     </div>
@@ -3020,11 +3162,12 @@ export default function UnifiedSetupWizardPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-emerald-800 dark:text-emerald-300 leading-relaxed pl-1">
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Akun Superadmin & Database Billing</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Identitas ISP & Footer Login Direct</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Client VPN Tunnel WireGuard / L2TP</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> MikroTik API & Remote ONT NAT Proxy</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Auto-Isolir Firewall & Web Proxy 8080</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Paket Internet PPPoE & Kecepatan</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Pelanggan Percobaan PPPoE</div>
-                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Rekening Bank Transfer & Gateway</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Rekening Bank & Payment Gateway (QRIN)</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Bot WhatsApp Baileys PM2 Service</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> FreeRADIUS Integration Ready</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> TR-069 GenieACS VLAN 4000</div>
@@ -3034,7 +3177,7 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(10)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(11)}>
                     Kembali
                   </Button>
                   <Button
@@ -3044,7 +3187,7 @@ export default function UnifiedSetupWizardPage() {
                       if (typeof window !== 'undefined') {
                         localStorage.setItem('euginebill_wizard_completed', 'true');
                       }
-                      markStepCompleted(11);
+                      markStepCompleted(12);
                       router.push('/admin');
                     }}
                   >

@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.84
+- **Version**: 2.40.85
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,20 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.85: Setup Wizard Dedicated Steps 2 & 3, Dynamic Real VPS IP Injection, Single-Token QRIN)
+
+- **Hard Invariant: Dedicated Step 2 Client VPN & Step 3 Router MikroTik (`src/app/setup/page.tsx`)**:
+  - Step 2 adalah khusus *Client VPN Setup* (WireGuard/L2TP/Direct IP) dengan opsi "Lewati" untuk Direct IP API.
+  - Step 3 adalah khusus *Koneksi Router MikroTik* (API Host, Username, Password, Ports 8728/8291/80, Auth Mode).
+  - Urutan total 13 steps (0 hingga 12) wajib sinkron antara navigation sidebar dan active card render.
+- **Hard Invariant: Dynamic VPS Host Injection in Scripts (`src/app/setup/page.tsx`)**:
+  - Generator skrip RouterOS DILARANG KERAS menggunakan string placeholder seperti `<VPS_IP_ADDRESS>`.
+  - Wajib diinject otomatis dari `window.location.hostname` atau domain `companyForm.baseUrl`.
+- **Hard Invariant: Absolute FreeRADIUS Hiding on Local Auth Mode (`src/app/setup/page.tsx`)**:
+  - Blok kartu FreeRADIUS tersembunyi total jika `routerForm.authMode === 'local'` atau `!radiusEnabled`.
+- **Hard Invariant: Single-Field Token QRIN (`src/app/setup/page.tsx`)**:
+  - Gateway QRIN (`qrin.web.id`) HANYA memerlukan 1 input yaitu `Token QRIN` (`token_qrin`), tanpa `merchantCode` atau `webhookSecret`.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.84: Setup Wizard 100% Parity: Two-Phase Router Flow, Full Isolation Settings, Conditional FreeRADIUS Hiding & QRIN Gateway)
 
