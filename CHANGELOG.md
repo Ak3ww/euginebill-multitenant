@@ -4,6 +4,24 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.84] — 2026-09-25
+
+### Setup Wizard 100% Original Parity: Step 2 Two-Phase VPN Router Flow, Step 3 Full Isolation Settings & ROS 6/7 Generator, Conditional FreeRADIUS Hiding, and Step 6 QRIN Gateway (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Step 2 (Koneksi MikroTik & Client VPN)**: Sebelumnya skrip WireGuard/L2TP langsung tampil di depan sebelum router/client VPN disimpan. Diperlukan alur dua fase 100% paritas dengan `/admin/network/routers`: Tambah Client VPN dulu $\rightarrow$ Simpan ke DB $\rightarrow$ Tampilkan Skrip RouterOS $\rightarrow$ Isi Form Router MikroTik $\rightarrow$ Simpan Router. Untuk mode *Direct IP API*, langsung tampilkan form Kredensial Router tanpa skrip VPN tunnel.
+  2. **Pengsembunyian FreeRADIUS Server Integration**: Kartu integrasi FreeRADIUS wajib tersembunyi (*conditionally hidden*) secara penuh jika mode RADIUS tidak diaktifkan (`authMode === 'local'` atau `radiusEnabled === false`).
+  3. **Step 3 (Sistem Isolir Otomatis)**: Sebelumnya hanya berupa skrip statis minimalis. Wajib diselaraskan 100% dengan `/admin/settings/isolation` dan `/admin/settings/isolation/mikrotik` (Form Pengaturan Umum, IP Pool CIDR `192.168.200.0/24`, IP Server VPS `43.173.14.236`, Rate Limit `64k/64k`, Allow DNS, Allow Payment Gateway, Custom Redirect URL, Notifikasi WA & Email) + Integrated Script Generator terpadu (ROS v7 vs ROS v6, Local vs RADIUS, Whitelist QRIN `qrin.web.id`, Midtrans, Xendit, Duitku, Tripay, iPaymu, GoPay, DANA, OVO, ShopeePay, QRIS Hub).
+  4. **Step 6 (Payment Gateway)**: Menambahkan tab & parameter lengkap untuk **QRIN (`qrin.web.id`)** (Merchant Code, API Key, Webhook Secret) dan Multi-Bank Manager.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Step 2 Two-Phase Flow (`src/app/setup/page.tsx`)**: Mengembangkan handler `handleSaveVpnClient` untuk alokasi IP tunnel dan alur penyimpanan 2 tahap sebelum menampilkan skrip WireGuard/L2TP.
+  2. **Step 3 Complete Isolation System (`src/app/setup/page.tsx`)**: Mengintegrasikan `handleSaveIsolationSettings` yang menyimpan konfigurasi ke `/api/settings/isolation` dan generator skrip multi-versi RouterOS 6 & 7 dengan daftar domain payment gateway paling lengkap.
+  3. **Step 6 QRIN Integration (`src/app/setup/page.tsx`)**: Menambahkan QRIN ke daftar switcher provider gateway otomatis dan menyimpan Webhook Secret signature.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.83] — 2026-09-25
 
 ### Setup Wizard Multi-Bank Account Manager, Live WhatsApp Bot Provider Monitor, and Standard TR-069 Script (`src/app/setup/page.tsx`)

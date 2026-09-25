@@ -189,6 +189,9 @@ export default function UnifiedSetupWizardPage() {
   const [connectionMethod, setConnectionMethod] = useState<'wireguard' | 'l2tp' | 'direct'>('wireguard');
   const [vpnClients, setVpnClients] = useState<any[]>([]);
   const [useVpnClient, setUseVpnClient] = useState(false);
+  const [vpnClientSaved, setVpnClientSaved] = useState(false);
+  const [isSavingVpnClient, setIsSavingVpnClient] = useState(false);
+  const [createdVpnClient, setCreatedVpnClient] = useState<any>(null);
   const [routerForm, setRouterForm] = useState({
     name: 'MikroTik-Utama',
     type: 'mikrotik',
@@ -320,13 +323,17 @@ export default function UnifiedSetupWizardPage() {
   const [restartingWaProvider, setRestartingWaProvider] = useState<string | null>(null);
 
   // Step 6: Payment Gateway State
+  const [bankAccounts, setBankAccounts] = useState<Array<{ bankName: string; accountNumber: string; accountName: string }>>([
+    { bankName: 'BCA', accountNumber: '1234567890', accountName: 'PT Eugine Solusi Internet' }
+  ]);
   const [paymentForm, setPaymentForm] = useState({
     bankName: 'BCA',
-    accountNumber: '',
-    accountName: '',
-    gatewayProvider: 'manual' as 'manual' | 'midtrans' | 'tripay' | 'xendit',
+    accountNumber: '1234567890',
+    accountName: 'PT Eugine Solusi Internet',
+    gatewayProvider: 'manual' as 'manual' | 'midtrans' | 'tripay' | 'xendit' | 'duitku' | 'qrin' | 'ipaymu',
     merchantCode: '',
     apiKey: '',
+    webhookSecret: '',
   });
   const [isSavingPayment, setIsSavingPayment] = useState(false);
 
@@ -609,6 +616,53 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
+  // Step 2: Save VPN Client (Phase 1 for WireGuard / L2TP)
+  const handleSaveVpnClient = async () => {
+    setIsSavingVpnClient(true);
+    try {
+      const res = await fetch('/api/network/vpn-clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: routerForm.name,
+          vpnProtocol: connectionMethod === 'wireguard' ? 'wireguard' : 'l2tp',
+          allowedIps: routerForm.allowedIps || undefined,
+          vpnIp: routerForm.autoAssignIp ? undefined : routerForm.ipAddress,
+          targetPorts: {
+            winbox: parseInt(routerForm.winboxPort) || 8291,
+            api: parseInt(routerForm.port) || 8728,
+            www: parseInt(routerForm.wwwPort) || 80,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.vpnClient) {
+        setCreatedVpnClient(data.vpnClient);
+        setVpnClientSaved(true);
+        if (data.vpnClient.vpnIp) {
+          setRouterForm((prev) => ({
+            ...prev,
+            vpnClientId: data.vpnClient.id,
+            ipAddress: data.vpnClient.vpnIp,
+            nasname: data.vpnClient.vpnIp,
+            username: data.vpnClient.resolvedUsername || prev.username,
+            password: data.vpnClient.resolvedPassword || prev.password,
+            secret: data.vpnClient.nasSecret || prev.secret,
+          }));
+        }
+      } else {
+        // If client exists or fallback
+        setVpnClientSaved(true);
+      }
+    } catch (err) {
+      console.error('Failed to save VPN Client:', err);
+      setVpnClientSaved(true);
+    } finally {
+      setIsSavingVpnClient(false);
+    }
+  };
+
   // Step 2: Test & Save Router
   const handleTestRouter = async () => {
     setIsTestingRouter(true);
@@ -664,6 +718,7 @@ export default function UnifiedSetupWizardPage() {
           secret: routerForm.secret || 'secret123',
           authMode: routerForm.authMode || 'local',
           allowedIps: routerForm.allowedIps || undefined,
+          vpnClientId: routerForm.vpnClientId || undefined,
         }),
       });
 
@@ -682,6 +737,30 @@ export default function UnifiedSetupWizardPage() {
       console.error('Failed to save router:', err);
     } finally {
       setIsSavingRouter(false);
+    }
+  };
+
+  // Step 3: Save Isolation Settings
+  const handleSaveIsolationSettings = async () => {
+    setIsSavingIsolation(true);
+    try {
+      const res = await fetch('/api/settings/isolation', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isolationForm),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        markStepCompleted(3);
+        setCurrentStep(4);
+      } else {
+        throw new Error(data.error || 'Gagal menyimpan sistem isolir');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan sistem isolir');
+    } finally {
+      setIsSavingIsolation(false);
     }
   };
 
@@ -1489,7 +1568,7 @@ export default function UnifiedSetupWizardPage() {
                     <div className="grid grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
                       <button
                         type="button"
-                        onClick={() => setConnectionMethod('wireguard')}
+                        onClick={() => { setConnectionMethod('wireguard'); setVpnClientSaved(false); }}
                         className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           connectionMethod === 'wireguard'
                             ? 'bg-background text-foreground shadow-xs'
@@ -1500,7 +1579,7 @@ export default function UnifiedSetupWizardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setConnectionMethod('l2tp')}
+                        onClick={() => { setConnectionMethod('l2tp'); setVpnClientSaved(false); }}
                         className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                           connectionMethod === 'l2tp'
                             ? 'bg-background text-foreground shadow-xs'
@@ -1539,235 +1618,225 @@ export default function UnifiedSetupWizardPage() {
                       </p>
                     ) : (
                       <p className="text-muted-foreground leading-relaxed">
-                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> di bawah (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk meremote MikroTik menembus NAT ISP. Cukup <strong className="text-foreground">Salin Skrip</strong> di bawah lalu <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
+                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk meremote MikroTik menembus NAT ISP. Tambahkan Client VPN terlebih dahulu, lalu <strong className="text-foreground">Salin Skrip</strong> yang di-generate dan <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
                       </p>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="routerName">Nama Client / Identitas Router *</Label>
-                      <Input
-                        id="routerName"
-                        value={routerForm.name}
-                        onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                        placeholder="cth: MIKROTIK SITE CIBINONG"
-                      />
-                      <p className="text-[11px] text-muted-foreground">Nama pengenal router di dashboard billing.</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="routerIp">
-                          {connectionMethod === 'direct' ? 'Alamat IP (Untuk API) *' : 'IP VPN Client (opsional — untuk VPN)'}
-                        </Label>
-                        {connectionMethod !== 'direct' && (
-                          <label className="flex items-center gap-1.5 text-[11px] font-medium text-primary cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={routerForm.autoAssignIp}
-                              onChange={(e) =>
-                                setRouterForm({
-                                  ...routerForm,
-                                  autoAssignIp: e.target.checked,
-                                  ipAddress: e.target.checked ? '10.254.1.2' : '',
-                                })
-                              }
-                              className="rounded border-border"
-                            />
-                            <span>Auto-Assign IP</span>
-                          </label>
-                        )}
+                  {/* PHASE 1: TAMBAH CLIENT VPN (WireGuard / L2TP) ATAU DIRECT IP */}
+                  {connectionMethod !== 'direct' && !vpnClientSaved && (
+                    <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
+                      <div className="text-xs font-bold uppercase tracking-wider text-primary">
+                        1. Tambah Client VPN ({connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'})
                       </div>
-                      <Input
-                        id="routerIp"
-                        disabled={connectionMethod !== 'direct' && routerForm.autoAssignIp}
-                        value={
-                          connectionMethod !== 'direct' && routerForm.autoAssignIp
-                            ? '10.254.1.2 (Otomatis dialokasikan VPS)'
-                            : routerForm.ipAddress
-                        }
-                        onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
-                        placeholder="cth: 10.254.1.2 (kosong = otomatis)"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {connectionMethod === 'direct'
-                          ? 'Alamat IP LAN / Publik Static untuk meremote Winbox/API port (contoh: 192.168.88.1).'
-                          : 'Kosongkan atau centang Auto-Assign agar sistem mengalokasikan IP VPN secara otomatis.'}
-                      </p>
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="vpnName">Nama Client *</Label>
+                          <Input
+                            id="vpnName"
+                            value={routerForm.name}
+                            onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
+                            placeholder="cth: MIKROTIK SITE CIBINONG"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="allowedIps">IP Lokal / Subnet di Balik NAS (AllowedIPs)</Label>
+                          <Input
+                            id="allowedIps"
+                            value={routerForm.allowedIps}
+                            onChange={(e) => setRouterForm({ ...routerForm, allowedIps: e.target.value })}
+                            placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
+                          />
+                        </div>
+                      </div>
 
-                  {/* AllowedIPs Subnet Option for VPN */}
-                  {connectionMethod !== 'direct' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="allowedIps">IP Lokal / Subnet di Balik NAS (AllowedIPs) (opsional)</Label>
-                      <Input
-                        id="allowedIps"
-                        value={routerForm.allowedIps}
-                        onChange={(e) => setRouterForm({ ...routerForm, allowedIps: e.target.value })}
-                        placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Pisahkan dengan koma. IP/subnet ini akan ditambahkan ke AllowedIPs peer di VPS agar VPS bisa menjangkau jaringan lokal / remote ONT di balik MikroTik.
-                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="winboxPort">Target Winbox Port *</Label>
+                          <Input
+                            id="winboxPort"
+                            type="number"
+                            value={routerForm.winboxPort}
+                            onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
+                            placeholder="8291"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="routerPort">Target API Port *</Label>
+                          <Input
+                            id="routerPort"
+                            type="number"
+                            value={routerForm.port}
+                            onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
+                            placeholder="8728"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="wwwPort">Target WWW Port *</Label>
+                          <Input
+                            id="wwwPort"
+                            type="number"
+                            value={routerForm.wwwPort}
+                            onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
+                            placeholder="80"
+                          />
+                        </div>
+                      </div>
+
+                      <Button onClick={handleSaveVpnClient} disabled={isSavingVpnClient} className="w-full bg-primary text-primary-foreground gap-2">
+                        {isSavingVpnClient ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        <span>Simpan & Buat Client VPN</span>
+                      </Button>
                     </div>
                   )}
 
-                  {/* Ports Section */}
-                  <div className="space-y-2 pt-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                      Port Layanan MikroTik (Target Port MikroTik)
-                    </Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="winboxPort">Winbox Port *</Label>
-                        <Input
-                          id="winboxPort"
-                          type="number"
-                          value={routerForm.winboxPort}
-                          onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
-                          placeholder="8291"
-                        />
-                        <p className="text-[11px] text-muted-foreground">Default: 8291</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="routerPort">API Port *</Label>
-                        <Input
-                          id="routerPort"
-                          type="number"
-                          value={routerForm.port}
-                          onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
-                          placeholder="8728"
-                        />
-                        <p className="text-[11px] text-muted-foreground">Default: 8728</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="wwwPort">WWW Port (Remote Web ONT)</Label>
-                        <Input
-                          id="wwwPort"
-                          type="number"
-                          value={routerForm.wwwPort}
-                          onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
-                          placeholder="80"
-                        />
-                        <p className="text-[11px] text-muted-foreground">Default: 80</p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* PHASE 2: GENERATED SCRIPT & SAVE ROUTER MIKROTIK */}
+                  {(connectionMethod === 'direct' || vpnClientSaved) && (
+                    <div className="space-y-6">
+                      {connectionMethod !== 'direct' && (
+                        <div className="space-y-2 pt-2 border-t border-border">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS Terminal</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                copyToClipboard(generatedScript);
+                                setCopiedScript(true);
+                                setTimeout(() => setCopiedScript(false), 2000);
+                              }}
+                              className="text-xs gap-1.5 h-8"
+                            >
+                              {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{copiedScript ? 'Tersalin!' : 'Salin Skrip'}</span>
+                            </Button>
+                          </div>
+                          <textarea
+                            readOnly
+                            rows={6}
+                            value={generatedScript}
+                            className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                          />
+                        </div>
+                      )}
 
-                  {/* Auth Mode Section */}
-                  <div className="space-y-2 pt-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                      Mode Autentikasi Pelanggan *
-                    </Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                          routerForm.authMode === 'local'
-                            ? 'border-primary bg-primary/5 text-foreground font-medium'
-                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="authMode"
-                          value="local"
-                          checked={routerForm.authMode === 'local'}
-                          onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
-                          className="mt-1"
-                        />
-                        <div className="text-xs space-y-0.5">
-                          <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
-                          <p className="text-muted-foreground text-[11px]">
-                            Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="routerName">Nama Client / Identitas Router *</Label>
+                          <Input
+                            id="routerName"
+                            value={routerForm.name}
+                            onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
+                            placeholder="cth: MIKROTIK SITE CIBINONG"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="routerIp">
+                            {connectionMethod === 'direct' ? 'Alamat IP (LAN / Publik Static) *' : 'IP VPN Client Tunnel *'}
+                          </Label>
+                          <Input
+                            id="routerIp"
+                            disabled={connectionMethod !== 'direct'}
+                            value={routerForm.ipAddress}
+                            onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
+                            placeholder="cth: 10.254.1.2"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Auth Mode Section */}
+                      <div className="space-y-2 pt-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                          Mode Autentikasi Pelanggan *
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <label
+                            className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                              routerForm.authMode === 'local'
+                                ? 'border-primary bg-primary/5 text-foreground font-medium'
+                                : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="authMode"
+                              value="local"
+                              checked={routerForm.authMode === 'local'}
+                              onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
+                              className="mt-1"
+                            />
+                            <div className="text-xs space-y-0.5">
+                              <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
+                              <p className="text-muted-foreground text-[11px]">
+                                Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
+                              </p>
+                            </div>
+                          </label>
+
+                          <label
+                            className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                              routerForm.authMode === 'radius'
+                                ? 'border-primary bg-primary/5 text-foreground font-medium'
+                                : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="authMode"
+                              value="radius"
+                              checked={routerForm.authMode === 'radius'}
+                              onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
+                              className="mt-1"
+                            />
+                            <div className="text-xs space-y-0.5">
+                              <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
+                              <p className="text-muted-foreground text-[11px]">
+                                Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Credentials Section */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="routerUsername">Username API MikroTik *</Label>
+                          <Input
+                            id="routerUsername"
+                            value={routerForm.username}
+                            onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
+                            placeholder="euginebill_api"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="routerPassword">Password API MikroTik *</Label>
+                          <Input
+                            id="routerPassword"
+                            type="password"
+                            value={routerForm.password}
+                            onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
+                            placeholder="Password API"
+                          />
+                        </div>
+                      </div>
+
+                      {/* FreeRADIUS Integration Card — HIDE COMPLETELY UNLESS radiusEnabled && authMode === 'radius' */}
+                      {radiusEnabled && routerForm.authMode === 'radius' && (
+                        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 space-y-2 text-xs">
+                          <div className="font-bold flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-amber-600" />
+                            <span>FreeRADIUS Server Integration</span>
+                          </div>
+                          <p>
+                            RADIUS Secret: <code className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{routerForm.secret}</code>
                           </p>
                         </div>
-                      </label>
-
-                      <label
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                          routerForm.authMode === 'radius'
-                            ? 'border-primary bg-primary/5 text-foreground font-medium'
-                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="authMode"
-                          value="radius"
-                          checked={routerForm.authMode === 'radius'}
-                          onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
-                          className="mt-1"
-                        />
-                        <div className="text-xs space-y-0.5">
-                          <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
-                          <p className="text-muted-foreground text-[11px]">
-                            Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
-                          </p>
-                        </div>
-                      </label>
+                      )}
                     </div>
-                  </div>
-
-                  {/* Credentials Section */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="routerUsername">Username API MikroTik *</Label>
-                      <Input
-                        id="routerUsername"
-                        value={routerForm.username}
-                        onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
-                        placeholder="euginebill_api"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="routerPassword">Password API MikroTik *</Label>
-                      <Input
-                        id="routerPassword"
-                        type="password"
-                        value={routerForm.password}
-                        onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
-                        placeholder="Password API"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="routerSecret">RADIUS Secret *</Label>
-                      <Input
-                        id="routerSecret"
-                        value={routerForm.secret}
-                        onChange={(e) => setRouterForm({ ...routerForm, secret: e.target.value })}
-                        placeholder="secret123"
-                      />
-                    </div>
-                  </div>
-
-                  {/* RouterOS Script Box */}
-                  <div className="space-y-2 pt-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS Terminal</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          copyToClipboard(generatedScript);
-                          setCopiedScript(true);
-                          setTimeout(() => setCopiedScript(false), 2000);
-                        }}
-                        className="text-xs gap-1.5 h-8"
-                      >
-                        {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedScript ? 'Tersalin!' : 'Salin Skrip'}</span>
-                      </Button>
-                    </div>
-                    <textarea
-                      readOnly
-                      rows={6}
-                      value={generatedScript}
-                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
-                    />
-                  </div>
+                  )}
 
                   {/* Test Result Box */}
                   {testResult && (
@@ -1803,8 +1872,6 @@ export default function UnifiedSetupWizardPage() {
                 </CardFooter>
               </Card>
             )}
-
-            {/* STEP 3: SISTEM ISOLIR OTOMATIS */}
             {currentStep === 3 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
@@ -1813,55 +1880,176 @@ export default function UnifiedSetupWizardPage() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <CardTitle>Sistem Isolir Otomatis (Firewall & Web Proxy)</CardTitle>
+                      <CardTitle>Pengaturan Sistem Isolasi Pelanggan</CardTitle>
                       <CardDescription>
-                        Konfigurasi aturan firewall MikroTik untuk pengisoliran otomatis pelanggan yang belum membayar tagihan.
+                        Konfigurasi aturan pemblokiran otomatis, IP pool isolir, rate limit, dan whitelist payment gateway.
                       </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                  <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-foreground uppercase tracking-wider">
-                        Fitur Otomatisasi Isolir EugineBill
-                      </div>
-                      <Badge variant="outline" className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Standar RouterOS
-                      </Badge>
+                  {/* General Isolation Settings Form */}
+                  <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      1. Pengaturan Umum & Jaringan Isolir
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Sistem EugineBill secara otomatis memasukkan IP / akun pelanggan terisolir ke dalam PPP Profile <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-foreground">ISOLIR</code> atau Address List <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-foreground">ISOLIR_LIST</code> di MikroTik. Lalu lintas HTTP (Port 80) akan dialihkan ke Web Proxy Port 8080 untuk menampilkan portal pemberitahuan isolir.
-                    </p>
+
+                    <div className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
+                      <div>
+                        <Label className="text-xs font-bold text-foreground">Aktifkan Auto Isolasi</Label>
+                        <p className="text-[11px] text-muted-foreground">Isolir otomatis pelanggan yang kadaluwarsa setiap jam.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={isolationForm.isolationEnabled}
+                        onChange={(e) => setIsolationForm({ ...isolationForm, isolationEnabled: e.target.checked })}
+                        className="w-4 h-4 rounded text-primary"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="isoIpPool">IP Pool Isolir (CIDR) *</Label>
+                        <Input
+                          id="isoIpPool"
+                          value={isolationForm.isolationIpPool}
+                          onChange={(e) => setIsolationForm({ ...isolationForm, isolationIpPool: e.target.value })}
+                          placeholder="192.168.200.0/24"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Default: 192.168.200.0/24</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="isoServerIp">IP Server VPS NAT *</Label>
+                        <Input
+                          id="isoServerIp"
+                          value={isolationForm.isolationServerIp}
+                          onChange={(e) => setIsolationForm({ ...isolationForm, isolationServerIp: e.target.value })}
+                          placeholder="43.173.14.236"
+                        />
+                        <p className="text-[11px] text-muted-foreground">IP VPS Billing untuk redirect NAT MikroTik.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="isoRateLimit">Rate Limit (Bandwidth) *</Label>
+                        <Input
+                          id="isoRateLimit"
+                          value={isolationForm.isolationRateLimit}
+                          onChange={(e) => setIsolationForm({ ...isolationForm, isolationRateLimit: e.target.value })}
+                          placeholder="64k/64k"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Upload/Download (cth: 64k/64k, 128k/128k)</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
+                        <div>
+                          <Label className="text-xs font-bold text-foreground">Izinkan Akses DNS</Label>
+                          <p className="text-[11px] text-muted-foreground">Dibutuhkan untuk resolve domain payment gateway.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isolationForm.isolationAllowDns}
+                          onChange={(e) => setIsolationForm({ ...isolationForm, isolationAllowDns: e.target.checked })}
+                          className="w-4 h-4 rounded text-primary"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
+                        <div>
+                          <Label className="text-xs font-bold text-foreground">Izinkan Payment Gateway</Label>
+                          <p className="text-[11px] text-muted-foreground">Pelanggan terisolir dapat melakukan bayar mandiri.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isolationForm.isolationAllowPayment}
+                          onChange={(e) => setIsolationForm({ ...isolationForm, isolationAllowPayment: e.target.checked })}
+                          className="w-4 h-4 rounded text-primary"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Integrated RouterOS Script Generator Section */}
+                  <div className="space-y-4 pt-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold text-foreground">Skrip Setup Isolir RouterOS Terminal</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const script = `# ========================================================\n# SKRIP SISTEM ISOLIR OTOMATIS EUGINEBILL\n# Target Router: ${routerForm.name} (${routerForm.ipAddress})\n# ========================================================\n\n# 1. PPP Profile Isolir (Kecepatan 128k/128k)\n:if ([:len [/ppp profile find name="ISOLIR"]] = 0) do={\n    /ppp profile add name="ISOLIR" rate-limit="128k/128k" comment="Profile Pelanggan Terisolir EugineBill"\n}\n\n# 2. Web Proxy Halaman Isolir (Port 8080)\n/ip proxy set enabled=yes port=8080 max-cache-size=none\n:do { /ip proxy access add action=allow dst-host="*billing*" comment="Allow Billing Access" } on-error={}\n:do { /ip proxy access add action=allow dst-host="*euginebill*" comment="Allow EugineBill Access" } on-error={}\n\n# 3. Address List & Redirect NAT Web Proxy 8080\n/ip firewall address-list add list=ISOLIR_LIST address=10.0.0.0/8 comment="Isolir Subnet Pool" disabled=yes\n:do { /ip firewall nat add chain=dstnat action=redirect to-ports=8080 src-address-list=ISOLIR_LIST protocol=tcp dst-port=80 comment="EugineBill Isolir HTTP Redirect" place-before=0 } on-error={}\n\n# 4. Firewall Filter Traffic Isolir\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=udp comment="Allow DNS for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=tcp comment="Allow DNS TCP for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=drop src-address-list=ISOLIR_LIST comment="Drop Non-DNS Traffic for Isolated Users" place-before=1 } on-error={}\n\n# ========================================================\n# SKRIP ISOLIR SELESAI! Tempel di Terminal Winbox Anda.\n# ========================================================`;
-                          copyToClipboard(script);
-                          setCopiedIsolirScript(true);
-                          setTimeout(() => setCopiedIsolirScript(false), 2000);
-                        }}
-                        className="text-xs gap-1.5 h-8"
-                      >
-                        {copiedIsolirScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedIsolirScript ? 'Tersalin!' : 'Salin Skrip Isolir'}</span>
-                      </Button>
+                      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                        2. Skrip Generator RouterOS MikroTik
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setIsolationRosVersion('ros7')}
+                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                              isolationRosVersion === 'ros7' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                            }`}
+                          >
+                            ROS v7
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsolationRosVersion('ros6')}
+                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                              isolationRosVersion === 'ros6' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                            }`}
+                          >
+                            ROS v6
+                          </button>
+                        </div>
+                        <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setIsolationAuthMode('local')}
+                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                              isolationAuthMode === 'local' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                            }`}
+                          >
+                            Local Auth
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsolationAuthMode('radius')}
+                            className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                              isolationAuthMode === 'radius' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                            }`}
+                          >
+                            RADIUS Mode
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <textarea
-                      readOnly
-                      rows={6}
-                      value={`# ========================================================\n# SKRIP SISTEM ISOLIR OTOMATIS EUGINEBILL\n# Target Router: ${routerForm.name} (${routerForm.ipAddress})\n# ========================================================\n\n# 1. PPP Profile Isolir (Kecepatan 128k/128k)\n:if ([:len [/ppp profile find name="ISOLIR"]] = 0) do={\n    /ppp profile add name="ISOLIR" rate-limit="128k/128k" comment="Profile Pelanggan Terisolir EugineBill"\n}\n\n# 2. Web Proxy Halaman Isolir (Port 8080)\n/ip proxy set enabled=yes port=8080 max-cache-size=none\n:do { /ip proxy access add action=allow dst-host="*billing*" comment="Allow Billing Access" } on-error={}\n:do { /ip proxy access add action=allow dst-host="*euginebill*" comment="Allow EugineBill Access" } on-error={}\n\n# 3. Address List & Redirect NAT Web Proxy 8080\n/ip firewall address-list add list=ISOLIR_LIST address=10.0.0.0/8 comment="Isolir Subnet Pool" disabled=yes\n:do { /ip firewall nat add chain=dstnat action=redirect to-ports=8080 src-address-list=ISOLIR_LIST protocol=tcp dst-port=80 comment="EugineBill Isolir HTTP Redirect" place-before=0 } on-error={}\n\n# 4. Firewall Filter Traffic Isolir\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=udp comment="Allow DNS for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=tcp comment="Allow DNS TCP for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=drop src-address-list=ISOLIR_LIST comment="Drop Non-DNS Traffic for Isolated Users" place-before=1 } on-error={}\n\n# ========================================================\n# SKRIP ISOLIR SELESAI! Tempel di Terminal Winbox Anda.\n# ========================================================`}
-                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
-                    />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-bold text-foreground">
+                          Skrip Otomatis Berdasarkan Pengaturan Anda (ROS Version: {isolationRosVersion.toUpperCase()})
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const fullScript = `# ========================================================\n# EUGINEBILL ISOLIR SCRIPT (${isolationRosVersion.toUpperCase()} - ${isolationAuthMode.toUpperCase()})\n# Target VPS: ${isolationForm.isolationServerIp}\n# ========================================================\n\n/ip pool\nadd name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool Isolir"\n\n/ppp profile\nadd name=isolir local-address=192.168.200.1 remote-address=pool-isolir address-list=isolir rate-limit=${isolationForm.isolationRateLimit} comment="EugineBill - Profile Isolir"\n\n/ip firewall address-list\nadd list=payment-gateways address=api.midtrans.com comment="Midtrans API"\nadd list=payment-gateways address=app.midtrans.com comment="Midtrans Snap"\nadd list=payment-gateways address=api.xendit.co comment="Xendit API"\nadd list=payment-gateways address=checkout.xendit.co comment="Xendit Checkout"\nadd list=payment-gateways address=passport.duitku.com comment="Duitku API"\nadd list=payment-gateways address=tripay.co.id comment="Tripay"\nadd list=payment-gateways address=qrin.web.id comment="QRIN Web Gateway"\nadd list=payment-gateways address=api.qrin.web.id comment="QRIN API Gateway"\nadd list=payment-gateways address=api.dana.id comment="DANA API"\nadd list=payment-gateways address=gopay.co.id comment="GoPay"\nadd list=payment-gateways address=qris.id comment="QRIS Hub"\n\n/ip firewall filter\nadd chain=forward src-address-list=isolir connection-state=established,related action=accept comment="Allow Established Isolir"\nadd chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="Allow DNS Isolir"\nadd chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="Allow DNS TCP Isolir"\nadd chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="Allow Billing Server Access"\nadd chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="Allow Payment Gateways"\nadd chain=forward src-address-list=isolir action=drop comment="Drop Other Internet Traffic Isolir"\n\n/ip firewall nat\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="Redirect HTTP to Billing Landing Page"\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="Redirect HTTPS to Billing Landing Page"\n`;
+                            copyToClipboard(fullScript);
+                            setCopiedIsolirScript(true);
+                            setTimeout(() => setCopiedIsolirScript(false), 2000);
+                          }}
+                          className="text-xs gap-1.5 h-8"
+                        >
+                          {copiedIsolirScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedIsolirScript ? 'Tersalin!' : 'Salin Seluruh Script'}</span>
+                        </Button>
+                      </div>
+                      <textarea
+                        readOnly
+                        rows={8}
+                        value={`# ========================================================\n# EUGINEBILL ISOLIR SCRIPT (${isolationRosVersion.toUpperCase()} - ${isolationAuthMode.toUpperCase()})\n# Target VPS: ${isolationForm.isolationServerIp}\n# ========================================================\n\n/ip pool\nadd name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool Isolir"\n\n/ppp profile\nadd name=isolir local-address=192.168.200.1 remote-address=pool-isolir address-list=isolir rate-limit=${isolationForm.isolationRateLimit} comment="EugineBill - Profile Isolir"\n\n/ip firewall address-list\nadd list=payment-gateways address=api.midtrans.com comment="Midtrans API"\nadd list=payment-gateways address=app.midtrans.com comment="Midtrans Snap"\nadd list=payment-gateways address=api.xendit.co comment="Xendit API"\nadd list=payment-gateways address=checkout.xendit.co comment="Xendit Checkout"\nadd list=payment-gateways address=passport.duitku.com comment="Duitku API"\nadd list=payment-gateways address=tripay.co.id comment="Tripay"\nadd list=payment-gateways address=qrin.web.id comment="QRIN Web Gateway"\nadd list=payment-gateways address=api.qrin.web.id comment="QRIN API Gateway"\nadd list=payment-gateways address=api.dana.id comment="DANA API"\nadd list=payment-gateways address=gopay.co.id comment="GoPay"\nadd list=payment-gateways address=qris.id comment="QRIS Hub"\n\n/ip firewall filter\nadd chain=forward src-address-list=isolir connection-state=established,related action=accept comment="Allow Established Isolir"\nadd chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="Allow DNS Isolir"\nadd chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="Allow DNS TCP Isolir"\nadd chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="Allow Billing Server Access"\nadd chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="Allow Payment Gateways"\nadd chain=forward src-address-list=isolir action=drop comment="Drop Other Internet Traffic Isolir"\n\n/ip firewall nat\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="Redirect HTTP to Billing Landing Page"\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="Redirect HTTPS to Billing Landing Page"\n`}
+                        className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </CardContent>
 
@@ -1869,8 +2057,9 @@ export default function UnifiedSetupWizardPage() {
                   <Button variant="outline" onClick={() => setCurrentStep(2)}>
                     Kembali
                   </Button>
-                  <Button onClick={() => { markStepCompleted(3); setCurrentStep(4); }}>
-                    <span>Lanjut ke Paket PPPoE</span>
+                  <Button onClick={handleSaveIsolationSettings} disabled={isSavingIsolation}>
+                    {isSavingIsolation ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Simpan & Lanjut ke Paket PPPoE</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </CardFooter>
@@ -2329,7 +2518,7 @@ export default function UnifiedSetupWizardPage() {
                     </h4>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-muted p-1 rounded-xl">
-                      {(['manual', 'midtrans', 'tripay', 'xendit'] as const).map((provider) => (
+                      {(['manual', 'midtrans', 'tripay', 'xendit', 'duitku', 'qrin', 'ipaymu'] as const).map((provider) => (
                         <button
                           key={provider}
                           type="button"
@@ -2340,20 +2529,20 @@ export default function UnifiedSetupWizardPage() {
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
-                          {provider === 'manual' ? 'Transfer Bank' : provider}
+                          {provider === 'manual' ? 'Transfer Bank' : provider === 'qrin' ? 'QRIN (qrin.web.id)' : provider}
                         </button>
                       ))}
                     </div>
 
                     {paymentForm.gatewayProvider !== 'manual' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                         <div className="space-y-2">
                           <Label htmlFor="merchantCode">Merchant ID / Code</Label>
                           <Input
                             id="merchantCode"
                             value={paymentForm.merchantCode}
                             onChange={(e) => setPaymentForm({ ...paymentForm, merchantCode: e.target.value })}
-                            placeholder="Kode merchant gateway"
+                            placeholder={paymentForm.gatewayProvider === 'qrin' ? 'QRIN Merchant Code' : 'Kode merchant gateway'}
                           />
                         </div>
                         <div className="space-y-2">
@@ -2364,6 +2553,16 @@ export default function UnifiedSetupWizardPage() {
                             value={paymentForm.apiKey}
                             onChange={(e) => setPaymentForm({ ...paymentForm, apiKey: e.target.value })}
                             placeholder="API Key gateway"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="webhookSecret">Webhook Secret (opsional)</Label>
+                          <Input
+                            id="webhookSecret"
+                            type="password"
+                            value={paymentForm.webhookSecret}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, webhookSecret: e.target.value })}
+                            placeholder="Secret signature callback"
                           />
                         </div>
                       </div>

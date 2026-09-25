@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.83
+- **Version**: 2.40.84
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,17 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.84: Setup Wizard 100% Parity: Two-Phase Router Flow, Full Isolation Settings, Conditional FreeRADIUS Hiding & QRIN Gateway)
+
+- **Hard Invariant: Two-Phase Router Setup Flow (`src/app/setup/page.tsx`)**:
+  - Step 2 Setup Wizard WAJIB menerapkan alur dua fase untuk VPN Tunnel (WireGuard/L2TP): Tambah Client VPN dulu $\rightarrow$ Simpan ke DB (`/api/network/vpn-clients`) $\rightarrow$ Tampilkan Skrip RouterOS $\rightarrow$ Isi Form Router MikroTik $\rightarrow$ Simpan Router (`/api/network/routers`). Untuk Direct IP API, langsung tampilkan form Kredensial Router tanpa generator skrip VPN.
+- **Hard Invariant: Conditional FreeRADIUS Server Hiding (`src/app/setup/page.tsx`)**:
+  - Kartu *FreeRADIUS Server Integration* WAJIB tersembunyi sepenuhnya jika mode RADIUS di-uncheck / nonaktif (`authMode === 'local'` atau `radiusEnabled === false`).
+- **Hard Invariant: Complete Isolation System & ROS 6/7 Generator (`src/app/setup/page.tsx`)**:
+  - Step 3 Setup Wizard WAJIB menyajikan Form Pengaturan Isolasi Lengkap (IP Pool CIDR, IP Server VPS NAT, Rate Limit, Allow DNS, Allow Payment, Custom Redirect URL, WA & Email Notifications) + Integrated RouterOS Script Generator terpadu (ROS v7 vs ROS v6, Local vs RADIUS, Whitelist QRIN `qrin.web.id`, Midtrans, Xendit, Duitku, Tripay, iPaymu, GoPay, DANA, OVO, ShopeePay, QRIS Hub).
+- **Hard Invariant: QRIN Payment Gateway & Multi-Bank Manager (`src/app/setup/page.tsx`)**:
+  - Step 6 Setup Wizard WAJIB menyajikan tab & parameter lengkap **QRIN (`qrin.web.id`)** (Merchant Code, API Key, Webhook Secret) dan Multi-Bank Manager.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.83: Multi-Bank Manager, Live WA Bot Monitor Grid & Standard TR-069 Script)
 
