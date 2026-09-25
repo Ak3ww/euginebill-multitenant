@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.56
+- **Version**: 2.40.57
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,13 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.56: Fix Prisma Query Filter for Orphaned OLT Clean-Up)
+### Recent Patch Log (September 25, 2026 — v2.40.57: Global lastSeenAt Purge Engine for oltOnuStatus)
+
+- **Hard Invariant: Timestamp-Based Global Purge (`scripts/olt-full-refresh.ts`)**:
+  - `runStartTime` mencatat timestamp awal eksekusi script.
+  - Setelah 378 ONT aktif di-upsert (`lastSeenAt = now >= runStartTime`), sistem menghapus seluruh entri `oltOnuStatus` yang `lastSeenAt < runStartTime` atau `null`.
+  - Menggaransi jumlah entri `oltOnuStatus` dan `inventoryAsset` MODEM 100% tepat **378 baris**.
+
 
 - **Hard Invariant: Non-nullable Prisma Filters**:
   - `oltId` pada `oltOnuStatus` bersifat non-nullable required string. Prisma validator menolak `{ oltId: null }` dalam objek filter.

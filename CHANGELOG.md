@@ -4,7 +4,25 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.57] — 2026-09-25
+### Global `lastSeenAt` Purge Engine untuk `oltOnuStatus` (Guaranteed 378 ONTs)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Meskipun `inventoryAsset` MODEM telah sukses 100% bersih di **378 unit**, `oltOnuStatus` masih mencatat 758 baris.
+     - Cause: Baris usang dari run terdahulu atau format OID lama tetap tersimpan di tabel `oltOnuStatus` karena hanya di-check berdasarkan per-OLT valid key.
+  2. Perlu mekanisme pembersihan berbasis timestamp run (`runStartTime`).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Timestamp-Based Purge (`scripts/olt-full-refresh.ts`)**:
+     - Menandai waktu mulai eksekusi (`runStartTime`). Seluruh 378 ONT aktif di-upsert dengan `lastSeenAt = now` (>= `runStartTime`).
+     - Setelah upsert selesai, sistem mengeksekusi `deleteMany` untuk seluruh entri `oltOnuStatus` yang `lastSeenAt < runStartTime` atau `null`.
+     - Hasil: Menggaransi `oltOnuStatus` dan `inventoryAsset` MODEM 100% tepat **378 baris**.
+
+- **Files**:
+  - Modified: `scripts/olt-full-refresh.ts`
+
 ## [2.40.56] — 2026-09-25
+
 ### Fix Prisma Query Filter untuk Orphaned oltOnuStatus Clean-Up
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
