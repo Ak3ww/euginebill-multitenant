@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.81
+- **Version**: 2.40.82
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,14 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.82: FTTH ODC/ODP Capacity Validation & Hardware Specs Auto-Detection)
+
+- **Hard Invariant: FTTH ODC/ODP Capacity Validation & Hardware Specs (`src/app/admin/network/odcs/page.tsx`, `src/app/admin/network/odps/page.tsx`, `src/app/api/network/odps/route.ts`)**:
+  - **ODC Over-Capacity Highlight**: Tabel ODC dan mobile card WAJIB menampilkan badge merah `OVER-CAPACITY: X/Y ODPs` dengan ikon `AlertTriangle` apabila `_count.odps > odc.portCount`.
+  - **Hardware Specs Auto-Detection**: ODC & ODP WAJIB menampilkan spesifikasi fisik Box & Splitter PLC secara otomatis berdasarkan `portCount` (cth: `Box ODC 8 Port (Splitter PLC 1:8)` atau `Box ODP 16 Port (Splitter PLC 1:16)`).
+  - **ODC Select Capacity Status**: Dropdown ODC pada modal ODP WAJIB menampilkan status kapasitas ODC (cth: `ODC-01 (4/4 FULL - Over capacity)`), beserta box warning alert jika ODC yang dipilih sudah penuh.
+  - **Server-Side API Guard**: Endpoint `POST` & `PUT` `/api/network/odps` WAJIB melakukan proteksi server-side. Jika `currentCount >= targetOdc.portCount`, request DITOLAK dengan status 400 (kecuali saat mengupdate ODP yang sama).
 
 ### Recent Patch Log (September 25, 2026 — v2.40.81: Inventory Items Overhaul, Packaging Unit Conversions & ONT Sync Engine)
 

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Shield,
+  ShieldAlert,
   Package,
   Users,
   Smartphone,
@@ -807,7 +808,7 @@ export default function UnifiedSetupWizardPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {sessionStatus === 'authenticated' && (
+          {sessionStatus === 'authenticated' ? (
             <Button
               variant="outline"
               size="sm"
@@ -817,12 +818,37 @@ export default function UnifiedSetupWizardPage() {
               <LayoutDashboard className="w-4 h-4 text-primary" />
               <span>Dashboard Admin</span>
             </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => router.push('/admin/login?callbackUrl=/setup')}
+              className="text-xs gap-2 bg-[#002C60] hover:bg-[#1b437c] text-white"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Login Admin</span>
+            </Button>
           )}
         </div>
       </header>
 
       {/* ── MAIN CONTENT (2-COLUMN CONTAINER) ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+        {/* Session Required Warning Banner if initialized but unauthenticated */}
+        {isInitialized && sessionStatus !== 'authenticated' && (
+          <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/90 dark:bg-amber-950/30 dark:border-amber-800 text-amber-950 dark:text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3 flex-1 min-w-[280px]">
+              <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="text-xs sm:text-sm">
+                <span className="font-bold">Login Admin Diperlukan:</span> Sistem sudah terinisialisasi (Progress Setup {progressPercent}%). Silakan login dengan akun superadmin untuk melanjutkan atau menyimpan konfigurasi.
+              </div>
+            </div>
+            <Button onClick={() => router.push('/admin/login?callbackUrl=/setup')} className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5 shrink-0">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Login Admin Sekarang</span>
+            </Button>
+          </div>
+        )}
+
         {/* Soft Notification Banner if system has operational data */}
         {hasExistingData && (
           <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/80 text-blue-950 flex items-start gap-3 shadow-xs">

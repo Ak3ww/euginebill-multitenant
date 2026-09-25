@@ -4,6 +4,35 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.82] — 2026-09-25
+
+### FTTH ODC/ODP Capacity Validation & Auto-Detect Hardware Specs (`src/app/admin/network/odcs/page.tsx`, `src/app/admin/network/odps/page.tsx`, `src/app/api/network/odps/route.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Spacing tabel antara `portCount` dan `ODP count` di ODC page berdempetan ("4 ports5 ODPs").
+  2. Membutuhkan visual warning badge warna merah saat ODC mengalami over-capacity (`_count.odps > odc.portCount`).
+  3. Membutuhkan auto-detection dan tampilan spesifikasi fisik Box & Splitter PLC (4/8/16 port dll.) untuk ODC & ODP.
+  4. Pada modal ODP, dropdown ODC harus menampilkan status kapasitas ODC (cth: "ODC-KPS06-02 (4/4 FULL - Over capacity)"), disertai warning alert jika ODC penuh.
+  5. Pada server-side API ODP (`POST` & `PUT`), perlu validasi proteksi kapasitas ODC agar tidak melebihi port max ODC (kecuali jika mengedit ODP yang sama atau memperluas port ODC).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **ODC Page (`src/app/admin/network/odcs/page.tsx`)**:
+     - Memperbaiki spacing tabel & mobile card menjadi format rapi "4 Ports | 5 ODPs".
+     - Menambahkan red warning badge `OVER-CAPACITY: 5/4 ODPs` dengan ikon `AlertTriangle` jika `_count.odps > odc.portCount`.
+     - Menambahkan fungsi helper `getOdcHardwareSpecs` untuk menampilkan spek otomatis "Box ODC N Port (Splitter PLC 1:N)" pada tabel, mobile card, dan modal.
+  2. **ODP Page (`src/app/admin/network/odps/page.tsx`)**:
+     - Memperbarui interface `ODC` untuk memuat `portCount` dan `_count.odps`.
+     - Menampilkan status kapasitas ODC pada dropdown selection di modal (cth: `ODC-01 (4/4 FULL - Over capacity)` atau `ODC-01 (2/8 Ports)`).
+     - Menambahkan box warning alert jika ODC yang dipilih berstatus FULL.
+     - Menambahkan helper `getOdpHardwareSpecs` untuk menampilkan spek otomatis "Box ODP N Port (Splitter PLC 1:N)" pada tabel, mobile card, dan modal.
+  3. **Server-Side API Protection (`src/app/api/network/odps/route.ts`)**:
+     - Menambahkan validasi kapasitas ODC di handler `POST` dan `PUT`. Jika `currentCount >= targetOdc.portCount`, request ditolak dengan status HTTP 400 dan pesan error informatif (kecuali saat mengupdate ODP yang sudah terhubung pada ODC tersebut).
+
+- **Files**:
+  - Modified: `src/app/admin/network/odcs/page.tsx`
+  - Modified: `src/app/admin/network/odps/page.tsx`
+  - Modified: `src/app/api/network/odps/route.ts`
+
 ## [2.40.81] — 2026-09-25
 
 ### Inventory Items Overhaul, Packaging Unit Conversions & ONT Sync Engine (`src/app/admin/inventory/items/page.tsx`, `src/app/api/admin/inventory/seed-defaults/route.ts`, `scripts/sync-ont-inventory.ts`, `src/lib/olt/ont-detector.ts`, `prisma/schema.prisma`)
