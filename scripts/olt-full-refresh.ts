@@ -264,9 +264,11 @@ async function main() {
   } else {
     // ─── STEP 2: Fetch ONTs langsung dari tiap OLT ─────────────
     console.log('\n=== STEP 2: Fetch ONTs dari OLT ===');
+    const runStartTime = new Date();
     
     let totalDiscovered = 0;
     let totalUpserted = 0;
+
 
     for (const olt of olts) {
       console.log(`\nOLT: ${olt.name} (${olt.vendor || 'unknown'})`);
@@ -383,25 +385,27 @@ async function main() {
       console.log(`  Selesai: ${onts.length} ONT di-upsert. Total di DB: ${total} (online: ${online}, offline: ${offline})`);
     }
 
-    // Clean orphaned oltOnuStatus records whose oltId is not in current olts list
-    const activeOltIds = olts.map(o => o.id);
-    const orphanedDbOnus = await prisma.oltOnuStatus.findMany({
-      where: {
-        oltId: { notIn: activeOltIds },
-      },
-      select: { id: true },
-    });
-
-    if (orphanedDbOnus.length > 0 && !isDryRun) {
-      await prisma.oltOnuStatus.deleteMany({
-        where: { id: { in: orphanedDbOnus.map(o => o.id) } },
+    // Clean stale oltOnuStatus records across DB that were not updated in this run
+    if (!isDryRun) {
+      const activeOltIds = olts.map(o => o.id);
+      const deletedStale = await prisma.oltOnuStatus.deleteMany({
+        where: {
+          OR: [
+            { lastSeenAt: { lt: runStartTime } },
+            { lastSeenAt: null },
+            { oltId: { notIn: activeOltIds } },
+          ],
+        },
       });
-      console.log(`\n  [Clean] Menghapus ${orphanedDbOnus.length} data oltOnuStatus orphan (OLT ID usang/tidak aktif).`);
+      if (deletedStale.count > 0) {
+        console.log(`\n  [Clean Global] Menghapus ${deletedStale.count} data oltOnuStatus usang/phantom dari DB.`);
+      }
     }
 
     console.log(`\nTotal ONT ditemukan dari semua OLT: ${totalDiscovered}`);
     console.log(`Total di-upsert ke oltOnuStatus: ${isDryRun ? '(dry run)' : totalUpserted}`);
   }
+
 
   if (isOltOnly || isDryRun) {
 
