@@ -106,6 +106,7 @@ export default function UnifiedSetupWizardPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       document.documentElement.classList.remove('dark');
+      document.documentElement.dataset.theme = 'light';
       localStorage.setItem('theme', 'light');
     }
   }, []);

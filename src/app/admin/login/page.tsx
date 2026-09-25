@@ -10,12 +10,9 @@ import { useTranslation } from '@/hooks/useTranslation';
 type Step = 'credentials' | 'twoFactor';
 
 if (typeof window !== 'undefined') {
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme === 'dark') {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
+  document.documentElement.classList.remove('dark');
+  document.documentElement.dataset.theme = 'light';
+  localStorage.setItem('theme', 'light');
 }
 
 function LoginForm() {

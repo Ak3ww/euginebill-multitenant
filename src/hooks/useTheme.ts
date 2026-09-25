@@ -18,6 +18,7 @@ export function useTheme() {
     setIsDark(dark);
     const html = document.documentElement;
     html.classList.toggle('dark', dark);
+    html.dataset.theme = dark ? 'dark' : 'light';
     html.style.colorScheme = dark ? 'dark' : 'light';
   }, []);
 
@@ -26,6 +27,7 @@ export function useTheme() {
       const next = !prev;
       const html = document.documentElement;
       html.classList.toggle('dark', next);
+      html.dataset.theme = next ? 'dark' : 'light';
       html.style.colorScheme = next ? 'dark' : 'light';
       localStorage.setItem('theme', next ? 'dark' : 'light');
       return next;

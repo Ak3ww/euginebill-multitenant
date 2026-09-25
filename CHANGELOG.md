@@ -4,6 +4,26 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.75] — 2026-09-25
+
+### Absolute Light Mode First Initialization (`src/app/admin/login/page.tsx`, `src/app/setup/page.tsx`, `src/hooks/useTheme.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman Login Admin (`/admin/login`) dan Setup Wizard (`/setup`) masih memuat tema gelap secara otomatis bagi pengguna yang menyimpan nilai `theme: dark` di `localStorage` browser pada versi terdahulu.
+  2. Sesuai aturan desain global EugineBill, antarmuka admin dan onboarding wajib diinisialisasi dalam **Light Mode First** secara absolut tanpa mengeksekusi *fallback* tema gelap lama.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Strict Light Mode Mount Override (`src/app/admin/login/page.tsx`, `src/app/setup/page.tsx`)**:
+     - Menghapus pengecekan `savedTheme === 'dark'` pada inisialisasi script halaman login admin dan setup wizard.
+     - Memaksa `document.documentElement.classList.remove('dark')`, `document.documentElement.dataset.theme = 'light'`, dan `localStorage.setItem('theme', 'light')` saat komponen di-mount sehingga seluruh pengguna dijamin langsung mendapatkan antarmuka Light SaaS sejak detik pertama.
+  2. **dataset.theme Synchronization (`src/hooks/useTheme.ts`)**:
+     - Menyinkronkan atribut `dataset.theme = 'light' | 'dark'` pada `useTheme` hook agar konsisten di seluruh hierarki DOM.
+
+- **Files**:
+  - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/hooks/useTheme.ts`
+
 ## [2.40.74] — 2026-09-25
 
 ### Dedicated Unified Setup Wizard Layout & Admin Light Mode First Synchronization (`src/app/setup/page.tsx`)
