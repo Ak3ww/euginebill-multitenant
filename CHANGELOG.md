@@ -4,6 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.78] — 2026-09-25
+
+### Dynamic System Readiness Dashboard Progress & Setup Wizard Payment Gateway Step Expansion (`src/app/setup/page.tsx`, `src/app/admin/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Langkah terakhir di Setup Wizard sebelumnya menampilkan pesan prematur *"Konfigurasi Awal Berhasil Diberlakukan!"* meskipun pengguna baru saja masuk ke halaman setup atau belum melengkapi konfigurasi payment gateway/bank.
+  2. Pengguna meminta penghapusan badge text non-standar (`Light SaaS Standard`) pada topbar header `/setup`.
+  3. Pengguna menginginkan adanya indikator kemajuan (*progress bar kesiapan sistem billing*) pada Dashboard Admin (`/admin`) setelah penyelesaian `/setup` (misal 50%-60% selesai) yang secara interaktif menampilkan persentase kesiapan sistem dan daftar modul yang belum terkonfigurasi.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Premature Setup Completion Fix & Payment Gateway Step Expansion (`src/app/setup/page.tsx`)**:
+     - Memperbaiki alur penentuan langkah selesai agar `setCompletedSteps` tidak menandai rute prematur berdasarkan nilai default basis data.
+     - Menghapus badge `Light SaaS Standard` dari header topbar `/setup`.
+     - Mengembangkan Step 6 menjadi **Step Rekening Bank & Payment Gateway** interaktif dengan pilihan Transfer Bank Manual (BCA/Mandiri/BRI/BNI/BSI/CIMB, Nomor Rekening, Pemilik Rekening) dan Gateway Pembayaran Otomatis (Midtrans, Tripay, Xendit).
+  2. **Dynamic System Readiness Progress Banner (`src/app/admin/page.tsx`)**:
+     - Membangun komponen **Banner Kesiapan Konfigurasi Sistem Billing** di bagian atas Dashboard Admin (`/admin`).
+     - Mengalkulasi skor kesiapan sistem secara dinamis (*dynamic readiness score %*) berdasarkan status 6 modul utama: Superadmin DB, Profil Perusahaan, Router MikroTik & VPN, Paket PPPoE, WhatsApp Bot, dan Payment Gateway.
+     - Menampilkan *progress bar* visual dan kisi-kisi *checklist* interaktif (Badge `Terhubung` vs `Lengkapi >`). Setiap item *checklist* dapat diklik untuk langsung menavigasi pengguna ke modul admin terkait atau membuka kembali Setup Wizard.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/admin/page.tsx`
+
 ## [2.40.77] — 2026-09-25
 
 ### Setup Wizard Step 2 & Step 3 Parity with Native Admin Modals (`src/app/setup/page.tsx`)

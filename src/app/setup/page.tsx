@@ -239,6 +239,17 @@ export default function UnifiedSetupWizardPage() {
   const [waProviders, setWaProviders] = useState<any[]>([]);
   const [waConnected, setWaConnected] = useState(false);
 
+  // Step 6: Payment Gateway State
+  const [paymentForm, setPaymentForm] = useState({
+    bankName: 'BCA',
+    accountNumber: '',
+    accountName: '',
+    gatewayProvider: 'manual' as 'manual' | 'midtrans' | 'tripay' | 'xendit',
+    merchantCode: '',
+    apiKey: '',
+  });
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+
   // Check system initialization
   useEffect(() => {
     async function checkSetup() {
@@ -248,7 +259,7 @@ export default function UnifiedSetupWizardPage() {
         const init = Boolean(data.isInitialized);
         setIsInitialized(init);
         setCurrentStep(init ? 1 : 0);
-        if (init) setCompletedSteps((prev) => [...prev, 0]);
+        if (init) setCompletedSteps((prev) => Array.from(new Set([...prev, 0])));
       } catch (err) {
         console.error('Failed checking setup status:', err);
       } finally {
@@ -698,10 +709,6 @@ export default function UnifiedSetupWizardPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Badge variant="secondary" className="text-xs gap-1.5 hidden md:inline-flex">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Light SaaS Standard
-          </Badge>
           {sessionStatus === 'authenticated' && (
             <Button
               variant="outline"
@@ -1839,30 +1846,131 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 6: PAYMENT GATEWAY */}
+            {/* STEP 6: PAYMENT GATEWAY & REKENING BANK */}
             {currentStep === 6 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <CardTitle>Selesai & Payment Gateway</CardTitle>
-                      <CardDescription>
-                        Integrasi pembayaran otomatis via Midtrans, Tripay, Xendit, atau Transfer Bank Manual.
-                      </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Rekening Bank & Payment Gateway</CardTitle>
+                        <CardDescription>
+                          Integrasi pembayaran otomatis via Midtrans, Tripay, Xendit, atau Transfer Bank Manual.
+                        </CardDescription>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                  <div className="p-6 rounded-xl border border-emerald-200 bg-emerald-50/50 text-emerald-950 space-y-2 text-center">
-                    <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto" />
-                    <h3 className="text-lg font-bold">Konfigurasi Awal Berhasil Diberlakukan!</h3>
-                    <p className="text-xs text-emerald-800 max-w-md mx-auto leading-relaxed">
-                      Sistem billing Anda kini siap digunakan untuk mengelola jaringan, mengisolir tunggakan, dan menerbitkan tagihan.
-                    </p>
+                  {/* Section 1: Transfer Bank Manual */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      1. Rekening Bank Transfer (Kwitansi & Invoice Pelanggan)
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="bankName">Nama Bank *</Label>
+                        <select
+                          id="bankName"
+                          value={paymentForm.bankName}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, bankName: e.target.value })}
+                          className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none"
+                        >
+                          <option value="BCA">Bank BCA</option>
+                          <option value="Mandiri">Bank Mandiri</option>
+                          <option value="BRI">Bank BRI</option>
+                          <option value="BNI">Bank BNI</option>
+                          <option value="BSI">Bank Syariah Indonesia (BSI)</option>
+                          <option value="CIMB">Bank CIMB Niaga</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="accountNumber">Nomor Rekening Bank *</Label>
+                        <Input
+                          id="accountNumber"
+                          value={paymentForm.accountNumber}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })}
+                          placeholder="cth: 1234567890"
+                          className="font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="accountName">Nama Pemilik Rekening *</Label>
+                        <Input
+                          id="accountName"
+                          value={paymentForm.accountName}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, accountName: e.target.value })}
+                          placeholder="cth: PT Eugine Solusi Internet"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Automated Payment Gateway Provider */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      2. Payment Gateway Otomatis (Opsional)
+                    </h4>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-muted p-1 rounded-xl">
+                      {(['manual', 'midtrans', 'tripay', 'xendit'] as const).map((provider) => (
+                        <button
+                          key={provider}
+                          type="button"
+                          onClick={() => setPaymentForm({ ...paymentForm, gatewayProvider: provider })}
+                          className={`py-2 px-3 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                            paymentForm.gatewayProvider === provider
+                              ? 'bg-background text-foreground shadow-xs'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {provider === 'manual' ? 'Transfer Bank' : provider}
+                        </button>
+                      ))}
+                    </div>
+
+                    {paymentForm.gatewayProvider !== 'manual' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="merchantCode">Merchant ID / Code</Label>
+                          <Input
+                            id="merchantCode"
+                            value={paymentForm.merchantCode}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, merchantCode: e.target.value })}
+                            placeholder="Kode merchant gateway"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="apiKey">API Key / Secret Key</Label>
+                          <Input
+                            id="apiKey"
+                            type="password"
+                            value={paymentForm.apiKey}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, apiKey: e.target.value })}
+                            placeholder="API Key gateway"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Summary Card Box */}
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 space-y-2 text-xs">
+                    <div className="font-bold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Ringkasan Setup Utama Sistem (Siap Operasional):</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-emerald-800 dark:text-emerald-300 leading-relaxed pl-1">
+                      <li>Akun Login Superadmin & Database Billing Terinisialisasi</li>
+                      <li>Identitas Perusahaan & Profil ISP Tersimpan</li>
+                      <li>Koneksi Router MikroTik & Tunnel VPN Terkonfigurasi</li>
+                      <li>Paket Internet PPPoE & Pelanggan Trial Berhasil Dibuat</li>
+                    </ul>
                   </div>
                 </CardContent>
 
@@ -1877,11 +1985,12 @@ export default function UnifiedSetupWizardPage() {
                       if (typeof window !== 'undefined') {
                         localStorage.setItem('euginebill_wizard_completed', 'true');
                       }
+                      markStepCompleted(6);
                       router.push('/admin');
                     }}
                   >
                     <CheckCircle2 className="w-5 h-5" />
-                    <span>Masuk Ke Dashboard Admin</span>
+                    <span>Selesaikan Setup & Masuk Ke Dashboard Admin</span>
                   </Button>
                 </CardFooter>
               </Card>

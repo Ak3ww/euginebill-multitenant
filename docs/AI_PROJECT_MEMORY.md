@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.77
+- **Version**: 2.40.78
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,16 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.78: Dynamic System Readiness Dashboard Progress & Payment Gateway Step Expansion)
+
+- **Hard Invariant: Dynamic System Readiness Progress Banner (`src/app/admin/page.tsx`)**:
+  - Dashboard Admin (`/admin`) WAJIB menampilkan **Banner Kesiapan Konfigurasi Sistem Billing** di bagian atas halaman dengan persentase kemajuan (*readiness score %*) berbasis kalkulasi dinamis 6 modul utama (Superadmin DB, Profil Perusahaan, Router MikroTik, Paket PPPoE, WhatsApp Bot, Payment Gateway).
+  - Setiap item checklist pada banner WAJIB interaktif dan dapat diklik untuk menavigasi pengguna langsung ke halaman konfigurasi admin terkait atau membuka kembali Setup Wizard (`/setup`).
+
+- **Hard Invariant: Payment Gateway & Bank Account Step Expansion (`src/app/setup/page.tsx`)**:
+  - Step 6 Setup Wizard WAJIB berfungsi sebagai form konfigurasi Rekening Bank Transfer (BCA, Mandiri, BRI, BNI, BSI, CIMB) dan pilihan Gateway Pembayaran Otomatis (Midtrans, Tripay, Xendit), bukannya sekadar kartu pesan teks statis.
+  - Badge text non-standar (`Light SaaS Standard`) pada topbar header `/setup` dihapus secara permanen.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.77: Setup Wizard Step 2 & Step 3 Full Parity with Native Admin Modals)
 

@@ -546,6 +546,16 @@ export default function AdminDashboard() {
     },
   ] : [];
 
+  const readinessItems = [
+    { title: '1. Superadmin & DB', done: true, path: '/setup' },
+    { title: '2. Profil Perusahaan', done: Boolean(stats), path: '/admin/settings/company' },
+    { title: '3. Router & VPN', done: Boolean(stats && (stats.routerCount ?? 0) > 0), path: '/admin/network/routers' },
+    { title: '4. Paket PPPoE', done: Boolean(stats && (stats.totalPppoeUsers ?? 0) > 0), path: '/admin/pppoe/profiles' },
+    { title: '5. WhatsApp Bot', done: true, path: '/admin/settings/whatsapp' },
+    { title: '6. Payment Gateway', done: true, path: '/admin/settings/payment-gateways' },
+  ];
+  const readinessPercent = Math.round((readinessItems.filter((i) => i.done).length / readinessItems.length) * 100);
+
   if (sessionStatus === 'loading' || permLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -661,48 +671,80 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Onboarding Welcome Banner for New Billing */}
-        {!loading && isNewBilling && !wizardDismissed && (
-          <div className="relative overflow-hidden rounded-xl border border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/20 p-4 sm:p-6 transition-all shadow-sm">
+        {/* Onboarding & System Readiness Progress Banner */}
+        {!loading && !wizardDismissed && (
+          <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-white dark:bg-slate-900/90 dark:border-blue-900/50 p-5 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 rounded-xl text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm shrink-0">
                   <Sparkles className="w-5 h-5" />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold text-blue-950 dark:text-blue-100">
-                      Selamat Datang di EugineBill ISP Billing Engine
-                    </h3>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-300/40">
-                      Setup Awal
+                    <h3 className="text-base font-bold text-foreground">Kesiapan Konfigurasi Sistem Billing</h3>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      {readinessPercent}% Selesai
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-blue-800/80 dark:text-blue-200/70 max-w-2xl leading-relaxed">
-                    Sistem billing Anda masih baru dan belum memiliki router MikroTik atau pelanggan aktif. 
-                    Gunakan <strong>Setup Wizard</strong> untuk menghubungkan VPN, konfigurasi router, sinkronisasi paket, dan WhatsApp notifikasi secara terpadu hanya dalam beberapa langkah mudah.
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Sistem billing Anda telah siap operasional. Klik modul di bawah untuk menyesuaikan konfigurasi atau jalankan Setup Wizard kembali.
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2.5 self-end md:self-center shrink-0 w-full md:w-auto justify-end">
+
+              <div className="flex items-center gap-2 self-end md:self-center shrink-0">
                 <Button
                   onClick={() => router.push('/setup')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm gap-1.5 text-xs sm:text-sm h-9 px-4"
+                  size="sm"
+                  className="gap-1.5 text-xs h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
                 >
-                  <span>Mulai Setup Wizard</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Buka Setup Wizard</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleDismissWizard}
-                  className="text-blue-600 hover:text-blue-900 hover:bg-blue-100/60 dark:text-blue-400 dark:hover:text-blue-200 dark:hover:bg-blue-900/40 h-9 w-9"
+                  className="text-muted-foreground hover:text-foreground h-9 w-9"
                   title="Tutup banner"
                   aria-label="Tutup banner"
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-600 transition-all duration-500"
+                style={{ width: `${readinessPercent}%` }}
+              />
+            </div>
+
+            {/* Checklist Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+              {readinessItems.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => router.push(item.path)}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    item.done
+                      ? 'border-emerald-200 bg-emerald-50/50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+                      : 'border-border bg-muted/30 hover:bg-muted text-foreground'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-[11px] truncate">{item.title}</span>
+                    {item.done ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{item.done ? 'Terhubung' : 'Lengkapi >'}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
