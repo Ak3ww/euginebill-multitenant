@@ -547,14 +547,16 @@ export default function AdminDashboard() {
   ] : [];
 
   const readinessItems = [
-    { title: '1. Superadmin & DB', done: true, path: '/setup' },
-    { title: '2. Profil Perusahaan', done: Boolean(stats), path: '/admin/settings/company' },
-    { title: '3. Router & VPN', done: Boolean(stats && (stats.routerCount ?? 0) > 0), path: '/admin/network/routers' },
-    { title: '4. Paket PPPoE', done: Boolean(stats && (stats.totalPppoeUsers ?? 0) > 0), path: '/admin/pppoe/profiles' },
-    { title: '5. WhatsApp Bot', done: true, path: '/admin/settings/whatsapp' },
-    { title: '6. Payment Gateway', done: true, path: '/admin/settings/payment-gateways' },
+    { title: '1. Superadmin & DB', done: Boolean(stats && (stats as any)?.adminConfigured), path: '/setup' },
+    { title: '2. Profil Perusahaan', done: Boolean(stats && (stats as any)?.companyCustomized), path: '/admin/settings/company' },
+    { title: '3. Router & VPN', done: Boolean(stats && (stats?.routerCount ?? 0) > 0), path: '/admin/network/routers' },
+    { title: '4. Paket PPPoE', done: Boolean(stats && ((stats as any)?.profileCount ?? 0) > 0), path: '/admin/pppoe/profiles' },
+    { title: '5. WhatsApp Bot', done: Boolean(stats && (stats as any)?.waConnected), path: '/admin/settings/whatsapp' },
+    { title: '6. Payment Gateway', done: Boolean(stats && (stats as any)?.hasPaymentGateway), path: '/admin/settings/payment-gateways' },
   ];
-  const readinessPercent = Math.round((readinessItems.filter((i) => i.done).length / readinessItems.length) * 100);
+  const readinessPercent = readinessItems.length > 0
+    ? Math.round((readinessItems.filter((i) => i.done).length / readinessItems.length) * 100)
+    : 0;
 
   if (sessionStatus === 'loading' || permLoading) {
     return (

@@ -54,14 +54,46 @@ export async function GET(request: NextRequest) {
     let totalPppoeUsers = 0;
     let customerCount = 0;
     let routerCount = 0;
+    let profileCount = 0;
+    let waConnectedCount = 0;
+    let activeGatewayCount = 0;
+    let adminUserCount = 0;
+    let hasPaymentGateway = false;
+    let companyCustomized = false;
+    let adminConfigured = false;
     try {
-      [totalPppoeUsers, customerCount, routerCount] = await Promise.all([
+      const [pUsers, cUsers, rCount, pCount, waCount, gwCount, aCount] = await Promise.all([
         prisma.pppoeUser.count({
           where: { status: { notIn: ['stop', 'suspended'] } },
         }),
         prisma.pppoeUser.count(),
         prisma.router.count(),
+        prisma.pppoeProfile.count(),
+        prisma.whatsapp_providers.count({ where: { isActive: true } }),
+        prisma.paymentGateway.count({ where: { isActive: true } }),
+        prisma.adminUser.count(),
       ]);
+      totalPppoeUsers = pUsers;
+      customerCount = cUsers;
+      routerCount = rCount;
+      profileCount = pCount;
+      waConnectedCount = waCount;
+      activeGatewayCount = gwCount;
+      adminUserCount = aCount;
+
+      const hasBankAccounts = Boolean(
+        company?.bankAccounts && Array.isArray(company.bankAccounts) && company.bankAccounts.length > 0
+      );
+      hasPaymentGateway = hasBankAccounts || activeGatewayCount > 0;
+
+      const defaultCompanyNames = ['PT Eugine Solusi Internet', 'EugineBill RADIUS', 'EugineBill', ''];
+      companyCustomized = Boolean(
+        company?.name && !defaultCompanyNames.includes(company.name.trim())
+      );
+
+      adminConfigured = Boolean(
+        adminUserCount > 0 && (companyCustomized || routerCount > 0 || profileCount > 0 || customerCount > 0)
+      );
     } catch (e) {
       console.error('[Dashboard] Error counting pppoeUser / routers:', e);
     }
@@ -524,6 +556,11 @@ export async function GET(request: NextRequest) {
         totalPppoeUsers,
         customerCount,
         routerCount,
+        profileCount,
+        waConnected: waConnectedCount > 0,
+        hasPaymentGateway,
+        companyCustomized,
+        adminConfigured,
         activePppoeUsers,
         activeSessionsPPPoE,
         activeSessionsHotspot,

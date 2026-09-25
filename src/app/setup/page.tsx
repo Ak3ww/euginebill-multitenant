@@ -45,6 +45,14 @@ import {
   MapPin,
   Activity,
   LayoutDashboard,
+  Eye,
+  EyeOff,
+  Cpu,
+  Plus,
+  Trash2,
+  Edit,
+  QrCode,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -144,6 +152,7 @@ export default function UnifiedSetupWizardPage() {
   // Post-Initialization Wizard State (Steps 0 - 6)
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [radiusEnabled, setRadiusEnabled] = useState<boolean>(false);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [hasExistingData, setHasExistingData] = useState<boolean>(false);
   const [existingStats, setExistingStats] = useState<{ routerCount: number; userCount: number }>({
@@ -178,18 +187,23 @@ export default function UnifiedSetupWizardPage() {
 
   // Step 2: Router MikroTik State
   const [connectionMethod, setConnectionMethod] = useState<'wireguard' | 'l2tp' | 'direct'>('wireguard');
+  const [vpnClients, setVpnClients] = useState<any[]>([]);
+  const [useVpnClient, setUseVpnClient] = useState(false);
   const [routerForm, setRouterForm] = useState({
     name: 'MikroTik-Utama',
+    type: 'mikrotik',
     ipAddress: '10.254.1.2',
+    nasname: '10.254.1.2',
     autoAssignIp: true,
     allowedIps: '',
     port: '8728',
     winboxPort: '8291',
     wwwPort: '80',
-    username: 'euginebill_api',
+    username: 'api-mikrotik-admin',
     password: 'EB@ApiSecret2026',
     secret: 'secret123',
     authMode: 'local',
+    vpnClientId: '',
   });
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [copiedScript, setCopiedScript] = useState(false);
@@ -198,6 +212,47 @@ export default function UnifiedSetupWizardPage() {
   const [isSavingRouter, setIsSavingRouter] = useState(false);
   const [routerSaved, setRouterSaved] = useState(false);
   const [savedRouterId, setSavedRouterId] = useState<string | null>(null);
+
+  // Step 3: Isolation Settings State
+  const [isolationForm, setIsolationForm] = useState({
+    isolationEnabled: true,
+    isolationIpPool: '192.168.200.0/24',
+    isolationServerIp: '43.173.14.236',
+    isolationRateLimit: '64k/64k',
+    isolationRedirectUrl: '',
+    isolationMessage: 'Akun Anda telah diisolir karena masa berlangganan habis. Silakan lakukan pembayaran untuk mengaktifkan kembali layanan.',
+    isolationAllowDns: true,
+    isolationAllowPayment: true,
+    isolationNotifyWhatsapp: true,
+    isolationNotifyEmail: false,
+    gracePeriodDays: 0,
+  });
+  const [isolationRosVersion, setIsolationRosVersion] = useState<'ros7' | 'ros6'>('ros7');
+  const [isolationAuthMode, setIsolationAuthMode] = useState<'local' | 'radius'>('local');
+  const [isSavingIsolation, setIsSavingIsolation] = useState(false);
+
+  const handleVpnClientChange = (vpnClientId: string) => {
+    if (vpnClientId) {
+      const vpnClient = vpnClients.find((v) => v.id === vpnClientId);
+      if (vpnClient) {
+        const vpnApiTarget = vpnClient.publicPorts?.services?.api?.target?.toString();
+        const vpnWinboxTarget = vpnClient.publicPorts?.services?.winbox?.target?.toString();
+        setRouterForm((prev) => ({
+          ...prev,
+          vpnClientId,
+          ipAddress: vpnClient.vpnIp,
+          nasname: vpnClient.vpnIp,
+          username: vpnClient.resolvedUsername || prev.username,
+          password: vpnClient.resolvedPassword || prev.password,
+          secret: vpnClient.nasSecret || prev.secret,
+          ...(vpnApiTarget ? { port: vpnApiTarget } : {}),
+          ...(vpnWinboxTarget ? { winboxPort: vpnWinboxTarget } : {}),
+        }));
+      }
+    } else {
+      setRouterForm((prev) => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '' }));
+    }
+  };
 
   // Step 3: PPPoE Profile State
   const [profileForm, setProfileForm] = useState({
@@ -244,6 +299,25 @@ export default function UnifiedSetupWizardPage() {
   const [waLoading, setWaLoading] = useState(false);
   const [waProviders, setWaProviders] = useState<any[]>([]);
   const [waConnected, setWaConnected] = useState(false);
+  const [waStatusesMap, setWaStatusesMap] = useState<Record<string, any>>({});
+  const [showWaModal, setShowWaModal] = useState(false);
+  const [editingWaProvider, setEditingWaProvider] = useState<any | null>(null);
+  const [waFormData, setWaFormData] = useState({
+    name: 'Bot Utama Baileys',
+    type: 'baileys',
+    apiUrl: 'internal',
+    apiKey: 'internal',
+    senderNumber: '',
+    priority: 1,
+    description: 'WhatsApp Gateway Baileys Multi-Device',
+  });
+  const [showWaQrModal, setShowWaQrModal] = useState(false);
+  const [waQrProvider, setWaQrProvider] = useState<any | null>(null);
+  const [waQrImage, setWaQrImage] = useState<string | null>(null);
+  const [waQrLoading, setWaQrLoading] = useState(false);
+  const [waQrConnected, setWaQrConnected] = useState(false);
+  const [waQrPollingRef, setWaQrPollingRef] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [restartingWaProvider, setRestartingWaProvider] = useState<string | null>(null);
 
   // Step 6: Payment Gateway State
   const [paymentForm, setPaymentForm] = useState({
@@ -299,7 +373,6 @@ export default function UnifiedSetupWizardPage() {
         const init = Boolean(data.isInitialized);
         setIsInitialized(init);
         setCurrentStep(init ? 1 : 0);
-        if (init) setCompletedSteps((prev) => Array.from(new Set([...prev, 0])));
       } catch (err) {
         console.error('Failed checking setup status:', err);
       } finally {
@@ -316,19 +389,24 @@ export default function UnifiedSetupWizardPage() {
     async function loadData() {
       setIsLoadingData(true);
       try {
-        const [companyRes, routersRes, usersRes, waRes] = await Promise.allSettled([
+        const [companyRes, routersRes, usersRes, waRes, profilesRes] = await Promise.allSettled([
           fetch('/api/company'),
           fetch('/api/network/routers'),
           fetch('/api/pppoe/users'),
           fetch('/api/whatsapp/providers'),
+          fetch('/api/pppoe/profiles'),
         ]);
 
         let rCount = 0;
         let uCount = 0;
+        const newCompletedSteps: number[] = [];
 
         if (companyRes.status === 'fulfilled' && companyRes.value.ok) {
           const cData = await companyRes.value.json();
-          if (cData && cData.name) {
+          if (cData) {
+            setRadiusEnabled(Boolean(cData.radiusEnabled));
+            const defaultNames = ['PT Eugine Solusi Internet', 'EugineBill RADIUS', 'EugineBill', ''];
+            const isCustomizedCompany = Boolean(cData.name && !defaultNames.includes(cData.name.trim()));
             setCompanyForm((prev) => ({
               ...prev,
               name: cData.name || prev.name,
@@ -338,8 +416,10 @@ export default function UnifiedSetupWizardPage() {
               address: cData.address || prev.address,
               email: cData.email || prev.email,
             }));
-            setCompanySaved(true);
-            setCompletedSteps((prev) => [...prev, 1]);
+            if (isCustomizedCompany) {
+              setCompanySaved(true);
+              newCompletedSteps.push(1);
+            }
           }
         }
 
@@ -357,7 +437,15 @@ export default function UnifiedSetupWizardPage() {
               port: String(routers[0].port || routers[0].apiPort || 8728),
             }));
             setRouterSaved(true);
-            setCompletedSteps((prev) => [...prev, 2]);
+            newCompletedSteps.push(2);
+          }
+        }
+
+        if (profilesRes.status === 'fulfilled' && profilesRes.value.ok) {
+          const pData = await profilesRes.value.json();
+          const profiles = pData.profiles || (Array.isArray(pData) ? pData : []);
+          if (profiles.length > 0) {
+            newCompletedSteps.push(4);
           }
         }
 
@@ -365,6 +453,9 @@ export default function UnifiedSetupWizardPage() {
           const uData = await usersRes.value.json();
           const users = uData.users || (Array.isArray(uData) ? uData : []);
           uCount = users.length;
+          if (uCount > 0) {
+            newCompletedSteps.push(5);
+          }
         }
 
         if (waRes.status === 'fulfilled' && waRes.value.ok) {
@@ -373,10 +464,11 @@ export default function UnifiedSetupWizardPage() {
             setWaProviders(wData);
             const active = wData.some((p: any) => p.isActive);
             setWaConnected(active);
-            if (active) setCompletedSteps((prev) => [...prev, 5]);
+            if (active) newCompletedSteps.push(7);
           }
         }
 
+        setCompletedSteps(Array.from(new Set(newCompletedSteps)));
         setExistingStats({ routerCount: rCount, userCount: uCount });
         if (rCount > 0 || uCount > 0) {
           setHasExistingData(true);
@@ -694,23 +786,194 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 7: WhatsApp providers check
-  const handleCheckWa = async () => {
+  // Step 7: WhatsApp provider handlers
+  const fetchWaProvidersList = async () => {
     setWaLoading(true);
     try {
       const res = await fetch('/api/whatsapp/providers');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setWaProviders(data);
-        const active = data.some((p: any) => p.isActive);
+      if (res.ok) {
+        const data = await res.json();
+        const sorted = Array.isArray(data) ? data.sort((a: any, b: any) => (a.priority || 0) - (b.priority || 0)) : [];
+        setWaProviders(sorted);
+        const active = sorted.some((p: any) => p.isActive);
         setWaConnected(active);
         if (active) markStepCompleted(7);
+        fetchWaStatuses(sorted);
       }
     } catch (e) {
-      console.error('Failed loading WA providers:', e);
+      console.error('Failed fetching WA providers:', e);
     } finally {
       setWaLoading(false);
     }
+  };
+
+  const fetchWaStatuses = async (list?: any[]) => {
+    const targetList = list || waProviders;
+    if (!targetList || targetList.length === 0) return;
+    const newStatuses: Record<string, any> = {};
+    await Promise.all(
+      targetList.map(async (provider: any) => {
+        if (['mpwa', 'waha', 'gowa', 'baileys'].includes(provider.type)) {
+          try {
+            const res = await fetch(`/api/whatsapp/providers/${provider.id}/status`);
+            if (res.ok) {
+              newStatuses[provider.id] = await res.json();
+            }
+          } catch (e) {
+            console.error(`Error status for ${provider.name}:`, e);
+          }
+        }
+      })
+    );
+    setWaStatusesMap(prev => ({ ...prev, ...newStatuses }));
+  };
+
+  const handleCheckWa = async () => {
+    fetchWaProvidersList();
+  };
+
+  const handleToggleWaActive = async (id: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/whatsapp/providers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !currentStatus }),
+      });
+      if (res.ok) {
+        fetchWaProvidersList();
+      }
+    } catch (e) {
+      console.error('Error toggling WA provider:', e);
+    }
+  };
+
+  const handleDeleteWaProvider = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus provider WhatsApp ini?')) return;
+    try {
+      const res = await fetch(`/api/whatsapp/providers/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchWaProvidersList();
+      }
+    } catch (e) {
+      console.error('Error deleting WA provider:', e);
+    }
+  };
+
+  const handleSaveWaProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waFormData.name || !waFormData.type || (waFormData.type !== 'baileys' && !waFormData.apiUrl)) {
+      alert('Nama, Jenis Provider, dan API URL (untuk non-baileys) wajib diisi.');
+      return;
+    }
+    try {
+      const url = editingWaProvider ? `/api/whatsapp/providers/${editingWaProvider.id}` : '/api/whatsapp/providers';
+      const method = editingWaProvider ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...waFormData,
+          apiUrl: waFormData.type === 'baileys' ? (waFormData.apiUrl || 'internal') : waFormData.apiUrl,
+          apiKey: waFormData.type === 'baileys' ? (waFormData.apiKey || 'internal') : waFormData.apiKey,
+        }),
+      });
+      if (res.ok) {
+        setShowWaModal(false);
+        setEditingWaProvider(null);
+        fetchWaProvidersList();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Gagal menyimpan WhatsApp provider');
+      }
+    } catch (e) {
+      console.error('Error saving WA provider:', e);
+    }
+  };
+
+  const handleRestartWaSession = async (provider: any) => {
+    if (!confirm(`Sesi WhatsApp ${provider.name} akan di-restart. Lanjutkan?`)) return;
+    setRestartingWaProvider(provider.id);
+    try {
+      const res = await fetch(`/api/whatsapp/providers/${provider.id}/restart`, { method: 'POST' });
+      if (res.ok) {
+        alert('Sesi WhatsApp berhasil di-restart.');
+        fetchWaStatuses();
+        setTimeout(() => handleShowWaQr(provider), 1000);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Gagal restart sesi WhatsApp');
+      }
+    } catch (e) {
+      console.error('Error restarting WA session:', e);
+    } finally {
+      setRestartingWaProvider(null);
+    }
+  };
+
+  const handleShowWaQr = async (provider: any) => {
+    setWaQrProvider(provider);
+    setShowWaQrModal(true);
+    setWaQrLoading(true);
+    setWaQrImage(null);
+    setWaQrConnected(false);
+    if (waQrPollingRef) clearInterval(waQrPollingRef);
+
+    try {
+      const res = await fetch(`/api/whatsapp/providers/${provider.id}/qr`);
+      if (res.ok) {
+        if (provider.type === 'mpwa' || provider.type === 'baileys') {
+          const data = await res.json();
+          if (data.status === 'qrcode' && data.qrcode) {
+            setWaQrImage(data.qrcode);
+            startWaQrPolling(provider);
+          } else if (data.connected || data.status === 'connected') {
+            setWaQrConnected(true);
+          }
+        } else {
+          const blob = await res.blob();
+          setWaQrImage(URL.createObjectURL(blob));
+          startWaQrPolling(provider);
+        }
+      } else if (res.status === 202) {
+        setTimeout(() => handleShowWaQr(provider), 2500);
+      } else if (res.status === 422) {
+        setWaQrConnected(true);
+      }
+    } catch (e) {
+      console.error('Error fetching WA QR:', e);
+    } finally {
+      setWaQrLoading(false);
+    }
+  };
+
+  const startWaQrPolling = (provider: any) => {
+    if (waQrPollingRef) clearInterval(waQrPollingRef);
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/whatsapp/providers/${provider.id}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connected) {
+            clearInterval(interval);
+            setWaQrConnected(true);
+            setWaQrImage(null);
+            fetchWaStatuses();
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 3000);
+    setWaQrPollingRef(interval);
+  };
+
+  const handleCloseWaQrModal = () => {
+    if (waQrPollingRef) clearInterval(waQrPollingRef);
+    setWaQrPollingRef(null);
+    setShowWaQrModal(false);
+    setWaQrImage(null);
+    setWaQrConnected(false);
+    fetchWaStatuses();
   };
 
   // Step 8: Save RADIUS Mode
@@ -730,6 +993,7 @@ export default function UnifiedSetupWizardPage() {
         throw new Error(errData.error || 'Gagal menyimpan mode RADIUS');
       }
 
+      setRadiusEnabled(radiusForm.radiusEnabled);
       markStepCompleted(8);
       setCurrentStep(9);
     } catch (err: any) {
@@ -2132,31 +2396,168 @@ export default function UnifiedSetupWizardPage() {
             {currentStep === 7 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Smartphone className="w-5 h-5" />
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Notifikasi WhatsApp Bot</CardTitle>
+                        <CardDescription>
+                          Kirim otomatis tagihan bulanan, kwitansi pembayaran, dan notifikasi isolir via WhatsApp Gateway.
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle>Notifikasi WhatsApp Bot</CardTitle>
-                      <CardDescription>
-                        Kirim otomatis tagihan bulanan, kwitansi pembayaran, dan notifikasi isolir via WhatsApp Baileys.
-                      </CardDescription>
-                    </div>
+                    <Button size="sm" onClick={() => {
+                      setEditingWaProvider(null);
+                      setWaFormData({
+                        name: 'Bot Utama Baileys',
+                        type: 'baileys',
+                        apiUrl: 'internal',
+                        apiKey: 'internal',
+                        senderNumber: '',
+                        priority: 1,
+                        description: 'WhatsApp Gateway Baileys Multi-Device',
+                      });
+                      setShowWaModal(true);
+                    }} className="text-xs gap-1.5 bg-[#002C60] hover:bg-[#1b437c] text-white">
+                      <Plus className="w-4 h-4" />
+                      <span>Tambah Provider WA</span>
+                    </Button>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-6">
+                  {/* Status Banner */}
                   <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-bold text-foreground">Status Bot WhatsApp Server</div>
+                      <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <Server className="w-4 h-4 text-primary" />
+                        <span>Status Bot WhatsApp Server</span>
+                      </div>
                       <Badge variant={waConnected ? 'default' : 'outline'} className="gap-1">
                         <span className={`w-2 h-2 rounded-full ${waConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                         {waConnected ? 'Terhubung (Ready)' : 'Belum Terhubung'}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Layanan WhatsApp Baileys berjalan di PM2 (<code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">EugineBill-wa</code>). Anda dapat menghubungkan QR Code nomor WhatsApp CS di menu Pengaturan WhatsApp Admin.
+                      Layanan WhatsApp Baileys berjalan di PM2 (<code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">EugineBill-wa</code>). Anda dapat menghubungkan QR Code nomor WhatsApp CS atau menambahkan provider cloud (Fonnte, Wablas, MPWA, WAHA, Gowa, Kirimi.id).
                     </p>
+                  </div>
+
+                  {/* Provider List Grid */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground uppercase tracking-wider">Daftar Provider WhatsApp ({waProviders.length})</Label>
+                      <Button variant="ghost" size="sm" onClick={fetchWaProvidersList} disabled={waLoading} className="text-xs gap-1.5 h-7 text-muted-foreground">
+                        <RefreshCw className={`w-3.5 h-3.5 ${waLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh Status</span>
+                      </Button>
+                    </div>
+
+                    {waProviders.length === 0 ? (
+                      <div className="p-8 text-center rounded-xl border border-dashed border-border bg-muted/20 space-y-3">
+                        <Smartphone className="w-8 h-8 text-muted-foreground mx-auto" />
+                        <p className="text-xs text-muted-foreground">Belum ada WhatsApp Provider. Klik tombol di atas untuk menambah gateway.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {waProviders.map((provider: any) => {
+                          const status = waStatusesMap[provider.id];
+                          const isConnected = status?.connected || status?.status === 'connected';
+
+                          return (
+                            <div key={provider.id} className="p-4 rounded-xl border border-border bg-card space-y-3 shadow-xs hover:border-primary/40 transition-all">
+                              <div className="flex items-start justify-between">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                                    <Badge variant="outline" className="text-[10px] uppercase font-mono bg-primary/5 text-primary border-primary/20">
+                                      {provider.type}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                    {provider.senderNumber ? `No: ${provider.senderNumber}` : provider.apiUrl}
+                                  </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={provider.isActive}
+                                    onChange={() => handleToggleWaActive(provider.id, provider.isActive)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-9 h-5 bg-muted-foreground/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-border text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : provider.isActive ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                                  <span className="text-muted-foreground font-medium text-[11px]">
+                                    {isConnected ? 'Connected' : provider.isActive ? (status?.status || 'Offline') : 'Nonaktif'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  {['baileys', 'mpwa', 'waha', 'gowa'].includes(provider.type) && (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleShowWaQr(provider)}
+                                        className="h-7 px-2 text-[11px] gap-1"
+                                      >
+                                        <QrCode className="w-3 h-3 text-primary" />
+                                        <span>Scan QR</span>
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRestartWaSession(provider)}
+                                        disabled={restartingWaProvider === provider.id}
+                                        className="h-7 px-2 text-[11px] gap-1 text-amber-600 hover:text-amber-700"
+                                      >
+                                        <RefreshCw className={`w-3 h-3 ${restartingWaProvider === provider.id ? 'animate-spin' : ''}`} />
+                                        <span>Restart</span>
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditingWaProvider(provider);
+                                      setWaFormData({
+                                        name: provider.name,
+                                        type: provider.type,
+                                        apiUrl: provider.apiUrl || '',
+                                        apiKey: provider.apiKey || '',
+                                        senderNumber: provider.senderNumber || '',
+                                        priority: provider.priority || 1,
+                                        description: provider.description || '',
+                                      });
+                                      setShowWaModal(true);
+                                    }}
+                                    className="h-7 w-7 p-0"
+                                  >
+                                    <Edit className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteWaProvider(provider.id)}
+                                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
 
@@ -2282,7 +2683,7 @@ export default function UnifiedSetupWizardPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const script = `# ========================================================\n# SKRIP TR-069 GENIEACS ONT MANAGEMENT (VLAN 4000)\n# Interface Uplink OLT: ether5-DISTRIBUSI\n# Gateway Mikrotik: 10.40.10.1/24\n# Pool IP Dynamic ONT: 10.40.10.10 - 10.40.10.254\n# ========================================================\n\n# 1. Interface VLAN 4000 Management ACS\n:do { /interface vlan add name=vlan4000-ACS vlan-id=4000 interface=ether5-DISTRIBUSI comment="VLAN Management ONT TR-069" } on-error={}\n\n# 2. IP Address Gateway MikroTik\n:do { /ip address add address=10.40.10.1/24 interface=vlan4000-ACS comment="Gateway TR-069 ACS Pool" } on-error={}\n\n# 3. IP Pool Dynamic untuk ONT\n:do { /ip pool add name=pool-acs ranges=10.40.10.10-10.40.10.254 comment="Pool IP Dynamic ONT TR-069" } on-error={}\n\n# 4. DHCP Server TR-069 untuk Autoconfig ONT\n:do { /ip dhcp-server network add address=10.40.10.0/24 gateway=10.40.10.1 dns-server=1.1.1.1,1.0.0.1 comment="DHCP Network ACS" } on-error={}\n:do { /ip dhcp-server add name=dhcp-acs interface=vlan4000-ACS address-pool=pool-acs disabled=no comment="DHCP Server ACS" } on-error={}\n\n# ========================================================\n# SELESAI! ONT yang terhubung via VLAN 4000 akan ter-provision otomatis.\n# ========================================================`;
+                          const script = `/interface vlan add comment="VLAN4000-TR069-ACS" interface=bridge-LAN name=vlan4000-tr069 vlan-id=4000\n/ip address add address=10.40.10.1/24 comment="IP-GATEWAY-TR069-ACS" interface=vlan4000-tr069 network=10.40.10.0\n/ip pool add comment="POOL-DHCP-TR069" name=dhcp_pool_tr069 ranges=10.40.10.2-10.40.11.254\n/ip dhcp-server add address-pool=dhcp_pool_tr069 comment="DHCP-SERVER-TR069" disabled=no interface=vlan4000-tr069 name=dhcp-tr069\n/ip dhcp-server network add address=10.40.10.0/24 comment="NET-TR069-ACS" dns-server=1.1.1.1,8.8.8.8 gateway=10.40.10.1`;
                           copyToClipboard(script);
                           setCopiedAcsScript(true);
                           setTimeout(() => setCopiedAcsScript(false), 2000);
@@ -2296,7 +2697,7 @@ export default function UnifiedSetupWizardPage() {
                     <textarea
                       readOnly
                       rows={6}
-                      value={`# ========================================================\n# SKRIP TR-069 GENIEACS ONT MANAGEMENT (VLAN 4000)\n# Interface Uplink OLT: ether5-DISTRIBUSI\n# Gateway Mikrotik: 10.40.10.1/24\n# Pool IP Dynamic ONT: 10.40.10.10 - 10.40.10.254\n# ========================================================\n\n# 1. Interface VLAN 4000 Management ACS\n:do { /interface vlan add name=vlan4000-ACS vlan-id=4000 interface=ether5-DISTRIBUSI comment="VLAN Management ONT TR-069" } on-error={}\n\n# 2. IP Address Gateway MikroTik\n:do { /ip address add address=10.40.10.1/24 interface=vlan4000-ACS comment="Gateway TR-069 ACS Pool" } on-error={}\n\n# 3. IP Pool Dynamic untuk ONT\n:do { /ip pool add name=pool-acs ranges=10.40.10.10-10.40.10.254 comment="Pool IP Dynamic ONT TR-069" } on-error={}\n\n# 4. DHCP Server TR-069 untuk Autoconfig ONT\n:do { /ip dhcp-server network add address=10.40.10.0/24 gateway=10.40.10.1 dns-server=1.1.1.1,1.0.0.1 comment="DHCP Network ACS" } on-error={}\n:do { /ip dhcp-server add name=dhcp-acs interface=vlan4000-ACS address-pool=pool-acs disabled=no comment="DHCP Server ACS" } on-error={}\n\n# ========================================================\n# SELESAI! ONT yang terhubung via VLAN 4000 akan ter-provision otomatis.\n# ========================================================`}
+                      value={`/interface vlan add comment="VLAN4000-TR069-ACS" interface=bridge-LAN name=vlan4000-tr069 vlan-id=4000\n/ip address add address=10.40.10.1/24 comment="IP-GATEWAY-TR069-ACS" interface=vlan4000-tr069 network=10.40.10.0\n/ip pool add comment="POOL-DHCP-TR069" name=dhcp_pool_tr069 ranges=10.40.10.2-10.40.11.254\n/ip dhcp-server add address-pool=dhcp_pool_tr069 comment="DHCP-SERVER-TR069" disabled=no interface=vlan4000-tr069 name=dhcp-tr069\n/ip dhcp-server network add address=10.40.10.0/24 comment="NET-TR069-ACS" dns-server=1.1.1.1,8.8.8.8 gateway=10.40.10.1`}
                       className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
                     />
                   </div>
@@ -2454,8 +2855,172 @@ export default function UnifiedSetupWizardPage() {
                 </CardFooter>
               </Card>
             )}
+      {/* ── MODAL 1: ADD / EDIT WHATSAPP PROVIDER ── */}
+      {showWaModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-card border border-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-base text-foreground">
+                  {editingWaProvider ? 'Edit Provider WhatsApp' : 'Tambah Provider WhatsApp'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWaModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWaProvider} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Nama Provider / Device *</Label>
+                <Input
+                  value={waFormData.name}
+                  onChange={(e) => setWaFormData({ ...waFormData, name: e.target.value })}
+                  placeholder="Bot Utama Baileys"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Jenis Provider *</Label>
+                <select
+                  value={waFormData.type}
+                  onChange={(e) => {
+                    const newType = e.target.value;
+                    const defaultUrl = newType === 'baileys' ? 'internal' : newType === 'fonnte' ? 'https://api.fonnte.com/send' : newType === 'wablas' ? 'https://wa.wablas.com' : newType === 'kirimi' ? 'https://api.kirimi.id' : '';
+                    setWaFormData({
+                      ...waFormData,
+                      type: newType,
+                      apiUrl: defaultUrl || waFormData.apiUrl,
+                      apiKey: newType === 'baileys' ? 'internal' : waFormData.apiKey,
+                    });
+                  }}
+                  className="w-full h-9 text-xs px-3 rounded-md border border-input bg-background text-foreground focus:outline-none"
+                >
+                  <option value="baileys">Baileys (Built-in Local Node.js Service)</option>
+                  <option value="fonnte">Fonnte (Cloud Gateway API)</option>
+                  <option value="wablas">Wablas (Cloud Gateway API)</option>
+                  <option value="mpwa">MPWA (Multi-Device Gateway)</option>
+                  <option value="waha">WAHA (WhatsApp HTTP API)</option>
+                  <option value="gowa">Gowa (Golang WhatsApp Gateway)</option>
+                  <option value="kirimi">Kirimi.id (Cloud Gateway API)</option>
+                </select>
+              </div>
+
+              {waFormData.type !== 'baileys' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">API Base URL *</Label>
+                  <Input
+                    value={waFormData.apiUrl}
+                    onChange={(e) => setWaFormData({ ...waFormData, apiUrl: e.target.value })}
+                    placeholder="https://api.fonnte.com/send"
+                    required
+                  />
+                </div>
+              )}
+
+              {waFormData.type !== 'baileys' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">API Key / Token</Label>
+                  <Input
+                    type="password"
+                    value={waFormData.apiKey}
+                    onChange={(e) => setWaFormData({ ...waFormData, apiKey: e.target.value })}
+                    placeholder="Token API dari provider"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Nomor Pengirim / Device ID</Label>
+                <Input
+                  value={waFormData.senderNumber}
+                  onChange={(e) => setWaFormData({ ...waFormData, senderNumber: e.target.value })}
+                  placeholder="081234567890 atau Device ID"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Prioritas Pengiriman (Angka)</Label>
+                <Input
+                  type="number"
+                  value={waFormData.priority}
+                  onChange={(e) => setWaFormData({ ...waFormData, priority: parseInt(e.target.value) || 1 })}
+                  placeholder="1"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <Button type="button" variant="outline" onClick={() => setShowWaModal(false)}>
+                  Batal
+                </Button>
+                <Button type="submit" className="bg-[#002C60] hover:bg-[#1b437c] text-white">
+                  Simpan Provider
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL 2: QR CODE SCANNER ── */}
+      {showWaQrModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl text-center">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="font-bold text-sm text-foreground">Scan QR Code WhatsApp</h3>
+              <button type="button" onClick={handleCloseWaQrModal} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {waQrConnected ? (
+              <div className="py-6 space-y-3">
+                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto animate-bounce" />
+                <h4 className="font-bold text-base text-emerald-600">WhatsApp Terhubung!</h4>
+                <p className="text-xs text-muted-foreground">
+                  Nomor WhatsApp CS berhasil tersambung ke server EugineBill. Notifikasi tagihan dan kwitansi siap dikirim otomatis.
+                </p>
+                <Button onClick={handleCloseWaQrModal} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white">
+                  Tutup & Lanjutkan
+                </Button>
+              </div>
+            ) : waQrLoading ? (
+              <div className="py-8 space-y-3">
+                <RefreshCw className="w-10 h-10 animate-spin text-primary mx-auto" />
+                <p className="text-xs text-muted-foreground">Menyiapkan QR Code dari Baileys Service...</p>
+              </div>
+            ) : waQrImage ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-white rounded-xl border border-border inline-block shadow-inner">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={waQrImage} alt="QR Code WhatsApp" className="w-56 h-56 mx-auto object-contain" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Buka WhatsApp di HP Anda &gt; Menu Perangkat Tertaut &gt; Scan QR Code di atas.
+                </p>
+                <div className="flex items-center justify-center gap-2 text-[11px] text-amber-600 font-medium">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Menunggu scan (auto-checking)...</span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 space-y-3">
+                <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+                <p className="text-xs text-muted-foreground">Gagal memuat QR Code. Pastikan service PM2 <code className="font-mono">EugineBill-wa</code> aktif.</p>
+                <Button onClick={() => waQrProvider && handleShowWaQr(waQrProvider)} variant="outline" size="sm">
+                  Coba Lagi
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       </main>
     </div>
   );
