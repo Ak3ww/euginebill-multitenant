@@ -4,7 +4,30 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.59] — 2026-09-25
+### Penyempurnaan Hak Akses Role WAREHOUSE & Audit Alur Pasang Baru (PSB) Portal Teknisi
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Staf Gudang (role `WAREHOUSE`) juga tidak boleh melihat atau mengelola menu Dokumen (`documents.*`). Tempat kerja staf gudang murni 100% di menu Inventori & Gudang (`/admin/inventory/*`).
+  2. Memastikan alur Pasang Baru (PSB) di Portal Teknisi (`/technician/work-orders/[id]`) tidak mengharuskan teknisi mengetik manual data yang sudah disiapkan oleh Admin saat pembuatan SPK/User (seperti SN Modem, MAC Address, Nama/GPS ODP).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Dokumen Restriction untuk Role WAREHOUSE (`src/server/auth/permissions.ts`, `prisma/seeds/permissions.ts`)**:
+     - Menghapus `documents.view`, `documents.create`, dan `documents.issue` dari template role `WAREHOUSE`.
+     - Filter otomatis di backend `getUserPermissions()` menyaring seluruh permission bertipe `documents.*`, `dashboard.*`, dan `reports.*` untuk role `WAREHOUSE`.
+     - Staf Gudang HANYA dapat melihat menu Inventoris di sidebar.
+  2. **Audit Alur PSB Portal Teknisi (`src/app/technician/(portal)/work-orders/[id]/page.tsx`)**:
+     - **ODP Dropdown**: Terisi otomatis dari master data ODP (`/admin/network/odps`). Jika Admin sudah menentukan ODP, ODP langsung ter-select dan titik koordinat ODP otomatis terkunci dari master data tanpa perlu pengetikan/penguncian GPS ODP manual oleh teknisi.
+     - **SN & MAC Modem**: Terisi otomatis dari data pre-filled Admin (atau aset modem yang ditautkan ke SPK). Banner hijau memberi tahu teknisi bahwa data ONT sudah terisi dari Admin.
+     - **Input Teknisi di Lapangan**: Teknisi cukup memilih **Port ODP (Grid 1–16)**, memilih **Roll Kabel Dropwire** & meter pemakaian (`dwRoll`), mengunci **GPS Rumah Pelanggan** (via tombol browser GPS), serta mengunggah **Foto Bukti Pemasangan** (Foto Box ODP, Foto Port, Foto Depan Rumah, Foto OPM Redaman, Foto ONT Depan/Belakang, Foto Speedtest).
+
+- **Files**:
+  - Modified: `src/server/auth/permissions.ts`
+  - Modified: `prisma/seeds/permissions.ts`
+  - Modified: `src/app/technician/(portal)/work-orders/[id]/page.tsx`
+
 ## [2.40.58] — 2026-09-25
+
 ### Isoasi Hak Akses Role WAREHOUSE (Staf Gudang) & Perbaikan Manajemen Stok Inventori
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:

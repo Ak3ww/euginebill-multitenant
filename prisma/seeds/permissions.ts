@@ -103,9 +103,6 @@ export const ROLE_TEMPLATES: Record<AdminRole, string[]> = {
     'inventory.manage',
     'inventory.assets',
     'inventory.export',
-    'documents.view',
-    'documents.create',
-    'documents.issue',
     'notifications.view',
   ],
 

@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.58
+- **Version**: 2.40.59
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,17 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.58: WAREHOUSE Role Isolation & Stock Management Access)
+### Recent Patch Log (September 25, 2026 — v2.40.59: Strict WAREHOUSE Scope & Technician PSB Zero-Manual-Typing Workflow)
+
+- **Hard Invariant: Strict WAREHOUSE Scope**:
+  - Role `WAREHOUSE` HANYA memegang `inventory.view`, `inventory.manage`, `inventory.assets`, `inventory.export`, `notifications.view`.
+  - Permission `documents.*`, `dashboard.*`, dan `reports.*` secara otomatis difilter keluar dari role `WAREHOUSE`.
+
+- **Hard Invariant: Technician PSB Zero-Manual-Typing Standard**:
+  - Saat teknisi membuka SPK Pasang Baru (PSB), ODP ter-select otomatis dari master data (`/admin/network/odps`) dan tikor ODP otomatis terkunci dari ODP master data.
+  - SN & MAC modem terisi otomatis dari prefilled data Admin/SPK. Banner hijau mengonfirmasi bahwa data ONT terisi dari Admin.
+  - Teknisi hanya mengklik **Port ODP**, memilih **Roll Kabel Dropwire & meter pemakaian**, mengunci **GPS Rumah Pelanggan** (via browser GPS), dan mengunggah **Foto Bukti Pemasangan**.
+
 
 - **Hard Invariant: WAREHOUSE Role Permission Boundaries**:
   - Role `WAREHOUSE` HANYA boleh memegang hak akses `inventory.view`, `inventory.manage`, `inventory.assets`, `inventory.export`, `documents.*`, `notifications.view`.

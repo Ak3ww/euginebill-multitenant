@@ -43,9 +43,14 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
     perms = await getRolePermissions(user.role);
   }
 
-  // Hard safety constraint: WAREHOUSE role can NEVER access dashboard or reports
+  // Hard safety constraint: WAREHOUSE role can ONLY access inventory & notifications
   if (user.role === 'WAREHOUSE') {
-    perms = perms.filter((k) => k !== 'dashboard.view' && k !== 'reports.view');
+    perms = perms.filter(
+      (k) =>
+        !k.startsWith('dashboard.') &&
+        !k.startsWith('reports.') &&
+        !k.startsWith('documents.')
+    );
   }
 
   return perms;
@@ -58,9 +63,6 @@ export const DEFAULT_ROLE_TEMPLATES: Record<string, string[]> = {
     'inventory.manage',
     'inventory.assets',
     'inventory.export',
-    'documents.view',
-    'documents.create',
-    'documents.issue',
     'notifications.view',
   ],
   FINANCE: [
