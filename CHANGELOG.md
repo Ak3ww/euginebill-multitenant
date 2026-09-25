@@ -4,6 +4,27 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.73] — 2026-09-25
+
+### Strict Standard Shadcn UI Specification Compliance (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`, `src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Setup Wizard (`/setup`) dan komponen UI perlu mematuhi 100% aturan standar Shadcn UI & Lucide React Icons tanpa adanya *custom inline color classes* atau override hardcoded yang berpotensi merusak konsistensi desain sistem.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Strict Shadcn UI Primitives (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
+     - `Input`: Mengimplementasikan spesifikasi murni Shadcn `border border-border bg-background text-foreground shadow-xs placeholder:text-muted-foreground focus-visible:ring-ring`.
+     - `Card`: Mengimplementasikan spesifikasi murni Shadcn `border border-border bg-card text-card-foreground shadow-xs`.
+     - `Button`: Mengimplementasikan spesifikasi murni Shadcn dengan variant `default` (`bg-primary text-primary-foreground hover:bg-primary/90`), `outline`, `secondary`, `ghost`, dan `link`.
+  2. **Clean Standard Setup Wizard Layout (`src/app/setup/page.tsx`)**:
+     - Membangun ulang seluruh tampilan Step 0 Setup Wizard murni menggunakan komponen `<Card>`, `<CardHeader>`, `<CardTitle>`, `<CardDescription>`, `<CardContent>`, `<Label htmlFor="...">`, `<Input id="..." placeholder="..." />`, dan `<Button>` bawaan Shadcn UI tanpa override warna inline statis.
+
+- **Files**:
+  - Modified: `src/components/ui/input.tsx`
+  - Modified: `src/components/ui/card.tsx`
+  - Modified: `src/components/ui/button.tsx`
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.72] — 2026-09-25
 
 ### Clean Light SaaS UI Primitives Refactor & Setup Wizard Input Overhaul (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`, `src/app/setup/page.tsx`)

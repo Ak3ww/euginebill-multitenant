@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.72
+- **Version**: 2.40.73
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,12 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.72: Clean Light SaaS UI Primitives & Setup Wizard Redesign)
+### Recent Patch Log (September 25, 2026 — v2.40.73: Strict Standard Shadcn UI Specification Compliance)
+
+- **Hard Invariant: Standard Shadcn UI Primitives Standard (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
+  - Komponen `Input`, `Card`, dan `Button` WAJIB mengimplementasikan spesifikasi murni Shadcn UI berbasis Tailwind CSS tokens (`bg-background`, `bg-card`, `text-card-foreground`, `border-border`, `bg-primary`, `text-primary-foreground`). DILARANG KERAS menggunakan cyberpunk cyan glow atau override warna inline statis.
+- **Hard Invariant: Clean Standard Setup Layout (`src/app/setup/page.tsx`)**:
+  - Tampilan Setup Wizard wajib dibangun 100% menggunakan komponen standard Shadcn UI (`<Card>`, `<CardHeader>`, `<CardTitle>`, `<CardDescription>`, `<CardContent>`, `<Label htmlFor="...">`, `<Input id="..." placeholder="..." />`, `<Button>`) dan Lucide React icons.
 
 - **Hard Invariant: Solid White Input & Shadcn Primitives (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
   - Komponen `Input` WAJIB menggunakan `bg-white dark:bg-slate-900` padat (100% opacity) dengan warna teks eksplisit `text-slate-900 dark:text-slate-100` dan hairline border `border-slate-300`. DILARANG KERAS menggunakan `bg-background/50` atau border neon cyan pada komponen dasar yang memicu distorsi kotak abu-abu di mode terang.
