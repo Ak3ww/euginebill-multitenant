@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.78
+- **Version**: 2.40.79
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,22 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.79: 13-Step Setup Wizard, Footer Direct Links, & POSTPAID Invoice Due Date Calculation Fix)
+
+- **Hard Invariant: POSTPAID Invoice Due Date & Current Month Billing Scope (`src/server/jobs/voucher-sync.ts`)**:
+  - `generateInvoices()` WAJIB memeriksa apakah pelanggan POSTPAID sudah memiliki tagihan pada bulan berjalan (*current month*).
+  - Jika pelanggan terdaftar di bulan berjalan (PSB Sept) atau belum memiliki tagihan bulan berjalan, tanggal jatuh tempo (`dueDate`) WAJIB berada pada bulan berjalan (cth: Sept 2026), BUKAN melompati ke bulan berikutnya (Oktober 2026).
+  - Tagihan bulan berikutnya (Oktober 2026) HANYA boleh dibuat jika tagihan bulan berjalan (September 2026) SUDAH ADA/LUNAS dan tanggal hari ini telah memasuki rentang `invoiceGenerateDays` menjelang jatuh tempo bulan depan.
+
+- **Hard Invariant: Automated Reconcile Due Date Repair (`src/app/api/admin/invoices/reconcile/route.ts`)**:
+  - Fitur Rekonsiliasi Database Keuangan Admin (`POST /api/admin/invoices/reconcile`) WAJIB menyertakan Seksi 6 untuk mengidentifikasi dan memulihkan tagihan PSB September yang jatuh temponya salah terlempar ke bulan Oktober kembali ke bulan September (`2026-09-05` / `2026-09-06`).
+
+- **Hard Invariant: 13-Step Onboarding Journey (`src/app/setup/page.tsx`)**:
+  - Setup Wizard `/setup` WAJIB menyediakan 13 langkah bertahap (Steps 0–12) secara lengkap yang mencakup Inisialisasi, Identitas & Footer, MikroTik & VPN, Sistem Isolir (Web Proxy 8080), Paket PPPoE, Pelanggan Trial, Payment Gateway & Bank, WhatsApp Bot, RADIUS Mode, TR-069 GenieACS (VLAN 4000), FTTH OLT Management (VSOL 1600GS-ZF/Std), Tim Teknisi, dan Peluncuran Sistem.
+
+- **Hard Invariant: Official Direct Link on Footers (`https://euginemediagroup.com`)**:
+  - Seluruh komponen footer pada portal Admin (`/admin/login`), Customer (`/customer/login`), Teknisi (`/technician/login`), dan Agent (`/agent`) WAJIB merender teks `"Powered by EugineBill"` dengan tag link `<a href="https://euginemediagroup.com" target="_blank">` yang mengarah langsung ke official website.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.78: Dynamic System Readiness Dashboard Progress & Payment Gateway Step Expansion)
 

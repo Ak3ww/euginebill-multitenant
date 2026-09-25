@@ -533,7 +533,19 @@ export default function CustomerLoginPage() {
 
       {/* ── Footer ── */}
       <footer className="relative z-10 text-center py-6 text-xs text-slate-400">
-        <p>{footerText || `© ${new Date().getFullYear()} ${companyName}. Hak Cipta Dilindungi.`}</p>
+        <p>
+          {footerText && footerText.includes('EugineBill') ? (
+            <>
+              {footerText.split('EugineBill')[0]}
+              <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-[#002c60]">
+                EugineBill
+              </a>
+              {footerText.split('EugineBill')[1]}
+            </>
+          ) : (
+            footerText || `© ${new Date().getFullYear()} ${companyName}. Hak Cipta Dilindungi.`
+          )}
+        </p>
       </footer>
 
       {/* ── MODAL LUPA PASSWORD MANDIRI ── */}

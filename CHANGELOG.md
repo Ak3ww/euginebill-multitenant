@@ -4,6 +4,34 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.79] — 2026-09-25
+
+### 13-Step Setup Wizard Overhaul, Footer Official Link Direct, and POSTPAID Invoice Due Date Calculation Fix (`src/app/setup/page.tsx`, `src/server/jobs/voucher-sync.ts`, `src/app/api/admin/invoices/reconcile/route.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Premature October Invoice & Sept PSB Due Date Jump Issue**: Pelanggan PSB bulan September (cth: Euis Holisah Sept 19, Tedyo Sept 13, Pipih Sept 7) secara otomatis dibuatkan tagihan PSB yang tanggal jatuh temponya terlempar ke bulan Oktober (`5/6 Okt 2026`), menyebabkan filter bulan September menjadi kosong dan tagihan Oktober auto-generate prematur padahal belum waktunya.
+  2. **13-Step Onboarding Journey Parity**: Wizard `/setup` harus mendukung 13 langkah penuh (Steps 0–12) dengan parity 100% modal `/admin` (Isolir, PPPoE, Payment Gateway, WA Bot, RADIUS, TR-069 GenieACS, FTTH OLT, Tim Teknisi, Peluncuran).
+  3. **Official Website Link on Login Footers**: Footer `"Powered by EugineBill"` di seluruh portal login (`/admin/login`, `/customer/login`, `/technician/login`, `/agent`) harus berupa link interaktif menuju official website `https://euginemediagroup.com`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Fix POSTPAID Due Date Calculation (`src/server/jobs/voucher-sync.ts`)**:
+     - Memperbaiki kalkulasi `getNextBillingDay` dan penentuan `targetDueDate` pada generator tagihan POSTPAID. Jika pelanggan belum memiliki tagihan pada bulan berjalan (September 2026) atau baru terdaftar PSB di bulan berjalan, tanggal jatuh tempo ditetapkan pada bulan berjalan (September 2026), bukan melompati ke bulan Oktober 2026.
+  2. **Auto-Reconciliation Due Date Repair (`src/app/api/admin/invoices/reconcile/route.ts`)**:
+     - Menambahkan Seksi 6 pada API Rekonsiliasi Keuangan untuk mengidentifikasi dan memulihkan tagihan PSB September yang terlempar ke bulan Oktober back-to-September (`2026-09-05` / `2026-09-06`).
+  3. **13-Step Wizard Overhaul (`src/app/setup/page.tsx`)**:
+     - Memperluas array `ALL_STEPS` menjadi 13 langkah (Step 0–12) lengkap dengan generator skrip RouterOS Isolir, TR-069 VLAN 4000, FTTH OLT VSOL V1600GS-ZF/Std, pendaftaran Akun Teknisi, sertaTurnkey System Readiness Audit.
+  4. **Clickable EugineBill Footer Links**:
+     - Memperbarui komponen footer pada portal Admin, Customer, Teknisi, dan Agent sehingga teks `"Powered by EugineBill"` membungkus `"EugineBill"` dengan tag link `<a href="https://euginemediagroup.com">`.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/server/jobs/voucher-sync.ts`
+  - Modified: `src/app/api/admin/invoices/reconcile/route.ts`
+  - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `src/app/customer/login/page.tsx`
+  - Modified: `src/app/technician/login/page.tsx`
+  - Modified: `src/app/agent/page.tsx`
+
 ## [2.40.78] — 2026-09-25
 
 ### Dynamic System Readiness Dashboard Progress & Setup Wizard Payment Gateway Step Expansion (`src/app/setup/page.tsx`, `src/app/admin/page.tsx`)

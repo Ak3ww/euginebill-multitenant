@@ -1659,15 +1659,14 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
     // Force mode bypasses the date window check (for manual testing).
     // ========================================
 
-    // Helper: calculate the next billingDay occurrence from today
-    const getNextBillingDay = (bd: number): Date => {
+    // Helper: calculate billingDay due date for current vs next month
+    const getThisMonthBillingDay = (bd: number): Date => {
       const thisMonthLastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
       const day = Math.min(bd, thisMonthLastDay);
-      const thisMonthBD = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, 23, 59, 59, 999));
-      if (thisMonthBD.getTime() >= now.getTime()) {
-        return thisMonthBD;
-      }
-      // Next month
+      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, 23, 59, 59, 999));
+    };
+
+    const getNextBillingDay = (bd: number): Date => {
       const nextMonth = now.getUTCMonth() + 1;
       const nextYear = nextMonth > 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
       const nm = nextMonth % 12;
@@ -1684,12 +1683,26 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
         profile: true,
         area: true,
         router: true,
+        invoices: {
+          select: { id: true, invoiceNumber: true, dueDate: true, status: true },
+        },
       },
     });
 
-    // Filter: only users whose next billingDay is within invoiceGenerateDays
+    // Filter POSTPAID users: determine if target invoice is for current month or next month
+    const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const currentMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+
     const postpaidUsers = force ? allPostpaidUsers : allPostpaidUsers.filter(user => {
       const bd = user.billingDay ?? 1;
+      const hasCurrentMonthInvoice = user.invoices.some(inv => inv.dueDate && inv.dueDate >= currentMonthStart && inv.dueDate <= currentMonthEnd && inv.status !== 'CANCELLED');
+
+      // If user has NO invoice for current month, invoice is for current month!
+      if (!hasCurrentMonthInvoice) {
+        return true;
+      }
+
+      // If user already has an invoice for current month, check if next month's billingDay is within invoiceGenerateDays window
       const nextBD = getNextBillingDay(bd);
       const diffMs = nextBD.getTime() - now.getTime();
       const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
@@ -1699,7 +1712,7 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
     if (force) {
       console.log(`[Invoice Generate] Found ${postpaidUsers.length} POSTPAID users (FORCE mode — date window bypassed)`);
     } else {
-      console.log(`[Invoice Generate] Found ${postpaidUsers.length}/${allPostpaidUsers.length} POSTPAID users within ${invoiceGenerateDays}-day window`);
+      console.log(`[Invoice Generate] Found ${postpaidUsers.length}/${allPostpaidUsers.length} POSTPAID users eligible for generation`);
     }
 
     // ========================================
@@ -1778,9 +1791,12 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
         // 🛑 SAFETY GUARD 1: User's expiredAt is already in the future beyond this billing period!
         // If a customer is active and their expiredAt is already past the target due date,
         // it means their subscription is ALREADY PAID for this period! NEVER bill them again!
+        const userInvoices = (user as any).invoices || [];
+        const hasCurrentMonthInvoice = userInvoices.some((inv: any) => inv.dueDate && inv.dueDate >= currentMonthStart && inv.dueDate <= currentMonthEnd && inv.status !== 'CANCELLED');
+
         const targetDueDate = user.subscriptionType === 'PREPAID'
-          ? (user.expiredAt || getNextBillingDay(user.billingDay ?? 1))
-          : getNextBillingDay(user.billingDay ?? 1);
+          ? (user.expiredAt || (hasCurrentMonthInvoice ? getNextBillingDay(user.billingDay ?? 1) : getThisMonthBillingDay(user.billingDay ?? 1)))
+          : (hasCurrentMonthInvoice ? getNextBillingDay(user.billingDay ?? 1) : getThisMonthBillingDay(user.billingDay ?? 1));
 
         if (user.expiredAt && user.expiredAt.getTime() > targetDueDate.getTime() + 12 * 60 * 60 * 1000) {
           skipped++;

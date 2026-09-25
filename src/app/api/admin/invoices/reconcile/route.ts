@@ -192,6 +192,53 @@ export async function POST(request: NextRequest) {
     logs.push(`Synced ${syncedTxCount} new transactions from paid invoices`);
     logs.push(`Updated ${updatedTxDateCount} transaction dates to match payment timestamps`);
 
+    // ── 6. Fix Misattributed Invoices (Created in Month M, Due Date mistakenly in Month M+1) ──
+    const misattributedInvoices = await prisma.invoice.findMany({
+      where: {
+        createdAt: {
+          gte: new Date(2026, 8, 1, 0, 0, 0, 0),
+          lte: new Date(2026, 8, 30, 23, 59, 59, 999),
+        },
+        dueDate: {
+          gte: new Date(2026, 9, 1, 0, 0, 0, 0),
+          lte: new Date(2026, 9, 31, 23, 59, 59, 999),
+        },
+      },
+      include: {
+        user: { select: { id: true, billingDay: true, name: true, username: true } },
+      },
+    });
+
+    let fixedDueDateCount = 0;
+    for (const inv of misattributedInvoices) {
+      if (!inv.userId) continue;
+
+      const septStart = new Date(2026, 8, 1, 0, 0, 0, 0);
+      const septEnd = new Date(2026, 8, 30, 23, 59, 59, 999);
+
+      const septInvoice = await prisma.invoice.findFirst({
+        where: {
+          userId: inv.userId,
+          id: { not: inv.id },
+          dueDate: { gte: septStart, lte: septEnd },
+        },
+      });
+
+      if (!septInvoice) {
+        const bd = inv.user?.billingDay || inv.dueDate.getDate() || 5;
+        const targetDay = Math.min(bd, 30);
+        const fixedDueDate = new Date(2026, 8, targetDay, 23, 59, 59, 999);
+
+        await prisma.invoice.update({
+          where: { id: inv.id },
+          data: { dueDate: fixedDueDate },
+        });
+        fixedDueDateCount++;
+        logs.push(`Fixed invoice ${inv.invoiceNumber} (${inv.customerName}) due date from ${inv.dueDate.toISOString().slice(0, 10)} to ${fixedDueDate.toISOString().slice(0, 10)}`);
+      }
+    }
+    logs.push(`Fixed ${fixedDueDateCount} invoices with misattributed due dates`);
+
     return NextResponse.json({
       success: true,
       message: "Rekonsiliasi database keuangan selesai",
@@ -203,6 +250,7 @@ export async function POST(request: NextRequest) {
         duplicatesRemoved: duplicateTxIds.length,
         transactionsCreated: syncedTxCount,
         transactionsUpdated: updatedTxDateCount,
+        dueDatesFixed: fixedDueDateCount,
       },
     });
   } catch (error: any) {

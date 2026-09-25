@@ -88,12 +88,18 @@ interface CreatedUser {
 
 const ALL_STEPS = [
   { id: 0, title: 'Inisialisasi Sistem', icon: ShieldCheck, desc: 'Akun Superadmin & ISP' },
-  { id: 1, title: 'Profil & Kontak ISP', icon: Building2, desc: 'Identitas & Alamat' },
-  { id: 2, title: 'Koneksi MikroTik', icon: Server, desc: 'API Router & VPN' },
-  { id: 3, title: 'Paket PPPoE', icon: Package, desc: 'Tarif & Kecepatan' },
-  { id: 4, title: 'Pelanggan Trial', icon: Users, desc: 'Akun Tes PPPoE' },
-  { id: 5, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
-  { id: 6, title: 'Payment Gateway', icon: CreditCard, desc: 'Pembayaran Online' },
+  { id: 1, title: 'Profil & Kontak ISP', icon: Building2, desc: 'Identitas & Footer Login' },
+  { id: 2, title: 'Koneksi MikroTik', icon: Server, desc: 'API Router & VPN Tunnel' },
+  { id: 3, title: 'Sistem Isolir', icon: Shield, desc: 'Firewall & Web Proxy 8080' },
+  { id: 4, title: 'Paket PPPoE', icon: Package, desc: 'Tarif & Kecepatan' },
+  { id: 5, title: 'Pelanggan Trial', icon: Users, desc: 'Akun Tes PPPoE' },
+  { id: 6, title: 'Payment Gateway', icon: CreditCard, desc: 'Bank & Automatic Gateways' },
+  { id: 7, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
+  { id: 8, title: 'RADIUS Server', icon: Radio, desc: 'Switch Auth & Port 1812/1813' },
+  { id: 9, title: 'TR-069 & GenieACS', icon: Globe, desc: 'Auto Config ONT (VLAN 4000)' },
+  { id: 10, title: 'FTTH OLT Management', icon: Cable, desc: 'VSOL 1600GS Config' },
+  { id: 11, title: 'Tim & SPK', icon: UserCheck, desc: 'Akun Teknisi & Role' },
+  { id: 12, title: 'Peluncuran Sistem', icon: Sparkles, desc: 'Turnkey Readiness Recap' },
 ];
 
 export default function UnifiedSetupWizardPage() {
@@ -249,6 +255,40 @@ export default function UnifiedSetupWizardPage() {
     apiKey: '',
   });
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+
+  // Additional Wizard Steps State (Steps 3, 8, 9, 10, 11)
+  const [copiedIsolirScript, setCopiedIsolirScript] = useState(false);
+  const [radiusForm, setRadiusForm] = useState({
+    radiusEnabled: false,
+    radiusSecret: 'secret123',
+    nasIp: '10.254.1.2',
+  });
+  const [isSavingRadius, setIsSavingRadius] = useState(false);
+  const [copiedAcsScript, setCopiedAcsScript] = useState(false);
+  const [oltVariant, setOltVariant] = useState<'v1600gs_zf' | 'v1600gs_std'>('v1600gs_zf');
+  const [copiedOltScript, setCopiedOltScript] = useState(false);
+  const [techForm, setTechForm] = useState({
+    name: 'Teknisi Lapangan 1',
+    username: 'teknisi01',
+    password: 'tech@password123',
+    phone: '081234567891',
+  });
+  const [isSavingTech, setIsSavingTech] = useState(false);
+  const [techSaved, setTechSaved] = useState(false);
+
+  // Read step from URL query param if present
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetStep = urlParams.get('step');
+      if (targetStep !== null) {
+        const parsed = parseInt(targetStep);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 12) {
+          setCurrentStep(parsed);
+        }
+      }
+    }
+  }, []);
 
   // Check system initialization
   useEffect(() => {
@@ -540,9 +580,11 @@ export default function UnifiedSetupWizardPage() {
         setSavedRouterId(data.router.id);
         setRouterSaved(true);
         markStepCompleted(2);
+        setCurrentStep(3);
       } else if (res.status === 409) {
         setRouterSaved(true);
         markStepCompleted(2);
+        setCurrentStep(3);
       }
     } catch (err) {
       console.error('Failed to save router:', err);
@@ -614,8 +656,8 @@ export default function UnifiedSetupWizardPage() {
       }
       const data = await res.json();
       setCreatedProfile(data.profile || data);
-      markStepCompleted(3);
-      setCurrentStep(4);
+      markStepCompleted(4);
+      setCurrentStep(5);
     } catch (err: any) {
       alert(err.message || 'Gagal menyimpan paket');
     } finally {
@@ -623,7 +665,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 4: Save Customer
+  // Step 5: Save Customer
   const handleSaveCustomer = async () => {
     setIsSavingCustomer(true);
     try {
@@ -643,8 +685,8 @@ export default function UnifiedSetupWizardPage() {
       if (!res.ok) throw new Error('Gagal membuat akun pelanggan');
       const data = await res.json();
       setCreatedCustomer(data.user || data);
-      markStepCompleted(4);
-      setCurrentStep(5);
+      markStepCompleted(5);
+      setCurrentStep(6);
     } catch (err: any) {
       alert(err.message || 'Gagal membuat pelanggan');
     } finally {
@@ -652,7 +694,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 5: WhatsApp providers check
+  // Step 7: WhatsApp providers check
   const handleCheckWa = async () => {
     setWaLoading(true);
     try {
@@ -662,12 +704,69 @@ export default function UnifiedSetupWizardPage() {
         setWaProviders(data);
         const active = data.some((p: any) => p.isActive);
         setWaConnected(active);
-        if (active) markStepCompleted(5);
+        if (active) markStepCompleted(7);
       }
     } catch (e) {
       console.error('Failed loading WA providers:', e);
     } finally {
       setWaLoading(false);
+    }
+  };
+
+  // Step 8: Save RADIUS Mode
+  const handleSaveRadius = async () => {
+    setIsSavingRadius(true);
+    try {
+      const res = await fetch('/api/company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          radiusEnabled: radiusForm.radiusEnabled,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal menyimpan mode RADIUS');
+      }
+
+      markStepCompleted(8);
+      setCurrentStep(9);
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyimpan mode RADIUS');
+    } finally {
+      setIsSavingRadius(false);
+    }
+  };
+
+  // Step 11: Save Technician Account
+  const handleSaveTechnician = async () => {
+    setIsSavingTech(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: techForm.name,
+          username: techForm.username,
+          password: techForm.password,
+          phone: techForm.phone,
+          role: 'TECHNICIAN',
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal membuat akun teknisi');
+      }
+
+      setTechSaved(true);
+      markStepCompleted(11);
+      setCurrentStep(12);
+    } catch (err: any) {
+      alert(err.message || 'Gagal membuat akun teknisi');
+    } finally {
+      setIsSavingTech(false);
     }
   };
 
@@ -1408,7 +1507,7 @@ export default function UnifiedSetupWizardPage() {
                       <span>Uji Koneksi API</span>
                     </Button>
                     <Button onClick={handleSaveRouter} disabled={isSavingRouter}>
-                      <span>Lanjut ke Paket PPPoE</span>
+                      <span>Lanjut ke Sistem Isolir</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1416,8 +1515,81 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 3: KONFIGURASI PAKET PPPOE */}
+            {/* STEP 3: SISTEM ISOLIR OTOMATIS */}
             {currentStep === 3 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Sistem Isolir Otomatis (Firewall & Web Proxy)</CardTitle>
+                      <CardDescription>
+                        Konfigurasi aturan firewall MikroTik untuk pengisoliran otomatis pelanggan yang belum membayar tagihan.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-foreground uppercase tracking-wider">
+                        Fitur Otomatisasi Isolir EugineBill
+                      </div>
+                      <Badge variant="outline" className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Standar RouterOS
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Sistem EugineBill secara otomatis memasukkan IP / akun pelanggan terisolir ke dalam PPP Profile <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-foreground">ISOLIR</code> atau Address List <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-foreground">ISOLIR_LIST</code> di MikroTik. Lalu lintas HTTP (Port 80) akan dialihkan ke Web Proxy Port 8080 untuk menampilkan portal pemberitahuan isolir.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground">Skrip Setup Isolir RouterOS Terminal</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const script = `# ========================================================\n# SKRIP SISTEM ISOLIR OTOMATIS EUGINEBILL\n# Target Router: ${routerForm.name} (${routerForm.ipAddress})\n# ========================================================\n\n# 1. PPP Profile Isolir (Kecepatan 128k/128k)\n:if ([:len [/ppp profile find name="ISOLIR"]] = 0) do={\n    /ppp profile add name="ISOLIR" rate-limit="128k/128k" comment="Profile Pelanggan Terisolir EugineBill"\n}\n\n# 2. Web Proxy Halaman Isolir (Port 8080)\n/ip proxy set enabled=yes port=8080 max-cache-size=none\n:do { /ip proxy access add action=allow dst-host="*billing*" comment="Allow Billing Access" } on-error={}\n:do { /ip proxy access add action=allow dst-host="*euginebill*" comment="Allow EugineBill Access" } on-error={}\n\n# 3. Address List & Redirect NAT Web Proxy 8080\n/ip firewall address-list add list=ISOLIR_LIST address=10.0.0.0/8 comment="Isolir Subnet Pool" disabled=yes\n:do { /ip firewall nat add chain=dstnat action=redirect to-ports=8080 src-address-list=ISOLIR_LIST protocol=tcp dst-port=80 comment="EugineBill Isolir HTTP Redirect" place-before=0 } on-error={}\n\n# 4. Firewall Filter Traffic Isolir\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=udp comment="Allow DNS for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=tcp comment="Allow DNS TCP for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=drop src-address-list=ISOLIR_LIST comment="Drop Non-DNS Traffic for Isolated Users" place-before=1 } on-error={}\n\n# ========================================================\n# SKRIP ISOLIR SELESAI! Tempel di Terminal Winbox Anda.\n# ========================================================`;
+                          copyToClipboard(script);
+                          setCopiedIsolirScript(true);
+                          setTimeout(() => setCopiedIsolirScript(false), 2000);
+                        }}
+                        className="text-xs gap-1.5 h-8"
+                      >
+                        {copiedIsolirScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedIsolirScript ? 'Tersalin!' : 'Salin Skrip Isolir'}</span>
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      rows={6}
+                      value={`# ========================================================\n# SKRIP SISTEM ISOLIR OTOMATIS EUGINEBILL\n# Target Router: ${routerForm.name} (${routerForm.ipAddress})\n# ========================================================\n\n# 1. PPP Profile Isolir (Kecepatan 128k/128k)\n:if ([:len [/ppp profile find name="ISOLIR"]] = 0) do={\n    /ppp profile add name="ISOLIR" rate-limit="128k/128k" comment="Profile Pelanggan Terisolir EugineBill"\n}\n\n# 2. Web Proxy Halaman Isolir (Port 8080)\n/ip proxy set enabled=yes port=8080 max-cache-size=none\n:do { /ip proxy access add action=allow dst-host="*billing*" comment="Allow Billing Access" } on-error={}\n:do { /ip proxy access add action=allow dst-host="*euginebill*" comment="Allow EugineBill Access" } on-error={}\n\n# 3. Address List & Redirect NAT Web Proxy 8080\n/ip firewall address-list add list=ISOLIR_LIST address=10.0.0.0/8 comment="Isolir Subnet Pool" disabled=yes\n:do { /ip firewall nat add chain=dstnat action=redirect to-ports=8080 src-address-list=ISOLIR_LIST protocol=tcp dst-port=80 comment="EugineBill Isolir HTTP Redirect" place-before=0 } on-error={}\n\n# 4. Firewall Filter Traffic Isolir\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=udp comment="Allow DNS for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=accept src-address-list=ISOLIR_LIST dst-port=53 protocol=tcp comment="Allow DNS TCP for Isolated Users" place-before=0 } on-error={}\n:do { /ip firewall filter add chain=forward action=drop src-address-list=ISOLIR_LIST comment="Drop Non-DNS Traffic for Isolated Users" place-before=1 } on-error={}\n\n# ========================================================\n# SKRIP ISOLIR SELESAI! Tempel di Terminal Winbox Anda.\n# ========================================================`}
+                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                    />
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={() => { markStepCompleted(3); setCurrentStep(4); }}>
+                    <span>Lanjut ke Paket PPPoE</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 4: KONFIGURASI PAKET PPPOE */}
+            {currentStep === 4 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -1720,8 +1892,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 4: PELANGGAN TRIAL */}
-            {currentStep === 4 && (
+            {/* STEP 5: PELANGGAN TRIAL */}
+            {currentStep === 5 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -1796,57 +1968,7 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 5: BOT WHATSAPP */}
-            {currentStep === 5 && (
-              <Card className="border-border shadow-xs bg-card">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Smartphone className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <CardTitle>Notifikasi WhatsApp Bot</CardTitle>
-                      <CardDescription>
-                        Kirim otomatis tagihan bulanan, kwitansi pembayaran, dan notifikasi isolir via WhatsApp Baileys.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-6">
-                  <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-bold text-foreground">Status Bot WhatsApp Server</div>
-                      <Badge variant={waConnected ? 'default' : 'outline'} className="gap-1">
-                        <span className={`w-2 h-2 rounded-full ${waConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                        {waConnected ? 'Terhubung (Ready)' : 'Belum Terhubung'}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Layanan WhatsApp Baileys berjalan di PM2 (`EugineBill-wa`). Anda dapat menghubungkan QR Code nomor WhatsApp CS di menu Pengaturan WhatsApp Admin.
-                    </p>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(4)}>
-                    Kembali
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={handleCheckWa} disabled={waLoading}>
-                      {waLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4 text-primary" />}
-                      <span>Cek Status WA</span>
-                    </Button>
-                    <Button onClick={() => setCurrentStep(6)}>
-                      <span>Lanjut ke Payment Gateway</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardFooter>
-              </Card>
-            )}
-
-            {/* STEP 6: PAYMENT GATEWAY & REKENING BANK */}
+            {/* STEP 6: REKENING BANK & PAYMENT GATEWAY */}
             {currentStep === 6 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
@@ -1958,24 +2080,429 @@ export default function UnifiedSetupWizardPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* Summary Card Box */}
-                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 space-y-2 text-xs">
-                    <div className="font-bold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Ringkasan Setup Utama Sistem (Siap Operasional):</span>
-                    </div>
-                    <ul className="list-disc list-inside space-y-1 text-emerald-800 dark:text-emerald-300 leading-relaxed pl-1">
-                      <li>Akun Login Superadmin & Database Billing Terinisialisasi</li>
-                      <li>Identitas Perusahaan & Profil ISP Tersimpan</li>
-                      <li>Koneksi Router MikroTik & Tunnel VPN Terkonfigurasi</li>
-                      <li>Paket Internet PPPoE & Pelanggan Trial Berhasil Dibuat</li>
-                    </ul>
-                  </div>
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
                   <Button variant="outline" onClick={() => setCurrentStep(5)}>
+                    Kembali
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={() => {
+                      if (typeof window !== 'undefined') localStorage.setItem('euginebill_wizard_completed', 'true');
+                      markStepCompleted(6);
+                      router.push('/admin');
+                    }}>
+                      <span>Ke Dashboard Admin</span>
+                    </Button>
+                    <Button onClick={() => { markStepCompleted(6); setCurrentStep(7); }}>
+                      <span>Lanjut ke Bot WhatsApp</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 7: BOT WHATSAPP */}
+            {currentStep === 7 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Notifikasi WhatsApp Bot</CardTitle>
+                      <CardDescription>
+                        Kirim otomatis tagihan bulanan, kwitansi pembayaran, dan notifikasi isolir via WhatsApp Baileys.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-bold text-foreground">Status Bot WhatsApp Server</div>
+                      <Badge variant={waConnected ? 'default' : 'outline'} className="gap-1">
+                        <span className={`w-2 h-2 rounded-full ${waConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        {waConnected ? 'Terhubung (Ready)' : 'Belum Terhubung'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Layanan WhatsApp Baileys berjalan di PM2 (<code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">EugineBill-wa</code>). Anda dapat menghubungkan QR Code nomor WhatsApp CS di menu Pengaturan WhatsApp Admin.
+                    </p>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(6)}>
+                    Kembali
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={handleCheckWa} disabled={waLoading}>
+                      {waLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4 text-primary" />}
+                      <span>Cek Status WA</span>
+                    </Button>
+                    <Button onClick={() => { markStepCompleted(7); setCurrentStep(8); }}>
+                      <span>Lanjut ke RADIUS Server</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 8: RADIUS SERVER */}
+            {currentStep === 8 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Radio className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>FreeRADIUS Server Integration</CardTitle>
+                      <CardDescription>
+                        Aktifkan mode autentikasi RADIUS terpusat untuk akuntansi durasi, kuota, dan session AAA.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-foreground">Mode Autentikasi RADIUS</div>
+                        <p className="text-xs text-muted-foreground">Default: Direct API Mode (non-RADIUS). Aktifkan jika menggunakan FreeRADIUS.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="radiusModeToggle"
+                        checked={radiusForm.radiusEnabled}
+                        onChange={(e) => setRadiusForm({ ...radiusForm, radiusEnabled: e.target.checked })}
+                        className="w-5 h-5 accent-primary rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="radiusSecret">RADIUS Secret (NAS Secret) *</Label>
+                      <Input
+                        id="radiusSecret"
+                        value={radiusForm.radiusSecret}
+                        onChange={(e) => setRadiusForm({ ...radiusForm, radiusSecret: e.target.value })}
+                        placeholder="secret123"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nasIp">NAS IP Address MikroTik *</Label>
+                      <Input
+                        id="nasIp"
+                        value={radiusForm.nasIp}
+                        onChange={(e) => setRadiusForm({ ...radiusForm, nasIp: e.target.value })}
+                        placeholder="10.254.1.2"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(7)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={handleSaveRadius} disabled={isSavingRadius}>
+                    {isSavingRadius ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Simpan & Lanjut ke TR-069</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 9: TR-069 & GENIEACS */}
+            {currentStep === 9 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>TR-069 & GenieACS ONT Management</CardTitle>
+                      <CardDescription>
+                        Manajemen remote ONT modem (SSID WiFi, Password, Reboot, Signal Optics) via standar CWMP / TR-069.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      CWMP Endpoint & VLAN Management
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Endpoint TR-069 aktif secara otomatis di <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">/api/cwmp</code>. Pasang VLAN 4000 di MikroTik untuk mengalokasikan IP Management ONT.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground">Skrip Setup VLAN 4000 RouterOS Terminal</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const script = `# ========================================================\n# SKRIP TR-069 GENIEACS ONT MANAGEMENT (VLAN 4000)\n# Interface Uplink OLT: ether5-DISTRIBUSI\n# Gateway Mikrotik: 10.40.10.1/24\n# Pool IP Dynamic ONT: 10.40.10.10 - 10.40.10.254\n# ========================================================\n\n# 1. Interface VLAN 4000 Management ACS\n:do { /interface vlan add name=vlan4000-ACS vlan-id=4000 interface=ether5-DISTRIBUSI comment="VLAN Management ONT TR-069" } on-error={}\n\n# 2. IP Address Gateway MikroTik\n:do { /ip address add address=10.40.10.1/24 interface=vlan4000-ACS comment="Gateway TR-069 ACS Pool" } on-error={}\n\n# 3. IP Pool Dynamic untuk ONT\n:do { /ip pool add name=pool-acs ranges=10.40.10.10-10.40.10.254 comment="Pool IP Dynamic ONT TR-069" } on-error={}\n\n# 4. DHCP Server TR-069 untuk Autoconfig ONT\n:do { /ip dhcp-server network add address=10.40.10.0/24 gateway=10.40.10.1 dns-server=1.1.1.1,1.0.0.1 comment="DHCP Network ACS" } on-error={}\n:do { /ip dhcp-server add name=dhcp-acs interface=vlan4000-ACS address-pool=pool-acs disabled=no comment="DHCP Server ACS" } on-error={}\n\n# ========================================================\n# SELESAI! ONT yang terhubung via VLAN 4000 akan ter-provision otomatis.\n# ========================================================`;
+                          copyToClipboard(script);
+                          setCopiedAcsScript(true);
+                          setTimeout(() => setCopiedAcsScript(false), 2000);
+                        }}
+                        className="text-xs gap-1.5 h-8"
+                      >
+                        {copiedAcsScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedAcsScript ? 'Tersalin!' : 'Salin Skrip ACS'}</span>
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      rows={6}
+                      value={`# ========================================================\n# SKRIP TR-069 GENIEACS ONT MANAGEMENT (VLAN 4000)\n# Interface Uplink OLT: ether5-DISTRIBUSI\n# Gateway Mikrotik: 10.40.10.1/24\n# Pool IP Dynamic ONT: 10.40.10.10 - 10.40.10.254\n# ========================================================\n\n# 1. Interface VLAN 4000 Management ACS\n:do { /interface vlan add name=vlan4000-ACS vlan-id=4000 interface=ether5-DISTRIBUSI comment="VLAN Management ONT TR-069" } on-error={}\n\n# 2. IP Address Gateway MikroTik\n:do { /ip address add address=10.40.10.1/24 interface=vlan4000-ACS comment="Gateway TR-069 ACS Pool" } on-error={}\n\n# 3. IP Pool Dynamic untuk ONT\n:do { /ip pool add name=pool-acs ranges=10.40.10.10-10.40.10.254 comment="Pool IP Dynamic ONT TR-069" } on-error={}\n\n# 4. DHCP Server TR-069 untuk Autoconfig ONT\n:do { /ip dhcp-server network add address=10.40.10.0/24 gateway=10.40.10.1 dns-server=1.1.1.1,1.0.0.1 comment="DHCP Network ACS" } on-error={}\n:do { /ip dhcp-server add name=dhcp-acs interface=vlan4000-ACS address-pool=pool-acs disabled=no comment="DHCP Server ACS" } on-error={}\n\n# ========================================================\n# SELESAI! ONT yang terhubung via VLAN 4000 akan ter-provision otomatis.\n# ========================================================`}
+                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                    />
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(8)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={() => { markStepCompleted(9); setCurrentStep(10); }}>
+                    <span>Lanjut ke FTTH OLT Management</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 10: FTTH OLT MANAGEMENT */}
+            {currentStep === 10 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Cable className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>FTTH OLT Management (VSOL Standard)</CardTitle>
+                      <CardDescription>
+                        Template konfigurasi OLT VSOL Seri V1600GS-ZF (ZTE Falcon) dan Cortina Standard.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pilih Varian Hardware OLT</Label>
+                    <div className="grid grid-cols-2 gap-2 bg-muted p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setOltVariant('v1600gs_zf')}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          oltVariant === 'v1600gs_zf'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        VSOL V1600GS-ZF (ZTE Falcon)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOltVariant('v1600gs_std')}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          oltVariant === 'v1600gs_std'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        VSOL V1600GS (Cortina Standard)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi CLI OLT</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const text = oltVariant === 'v1600gs_zf'
+                            ? `# Configuration Template: VSOL V1600GS-ZF (ZTE Falcon Chipset)\n# MANDATORY: service-port line inside line-profile\nprofile line V1600GS-ZF\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n  service-port 1 gemport 1 uservlan 20 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
+                            : `# Configuration Template: VSOL V1600GS Standar (Cortina Chipset)\nprofile line V1600GS-STD\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`;
+                          copyToClipboard(text);
+                          setCopiedOltScript(true);
+                          setTimeout(() => setCopiedOltScript(false), 2000);
+                        }}
+                        className="text-xs gap-1.5 h-8"
+                      >
+                        {copiedOltScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedOltScript ? 'Tersalin!' : 'Salin Skrip OLT'}</span>
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      rows={7}
+                      value={
+                        oltVariant === 'v1600gs_zf'
+                          ? `# Configuration Template: VSOL V1600GS-ZF (ZTE Falcon Chipset)\n# MANDATORY: service-port line inside line-profile\nprofile line V1600GS-ZF\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n  service-port 1 gemport 1 uservlan 20 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
+                          : `# Configuration Template: VSOL V1600GS Standar (Cortina Chipset)\nprofile line V1600GS-STD\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
+                      }
+                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                    />
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(9)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={() => { markStepCompleted(10); setCurrentStep(11); }}>
+                    <span>Lanjut ke Tim & SPK</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 11: TIM & SPK TEKNISI */}
+            {currentStep === 11 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Tim & SPK Teknisi</CardTitle>
+                      <CardDescription>
+                        Buat akun login portal teknisi untuk menerima tiket gangguan dan SPK pemasangan baru.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="techName">Nama Lengkap Teknisi *</Label>
+                      <Input
+                        id="techName"
+                        value={techForm.name}
+                        onChange={(e) => setTechForm({ ...techForm, name: e.target.value })}
+                        placeholder="Teknisi Lapangan 1"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="techPhone">No. WhatsApp Teknisi *</Label>
+                      <Input
+                        id="techPhone"
+                        value={techForm.phone}
+                        onChange={(e) => setTechForm({ ...techForm, phone: e.target.value })}
+                        placeholder="0812xxxxxxxx"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="techUsername">Username Login Portal Teknisi *</Label>
+                      <Input
+                        id="techUsername"
+                        value={techForm.username}
+                        onChange={(e) => setTechForm({ ...techForm, username: e.target.value })}
+                        placeholder="teknisi01"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="techPassword">Password *</Label>
+                      <Input
+                        id="techPassword"
+                        type="password"
+                        value={techForm.password}
+                        onChange={(e) => setTechForm({ ...techForm, password: e.target.value })}
+                        placeholder="tech@password123"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(10)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={handleSaveTechnician} disabled={isSavingTech}>
+                    {isSavingTech ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Buat Akun & Lanjut ke Peluncuran</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 12: PELUNCURAN SISTEM */}
+            {currentStep === 12 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-emerald-700 dark:text-emerald-400">
+                          Sistem Billing EugineBill Siap Diluncurkan!
+                        </CardTitle>
+                        <CardDescription>
+                          Semua 12 modul utama infrastruktur jaringan dan operasional ISP telah terkonfigurasi 100%.
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 space-y-3 text-xs">
+                    <div className="font-bold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Audit Kesiapan Turnkey System (100% Ready):</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-emerald-800 dark:text-emerald-300 leading-relaxed pl-1">
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Akun Superadmin & Database Billing</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Identitas ISP & Footer Login Direct</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> MikroTik API & Remote ONT NAT Proxy</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Auto-Isolir Firewall & Web Proxy 8080</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Paket Internet PPPoE & Kecepatan</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Pelanggan Percobaan PPPoE</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Rekening Bank Transfer & Gateway</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Bot WhatsApp Baileys PM2 Service</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> FreeRADIUS Integration Ready</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> TR-069 GenieACS VLAN 4000</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> FTTH OLT VSOL 1600GS Config</div>
+                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Akun Teknisi & Manajemen SPK</div>
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(11)}>
                     Kembali
                   </Button>
                   <Button
@@ -1985,7 +2512,7 @@ export default function UnifiedSetupWizardPage() {
                       if (typeof window !== 'undefined') {
                         localStorage.setItem('euginebill_wizard_completed', 'true');
                       }
-                      markStepCompleted(6);
+                      markStepCompleted(12);
                       router.push('/admin');
                     }}
                   >
