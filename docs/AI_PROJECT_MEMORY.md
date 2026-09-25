@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.60
+- **Version**: 2.40.61
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,13 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.60: OLT Poller Pruning Timestamp & Inventory USED_GOOD Badge UI Styling)
+### Recent Patch Log (September 25, 2026 — v2.40.61: Clean Master Inventory Catalog, Duplicate Removal & Stock 0 Initial Policy)
+
+- **Hard Invariant: Clean Master Inventory Standard (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+  - Seluruh barang dikelompokkan ke dalam 8 Kategori Master: Consumable (CNS), Marketing (MKT), Tools (TLS), Passive (PAS), Hardware (HDW), Office Supplies (SUP), Cable (CBL), dan CPE Modem (CPE).
+  - Setiap barang memiliki kode SKU berstandar tanpa duplikasi (misal `SUP-KERTAS-HVS-A4` murni 1 item).
+  - Stok awal seluruh barang non-modem diset ke `0` agar penambahan stok murni melalui mutasi stok `IN`.
+  - Stok barang modem CPE disinkronkan otomatis secara real-time dari unit `inventoryAsset` yang berstatus `AVAILABLE` di gudang per vendor (ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome, Generic).
 
 - **Hard Invariant: OLT Poller Pruning Timestamp (`src/lib/olt/poller.ts`)**:
   - `pollOLTWithOptions` mengirimkan `pollStartTime` ke `pruneMissingOnus(oltId, discoveredKeys, pollStartTime)`.

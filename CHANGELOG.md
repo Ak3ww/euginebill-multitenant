@@ -4,6 +4,28 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.61] — 2026-09-25
+
+### Perapihan Katalog Inventori Master, Pembersihan Duplikasi & Pencatatan Stok Awal 0
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Staf gudang membutuhkan struktur katalog barang inventori yang rapi, tanpa duplikasi (seperti `KERTAS HVS A4` yang cukup 1 item), serta seluruh stok awal barang dimulaikan dari `0` (ditambah secara bertahap via mutasi stok `IN`).
+  2. Mengelompokkan seluruh barang ke dalam 8 Kategori Master standar: Consumable (CNS), Marketing (MKT), Tools (TLS), Passive (PAS), Hardware (HDW), Office Supplies (SUP), Cable (CBL), dan CPE Modem (CPE).
+  3. Mengintegrasikan stok barang modem CPE dengan unit fisik OLT (`inventoryAsset` bermerek ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome, Generic) secara otomatis.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Script Seeding & Perapihan Master Katalog (`scripts/reseed-clean-inventory.ts`)**:
+     - Membuat 8 Kategori Master standar & 55 Item Katalog Rapi dengan kode SKU berstandar (`CNS-ISOLASI-HITAM`, `TLS-FIBER-CLEAVER`, `SUP-KERTAS-HVS-A4`, `CBL-DROPCORE-1C-50M` s/d `300M`, `EMG-CPE-ONT-ZTE-F670L`, dll).
+     - Mengatur `currentStock = 0` untuk seluruh barang non-modem (Consumable, Tools, Passive, Hardware, Supplies, Cable) agar restock dilakukan via Mutasi Stok `IN`.
+     - Menghapus item duplikat usang yang tidak terikat ke transaksi/aset.
+  2. **Integrasi Stok Modem Vendor <> Unit OLT (`src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+     - Seluruh `inventoryAsset` bermerek ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome dihubungkan ke Master Item CPE masing-masing vendor.
+     - `currentStock` barang modem dihitung otomatis dari jumlah fisik unit yang berstatus `AVAILABLE` di gudang.
+
+- **Files**:
+  - Added: `scripts/reseed-clean-inventory.ts`
+  - Modified: `src/app/api/admin/inventory/seed-defaults/route.ts`
+
 ## [2.40.60] — 2026-09-25
 
 ### Perbaikan Otomatis Pruning Phantom ONU OLT Monitoring & Desain Styling Badge Condition Inventori (USED_GOOD)

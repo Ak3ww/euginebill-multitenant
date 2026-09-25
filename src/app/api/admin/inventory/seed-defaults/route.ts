@@ -41,88 +41,88 @@ const DEFAULT_NUMBERING_RULES = [
 
 // ─── Default Inventory Categories ─────────────────────────────────────────────
 const DEFAULT_CATEGORIES = [
-  { code: 'HW', name: 'Hardware Utama (HW)', description: 'Router, Switch, OLT, Server' },
-  { code: 'CPE', name: 'Customer Equipment (CPE)', description: 'Modem ONT, STB, Access Point' },
-  { code: 'PAS', name: 'Perangkat Pasif (PAS)', description: 'ODP, ODC, Closure, Splitter PLC/FBT' },
-  { code: 'CAB', name: 'Kabel & Dropcore (CAB)', description: 'Kabel Precon, Dropwire, Patchcord, UTP' },
-  { code: 'CON', name: 'Konektor & Aksesoris (CON)', description: 'Fast Connector, Adapter SC, Klem, Isolasi, HVS' },
-  { code: 'PWR', name: 'Power & Adaptor (PWR)', description: 'Adaptor 12V, Mini UPS, POE Injector' },
-  { code: 'TLS', name: 'Alat & Perkakas (TLS)', description: 'Fusion Splicer, Cleaver, Stripper, OPM, VFL' },
-  { code: 'ACC', name: 'Aksesori Material (ACC)', description: 'Fishbone, Bracket ODP, Spiral, Kabel Tis' },
-  { code: 'MKT', name: 'Materi Marketing (MKT)', description: 'Brosur PSB, Spanduk, Stiker ODP' },
-  { code: 'SUP', name: 'Supplies Kantor (SUP)', description: 'Kertas HVS, Amplop, Kwitansi, ATK' },
+  { code: 'CNS', name: 'Bahan Habis Pakai (Consumable)', description: 'Isolasi, kabel ties, sleeve protector, paku klem, baterai, patch cord, adapter FO, label modem' },
+  { code: 'MKT', name: 'Perlengkapan Pemasaran (Marketing)', description: 'Brosur A5, spanduk, stiker logo ODP, materi promosi' },
+  { code: 'TLS', name: 'Peralatan & Tools Kerja (Tools)', description: 'Fusion splicer, fiber cleaver, stripper, OTDR, OPM, VFL laser, tangga teleskopik, obeng, palu' },
+  { code: 'PAS', name: 'Perangkat Pasif FTTH (Passive)', description: 'Box ODP, Box ODC, Join Closure, Splitter PLC 1:2 / 1:4 / 1:8 / 1:16' },
+  { code: 'HDW', name: 'Perangkat Keras Utama (Hardware)', description: 'MikroTik Routerboard, OLT, Printer Kantor' },
+  { code: 'SUP', name: 'Perlengkapan & ATK Kantor (Supplies)', description: 'Kertas HVS A4, pulpen, pensil, stempel, sticky note, isi staples' },
+  { code: 'CBL', name: 'Kabel FTTH & Network (Cable)', description: 'Kabel Dropcore 1 Core 50m - 300m, Kabel Precon, Kabel UTP' },
+  { code: 'CPE', name: 'Customer Premises Equipment (CPE / Modem)', description: 'Modem ONT ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome, Generic' },
 ];
 
 // ─── Inventory Item Master Catalog ─────────────────────────────────────────────
 const DEFAULT_INVENTORY_ITEMS = [
-  // ─── CPE: 7 Vendor Standar FTTH (ZTE, Huawei, FiberHome, Skyworth, Realtek, Gigalink, VSOL) ───
-  // 1. ZTE
-  { sku: 'EMG-CPE-ONT-ZTE-F609V3', name: 'Modem ZTE F609 V3 Gigabit GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-ZTE-F609V9', name: 'Modem ZTE F609 V9 Dual Band AC', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-ZTE-F670L',  name: 'Modem ZTE F670L Dual Band Gigabit', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-ZTE-F660',   name: 'Modem ZTE F660 Single Band GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── CONSUMABLE (CNS) ───
+  { sku: 'CNS-ISOLASI-HITAM', name: 'ISOLASI HITAM', categoryCode: 'CNS', unit: 'pack', packSize: 1, isSerialized: false },
+  { sku: 'CNS-KABEL-TIES-30CM', name: 'KABEL TIES 30 CM (LARGE)', categoryCode: 'CNS', unit: 'pack', packSize: 100, isSerialized: false },
+  { sku: 'CNS-KABEL-TIES-20CM', name: 'KABEL TIES 20 CM (MEDIUM)', categoryCode: 'CNS', unit: 'pack', packSize: 100, isSerialized: false },
+  { sku: 'CNS-KABEL-TIES-10CM', name: 'KABEL TIES 10 CM (SMALL)', categoryCode: 'CNS', unit: 'pack', packSize: 100, isSerialized: false },
+  { sku: 'CNS-SLEEVE-FO-BESAR', name: 'SLEEVE PROTECTOR FO BESAR', categoryCode: 'CNS', unit: 'pack', packSize: 50, isSerialized: false },
+  { sku: 'CNS-SLEEVE-FO-KECIL', name: 'SLEEVE PROTECTOR FO KECIL', categoryCode: 'CNS', unit: 'pack', packSize: 50, isSerialized: false },
+  { sku: 'CNS-PAKU-KLEM', name: 'PAKU KLEM', categoryCode: 'CNS', unit: 'pack', packSize: 50, isSerialized: false },
+  { sku: 'CNS-BAT-REMOTE-AAA', name: 'BATERAI REMOTE AAA', categoryCode: 'CNS', unit: 'pasang', packSize: 2, isSerialized: false },
+  { sku: 'CNS-PATCHCORD-SC-UPC', name: 'Patch Cord SC-UPC to SC-UPC', categoryCode: 'CNS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'CNS-ADAPTER-BARREL-FO', name: 'ADAPTER / BARREL FO', categoryCode: 'CNS', unit: 'pack', packSize: 50, isSerialized: false },
+  { sku: 'CNS-BRAND-LABEL-LARGE', name: 'BRAND LABEL MODEM LARGE', categoryCode: 'CNS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'CNS-BRAND-LABEL-SMALL', name: 'BRAND LABEL MODEM SMALL', categoryCode: 'CNS', unit: 'pcs', packSize: 1, isSerialized: false },
 
-  // 2. Huawei
-  { sku: 'EMG-CPE-ONT-HWA-8245H',  name: 'Modem Huawei EchoLife HG8245H', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-HWA-8245H5', name: 'Modem Huawei EchoLife HG8245H5', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-HWA-8145V5', name: 'Modem Huawei EchoLife HG8145V5 Dual Band AC', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-HWA-8010H',  name: 'Modem Huawei EchoLife HG8010H 1GE Bridge', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── MARKETING (MKT) ───
+  { sku: 'MKT-BROSUR-A5-150', name: 'BROSUR A5 ART PAPER 150', categoryCode: 'MKT', unit: 'rim', packSize: 500, isSerialized: false },
 
-  // 3. FiberHome
-  { sku: 'EMG-CPE-ONT-FBH-HG6243', name: 'Modem FiberHome HG6243C Dual Band AC Gigabit', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-FBH-AN5506', name: 'Modem FiberHome AN5506-04-FG Quad Port GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-FBH-HG6143', name: 'Modem FiberHome HG6143D Dual Band GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── TOOLS (TLS) ───
+  { sku: 'TLS-FIBER-CLEAVER', name: 'FIBER CLEAVER', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-OBENG-KEMBANG', name: 'OBENG KEMBANG', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'TLS-OBENG-MIN', name: 'OBENG MIN', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'TLS-LABEL-PRINTER', name: 'LABEL PRINTER PORTABLE', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-PALU', name: 'PALU', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'TLS-DROP-CABLE-STRIPPER', name: 'DROP CABLE STRIPPER', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'TLS-FIBER-STRIPPER', name: 'FIBER STRIPPER', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'TLS-FUSION-SPLICER', name: 'FUSION SPLICER', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-OPM', name: 'OPTICAL POWER METER (OPM)', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-OTDR', name: 'OPTICAL TIME DOMAIN REFLECTOMETER (OTDR)', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-HLS', name: 'HANDHELD LIGHT SOURCE (HLS)', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-TANGGA-TELESKOPIK', name: 'TELESCOPIC LADDER', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'TLS-VFL-LASER', name: 'FIBER OPTIC VISUAL FAULT LOCATOR (LASER)', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
 
-  // 4. Skyworth / SK
-  { sku: 'EMG-CPE-ONT-SKW-542VF',  name: 'Modem Skyworth GN542VF Dual Band AC Gigabit', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-SKW-640V',   name: 'Modem Skyworth GN640V Dual Band XPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-SKW-D742',   name: 'Modem Skyworth SK-D742 Gigabit GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── PASSIVE (PAS) ───
+  { sku: 'PAS-BOX-ODP', name: 'BOX ODP', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-BOX-ODC', name: 'BOX ODC', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-SPLITTER-1-2', name: 'SPLITTER 1:2', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-SPLITTER-1-4', name: 'SPLITTER 1:4', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-SPLITTER-1-8', name: 'SPLITTER 1:8', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-SPLITTER-1-16', name: 'SPLITTER 1:16', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
+  { sku: 'PAS-JOIN-CLOSURE', name: 'JOIN CLOSURE', categoryCode: 'PAS', unit: 'unit', packSize: 1, isSerialized: false },
 
-  // 5. Realtek OEM / RTE
-  { sku: 'EMG-CPE-ONT-RLT-OEM',    name: 'Modem Realtek OEM RTL9603C GPON/EPON 1GE+1FE', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-RLT-9607',   name: 'Modem Realtek OEM RTL9607C Dual Band AC', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-RLT-V2804',  name: 'Modem Realtek OEM V2804RGW XPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── HARDWARE (HDW) ───
+  { sku: 'HDW-MIKROTIK-ROUTERBOARD', name: 'MIKROTIK ROUTER BOARD', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'HDW-OLT', name: 'OLT', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'HDW-PRINTER', name: 'PRINTER KANTOR', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
 
-  // 6. Gigalink / C-Data (GGCLINK)
-  { sku: 'EMG-CPE-ONT-GGL-FD511G', name: 'Modem Gigalink / C-Data FD511G 1GE GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-GGL-FD512G', name: 'Modem Gigalink FD512GW 1GE+1FE WiFi XPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-GGL-FD704G', name: 'Modem Gigalink FD704GW Dual Band AC GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── SUPPLIES (SUP) ───
+  { sku: 'SUP-KERTAS-HVS-A4', name: 'KERTAS HVS A4', categoryCode: 'SUP', unit: 'pack', packSize: 1, isSerialized: false },
+  { sku: 'SUP-PULPEN', name: 'PULPEN', categoryCode: 'SUP', unit: 'pack', packSize: 12, isSerialized: false },
+  { sku: 'SUP-PENSIL', name: 'PENSIL', categoryCode: 'SUP', unit: 'pack', packSize: 12, isSerialized: false },
+  { sku: 'SUP-STAMP', name: 'STAMP / STEMPEL KANTOR', categoryCode: 'SUP', unit: 'pcs', packSize: 1, isSerialized: false },
+  { sku: 'SUP-STICKY-NOTE', name: 'STICKY NOTE', categoryCode: 'SUP', unit: 'pack', packSize: 1, isSerialized: false },
+  { sku: 'SUP-PAPER-STAPLES', name: 'PAPER STAPLES', categoryCode: 'SUP', unit: 'box', packSize: 1, isSerialized: false },
 
-  // 7. VSOL
-  { sku: 'EMG-CPE-ONT-VSL-V2801',  name: 'Modem VSOL V2801SG 1GE XPON Bridge', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-VSL-V2804',  name: 'Modem VSOL V2804RGW 4GE WiFi XPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-VSL-V2802',  name: 'Modem VSOL V2802RH Dual Mode CATV XPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
+  // ─── CABLE (CBL) ───
+  { sku: 'CBL-DROPCORE-1C-50M', name: 'KABEL DROPCORE 1 CORE 50M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-DROPCORE-1C-100M', name: 'KABEL DROPCORE 1 CORE 100M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-DROPCORE-1C-150M', name: 'KABEL DROPCORE 1 CORE 150M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-DROPCORE-1C-200M', name: 'KABEL DROPCORE 1 CORE 200M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-DROPCORE-1C-250M', name: 'KABEL DROPCORE 1 CORE 250M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-DROPCORE-1C-300M', name: 'KABEL DROPCORE 1 CORE 300M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
 
-  // Kompatibilitas Tambahan
-  { sku: 'EMG-CPE-ONT-EFT-OEM',    name: 'Modem EFiber OEM GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-CPE-ONT-YHT-100G',   name: 'Modem Yuhua 100G GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
-  // Cable types (CAB) — serialized, roll
-  { sku: 'EMG-CAB-PRC-1C-250M', name: 'Kabel Precon 1 Core 250M', categoryCode: 'CAB', subCategory: 'PRC', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-PRC-1C-500M', name: 'Kabel Precon 1 Core 500M', categoryCode: 'CAB', subCategory: 'PRC', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-UTP-CAT6-305M', name: 'Kabel UTP Cat6 305M', categoryCode: 'CAB', subCategory: 'UTP', unit: 'roll', isSerialized: true },
-  // Dropcore Cable types (CAB/DRP) — serialized, roll
-  { sku: 'EMG-CAB-DRP-1C-50M',  name: 'Kabel Dropcore 1 Core 50M',  categoryCode: 'CAB', subCategory: 'DRP', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-DRP-1C-100M', name: 'Kabel Dropcore 1 Core 100M', categoryCode: 'CAB', subCategory: 'DRP', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-DRP-1C-200M', name: 'Kabel Dropcore 1 Core 200M', categoryCode: 'CAB', subCategory: 'DRP', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-DRP-1C-250M', name: 'Kabel Dropcore 1 Core 250M', categoryCode: 'CAB', subCategory: 'DRP', unit: 'roll', isSerialized: true },
-  { sku: 'EMG-CAB-DRP-1C-300M', name: 'Kabel Dropcore 1 Core 300M', categoryCode: 'CAB', subCategory: 'DRP', unit: 'roll', isSerialized: true },
-  // PAS types — serialized & non-serialized
-  { sku: 'EMG-PAS-ODP-16P', name: 'ODP 16 Port', categoryCode: 'PAS', subCategory: 'ODP', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-PAS-SPL-1X8-PLC', name: 'Splitter PLC 1x8', categoryCode: 'PAS', subCategory: 'SPL', unit: 'pcs', isSerialized: true },
-  { sku: 'EMG-PAS-RST-1P-SCUPC', name: 'Roset Fiber 1 Port SC/UPC', categoryCode: 'PAS', subCategory: 'RST', unit: 'pcs', isSerialized: false },
-  // Consumables (CON) — not serialized
-  { sku: 'EMG-CON-TIE-30CM-BLK', name: 'Kabel Tis 30cm Hitam', categoryCode: 'CON', subCategory: 'TIE', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-TAP-60MM', name: 'Isolasi Hitam 60mm', categoryCode: 'CON', subCategory: 'TAP', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-KLM-16MM', name: 'Paku Klem 16mm', categoryCode: 'CON', subCategory: 'KLM', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-PTC-FC-APC', name: 'Konektor FC-APC', categoryCode: 'CON', subCategory: 'PTC', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-PTC-SC-UPC-3M', name: 'Patch Cord SC-UPC 3M', categoryCode: 'CON', subCategory: 'PTC', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-SLV-60MM', name: 'Protection Sleeve 60mm', categoryCode: 'CON', subCategory: 'SLV', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-FOD-CLEAVE', name: 'Fiber Cleaver Blade', categoryCode: 'CON', subCategory: 'FOD', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-CON-PAP-A4', name: 'Kertas HVS A4', categoryCode: 'CON', subCategory: 'PAP', unit: 'rim', isSerialized: false },
-  { sku: 'EMG-CON-BAT-AAA-PAIR', name: 'Baterai Remote AAA (sepasang)', categoryCode: 'CON', subCategory: 'BAT', unit: 'pasang', isSerialized: false },
-  // MKT types — not serialized
-  { sku: 'EMG-MKT-BRC-A5', name: 'Brosur A5', categoryCode: 'MKT', subCategory: 'BRC', unit: 'pcs', isSerialized: false },
-  { sku: 'EMG-MKT-STK-ODP-LOGO', name: 'Stiker Logo ODP', categoryCode: 'MKT', subCategory: 'STK', unit: 'pcs', isSerialized: false },
+  // ─── CPE MODEM (VENDOR MASTER ITEMS) ───
+  { sku: 'EMG-CPE-ONT-ZTE-F670L', name: 'Modem ONT ZTE (F609 / F670L)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-HSGQ-ONT', name: 'Modem ONT HSGQ', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-VSOL-ONT', name: 'Modem ONT VSOL', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-SKYWORTH-OEM', name: 'Modem ONT Skyworth', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-HUAWEI-HG8245H', name: 'Modem ONT Huawei (HG8245H)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-FIBERHOME-AN5506', name: 'Modem ONT FiberHome (AN5506)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-GENERIC-ONT', name: 'Modem ONT Generic', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
 ];
 
 // ─── Standard Initial Stock Levels & Pack Size for Consumables ────────────────
