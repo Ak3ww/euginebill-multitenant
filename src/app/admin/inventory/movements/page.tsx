@@ -92,6 +92,7 @@ export default function StockMovementsPage() {
   const [formData, setFormData] = useState({
     itemId: '',
     movementType: 'IN',
+    outReason: 'INSTALLED_NETWORK',
     quantity: 1,
     packCount: 1,
     unitMode: 'PCS' as 'PCS' | 'PACK',
@@ -136,6 +137,7 @@ export default function StockMovementsPage() {
     setFormData({
       itemId: '',
       movementType: 'IN',
+      outReason: 'INSTALLED_NETWORK',
       quantity: 1,
       packCount: 1,
       unitMode: 'PCS',
@@ -188,6 +190,7 @@ export default function StockMovementsPage() {
         quantity: formData.quantity,
         referenceNo: formData.referenceNo.trim() || undefined,
         notes: formData.notes.trim() || undefined,
+        outReason: formData.movementType === 'OUT' ? formData.outReason : undefined,
       };
 
       if (formData.movementType === 'ADJUSTMENT') {
@@ -674,6 +677,37 @@ export default function StockMovementsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Purpose / Reason for OUT Movement */}
+            {formData.movementType === 'OUT' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">
+                  Tujuan Barang Keluar <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={formData.outReason}
+                  onValueChange={(val) => setFormData((prev) => ({ ...prev, outReason: val }))}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="INSTALLED_NETWORK" className="text-xs">
+                      Dipasang di Jaringan / Pelanggan (SPK & FTTH)
+                    </SelectItem>
+                    <SelectItem value="DIRECT_SALE" className="text-xs">
+                      Dijual (Penjualan Direct / Cash Sale)
+                    </SelectItem>
+                    <SelectItem value="DAMAGED_SCRAP" className="text-xs">
+                      Kerusakan / Afkir Barang
+                    </SelectItem>
+                    <SelectItem value="INTERNAL_USE" className="text-xs">
+                      Pemakaian Operasional Internal
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Pack / Pcs Converter if item has packSize > 1 */}
             {selectedItem && selectedItem.packSize && selectedItem.packSize > 1 && formData.movementType !== 'ADJUSTMENT' && (

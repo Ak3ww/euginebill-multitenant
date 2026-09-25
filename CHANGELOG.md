@@ -4,6 +4,33 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.65] — 2026-09-25
+
+### Penambahan Master Item Adaptor 12V 1.5A & Perangkat CCTV serta Multi-Tujuan Mutasi Stok Keluar (Stock Out Purpose)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Penambahan barang master baru: Power Adaptor 12V 1.5A (`PWR-ADP-12V-1.5A`), Kamera CCTV (`HDW-CCTV-CAMERA`), dan Kabel Extender CCTV (`CBL-CCTV-EXTENDER`).
+  2. Saat mencatat Mutasi Stok Keluar (Stock Out), staf gudang perlu opsi peruntukan yang jelas: apakah barang dipasang di jaringan/pelanggan (SPK/FTTH), dijual direct (cash sale), mengalami kerusakan/afkir, atau digunakan untuk operasional internal kantor.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Update Master Item & Dictionary SKU (`prisma/seeds/sku-dictionary.ts`, `scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+     - Menambahkan kategori `PWR` (Power & Power Supply) dan sub-kategori `CCT` (CCTV) serta `EXT` (Kabel Extender).
+     - Menambahkan item `PWR-ADP-12V-1.5A`, `HDW-CCTV-CAMERA`, dan `CBL-CCTV-EXTENDER` ke katalog master dengan stok awal 0.
+  2. **Multi-Tujuan Mutasi Stok Keluar (`src/app/admin/inventory/movements/page.tsx`, `src/app/api/inventory/movements/route.ts`)**:
+     - Menambahkan input dropdown `Tujuan Barang Keluar` (`outReason`) pada modal pencatatan mutasi manual jika memilih tipe `OUT`:
+       - `Dipasang di Jaringan / Pelanggan (SPK & FTTH)`
+       - `Dijual (Penjualan Direct / Cash Sale)`
+       - `Kerusakan / Afkir Barang`
+       - `Pemakaian Operasional Internal`
+     - Mengubah API endpoint POST `/api/inventory/movements` untuk secara otomatis memformat catatan mutasi `[Tujuan: <Tujuan>] <Catatan>` sehingga tersimpan dengan rapi pada audit log transaksi gudang.
+
+- **Files**:
+  - Modified: `prisma/seeds/sku-dictionary.ts`
+  - Modified: `scripts/reseed-clean-inventory.ts`
+  - Modified: `src/app/api/admin/inventory/seed-defaults/route.ts`
+  - Modified: `src/app/api/inventory/movements/route.ts`
+  - Modified: `src/app/admin/inventory/movements/page.tsx`
+
 ## [2.40.64] — 2026-09-25
 
 ### Populate Pengaturan SKU (`/admin/inventory/sku-settings`) & Integrasi Pintar Perangkat Pasif Terpasang di Jaringan (ODP, ODC, Splitter)

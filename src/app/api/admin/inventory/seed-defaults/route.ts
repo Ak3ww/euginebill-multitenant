@@ -45,10 +45,11 @@ const DEFAULT_CATEGORIES = [
   { code: 'MKT', name: 'Perlengkapan Pemasaran (Marketing)', description: 'Brosur A5, spanduk, stiker logo ODP, materi promosi' },
   { code: 'TLS', name: 'Peralatan & Tools Kerja (Tools)', description: 'Fusion splicer, fiber cleaver, stripper, OTDR, OPM, VFL laser, tangga teleskopik, obeng, palu' },
   { code: 'PAS', name: 'Perangkat Pasif FTTH (Passive)', description: 'Box ODP, Box ODC, Join Closure, Splitter PLC 1:2 / 1:4 / 1:8 / 1:16' },
-  { code: 'HDW', name: 'Perangkat Keras Utama (Hardware)', description: 'MikroTik Routerboard, OLT, Printer Kantor' },
+  { code: 'HDW', name: 'Perangkat Keras Utama (Hardware)', description: 'MikroTik Routerboard, OLT, Printer Kantor, Kamera CCTV' },
   { code: 'SUP', name: 'Perlengkapan & ATK Kantor (Supplies)', description: 'Kertas HVS A4, pulpen, pensil, stempel, sticky note, isi staples' },
-  { code: 'CBL', name: 'Kabel FTTH & Network (Cable)', description: 'Kabel Dropcore 1 Core 50m - 300m, Kabel Precon, Kabel UTP' },
+  { code: 'CBL', name: 'Kabel FTTH & Network (Cable)', description: 'Kabel Dropcore 1 Core 50m - 300m, Kabel Precon, Kabel UTP, Kabel Extender CCTV' },
   { code: 'CPE', name: 'Customer Premises Equipment (CPE / Modem)', description: 'Modem ONT ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome, Generic' },
+  { code: 'PWR', name: 'Power & Power Supply (Power)', description: 'Power Adaptor 12V 1.5A, Power Supply Unit, Mini UPS' },
 ];
 
 // ─── Inventory Item Master Catalog ─────────────────────────────────────────────
@@ -98,6 +99,10 @@ const DEFAULT_INVENTORY_ITEMS = [
   { sku: 'HDW-MIKROTIK-ROUTERBOARD', name: 'MIKROTIK ROUTER BOARD', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
   { sku: 'HDW-OLT', name: 'OLT', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
   { sku: 'HDW-PRINTER', name: 'PRINTER KANTOR', categoryCode: 'HDW', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'HDW-CCTV-CAMERA', name: 'KAMERA CCTV', categoryCode: 'HDW', subCategory: 'CCT', unit: 'unit', packSize: 1, isSerialized: true },
+
+  // ─── POWER & ADAPTOR (PWR) ───
+  { sku: 'PWR-ADP-12V-1.5A', name: 'POWER ADAPTOR 12V 1.5A', categoryCode: 'PWR', subCategory: 'ADP', unit: 'pcs', packSize: 1, isSerialized: false },
 
   // ─── SUPPLIES (SUP) ───
   { sku: 'SUP-KERTAS-HVS-A4', name: 'KERTAS HVS A4', categoryCode: 'SUP', unit: 'pack', packSize: 1, isSerialized: false },
@@ -114,6 +119,7 @@ const DEFAULT_INVENTORY_ITEMS = [
   { sku: 'CBL-DROPCORE-1C-200M', name: 'KABEL DROPCORE 1 CORE 200M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
   { sku: 'CBL-DROPCORE-1C-250M', name: 'KABEL DROPCORE 1 CORE 250M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
   { sku: 'CBL-DROPCORE-1C-300M', name: 'KABEL DROPCORE 1 CORE 300M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
+  { sku: 'CBL-CCTV-EXTENDER', name: 'KABEL EXTENDER CCTV', categoryCode: 'CBL', subCategory: 'EXT', unit: 'pcs', packSize: 1, isSerialized: false },
 
   // ─── CPE MODEM (VENDOR MASTER ITEMS - TANPA EQUIPMENT ID) ───
   { sku: 'EMG-CPE-ONT-ZTE', name: 'Modem ONT ZTE', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },

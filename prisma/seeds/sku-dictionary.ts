@@ -65,9 +65,17 @@ export const SKU_SUBCATEGORIES = [
   { categoryCode: 'MKT', code: 'BNR', label: 'Banner / Spanduk',      requiresBrand: false },
 
   // PWR - Power Equipment
-  { categoryCode: 'PWR', code: 'ADP', label: 'Power Adaptor 12V',     requiresBrand: true },
+  { categoryCode: 'PWR', code: 'ADP', label: 'Power Adaptor 12V 1.5A',     requiresBrand: true },
   { categoryCode: 'PWR', code: 'UPS', label: 'Mini UPS Backup',       requiresBrand: true },
   { categoryCode: 'PWR', code: 'POE', label: 'PoE Injector / Splitter', requiresBrand: true },
+
+  // HDW / HW - CCTV & Extender
+  { categoryCode: 'HDW', code: 'CCT', label: 'Kamera CCTV & Keamanan', requiresBrand: true },
+  { categoryCode: 'HW',  code: 'CCT', label: 'Kamera CCTV & Keamanan', requiresBrand: true },
+
+  // CBL - Cable Extender
+  { categoryCode: 'CBL', code: 'EXT', label: 'Kabel Extender CCTV / LAN Extension', requiresBrand: false },
+  { categoryCode: 'CAB', code: 'EXT', label: 'Kabel Extender CCTV / LAN Extension', requiresBrand: false },
 
   // TLS - Tools / Alat Kerja
   { categoryCode: 'TLS', code: 'FUS', label: 'Fusion Splicer',        requiresBrand: true },

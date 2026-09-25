@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.64
+- **Version**: 2.40.65
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,16 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.65: Power Adaptor 12V 1.5A, CCTV Items & Multi-Purpose Stock Out)
+
+- **Hard Invariant: Power & CCTV Master Inventory Standard (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`, `prisma/seeds/sku-dictionary.ts`)**:
+  - Menambahkan kategori `PWR` (Power & Power Supply) dan sub-kategori `CCT` (CCTV) serta `EXT` (Extender Cable).
+  - Menambahkan master item: `PWR-ADP-12V-1.5A` (Power Adaptor 12V 1.5A), `HDW-CCTV-CAMERA` (Kamera CCTV), dan `CBL-CCTV-EXTENDER` (Kabel Extender CCTV) dengan stok awal 0.
+
+- **Hard Invariant: Multi-Purpose Stock Out Standard (`src/app/admin/inventory/movements/page.tsx`, `src/app/api/inventory/movements/route.ts`)**:
+  - Saat mencatat mutasi stok keluar (`OUT`), staf gudang wajib menentukan peruntukan (`outReason`): `Dipasang di Jaringan / Pelanggan (SPK & FTTH)`, `Dijual (Penjualan Direct / Cash Sale)`, `Kerusakan / Afkir Barang`, atau `Pemakaian Operasional Internal`.
+  - API endpoint POST `/api/inventory/movements` secara otomatis memformat catatan mutasi `[Tujuan: <Tujuan>] <Catatan>` pada audit log transaksi gudang.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.64: Populate SKU Settings & Live FTTH Deployed Equipment Metrics)
 

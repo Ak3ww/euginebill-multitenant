@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { itemId, movementType, quantity, referenceNo, notes, periodLabel } = body;
+    const { itemId, movementType, quantity, referenceNo, notes, periodLabel, outReason } = body;
 
     if (!itemId || !movementType || quantity === undefined || quantity === null) {
       return NextResponse.json(
@@ -120,6 +120,21 @@ export async function POST(request: NextRequest) {
       newStock = numQty;
     }
 
+    // Format notes for OUT movement if outReason is specified
+    let finalNotes = notes?.trim() || null;
+    if (movementType === 'OUT' && outReason) {
+      const OUT_REASON_MAP: Record<string, string> = {
+        INSTALLED_NETWORK: 'Dipasang di Jaringan / Pelanggan',
+        DIRECT_SALE: 'Dijual (Penjualan Direct / Cash)',
+        DAMAGED_SCRAP: 'Kerusakan / Afkir',
+        INTERNAL_USE: 'Pemakaian Operasional Internal',
+      };
+      const reasonLabel = OUT_REASON_MAP[outReason] || outReason;
+      if (!finalNotes?.includes('[Tujuan:')) {
+        finalNotes = finalNotes ? `[Tujuan: ${reasonLabel}] ${finalNotes}` : `[Tujuan: ${reasonLabel}]`;
+      }
+    }
+
     // Auto-generate periodLabel for ADJUSTMENT if not provided (YYYY-MM)
     const effectivePeriodLabel = periodLabel || (movementType === 'ADJUSTMENT' ? new Date().toISOString().slice(0, 7) : null);
 
@@ -134,7 +149,7 @@ export async function POST(request: NextRequest) {
           newStock,
           periodLabel: effectivePeriodLabel,
           referenceNo,
-          notes,
+          notes: finalNotes,
           userId: session.user.id,
           userName: session.user.name || session.user.username,
         },
