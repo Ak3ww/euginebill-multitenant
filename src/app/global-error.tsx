@@ -34,6 +34,24 @@ export default function GlobalError({
   const handleReload = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('eugine_chunk_reload_retry');
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.unregister();
+            }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then((names) => {
+            for (const name of names) {
+              caches.delete(name);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Failed clearing caches on global error reload:', e);
+      }
       window.location.reload();
     } else {
       reset();

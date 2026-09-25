@@ -4,6 +4,26 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.68] — 2026-09-25
+
+### Fix PWA Service Worker Chunk Caching & Automatic Cache Purge pada Global Error Boundary (`public/sw.js`, `src/app/global-error.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Setelah build/re-deploy VPS baru, browser yang pernah menyimpan Service Worker lama (`public/sw.js`) terus memuat skrip JS chunk versi lama dari cache PWA (`Stale-While-Revalidate`).
+  2. Menyebabkan `ChunkLoadError` pada browser (karena hash chunk Next.js berubah pasca-build) yang memicu tampilan `GlobalError` ("Pembaruan Sistem Terdeteksi") secara terus-menerus.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Update Strategi PWA SW (`public/sw.js`)**:
+     - Mengubah strategi cache untuk aset static `/_next/static/` menjadi **Network-First** (selalu mengunduh chunk JS build terbaru langsung dari Nginx server terlebih dahulu).
+     - Menaikkan versi cache PWA menjadi `EugineBill-pwa-v7`.
+  2. **Auto Purge Cache pada Global Error Boundary (`src/app/global-error.tsx`)**:
+     - Tombol "Muat Ulang Halaman" dan pemulihan otomatis pada `global-error.tsx` kini secara otomatis menghapus (*unregister*) Service Worker lama dan membersihkan `caches` browser sebelum me-reload halaman.
+     - Menjamin pasca-build VPS baru, halaman `/setup` dan dashboard langsung memuat script terbaru 100% tanpa terjebak di pesan reload.
+
+- **Files**:
+  - Modified: `public/sw.js`
+  - Modified: `src/app/global-error.tsx`
+
 ## [2.40.67] — 2026-09-25
 
 ### Upsert Kredensial Super Admin pada Setup Wizard (`src/app/api/setup/route.ts`)

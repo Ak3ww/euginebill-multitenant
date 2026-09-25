@@ -1,4 +1,4 @@
-const CACHE_NAME = 'EugineBill-pwa-v6';
+const CACHE_NAME = 'EugineBill-pwa-v7';
 const OFFLINE_URL = '/offline';
 const STATIC_ASSETS = [
   OFFLINE_URL,
@@ -87,7 +87,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (url.pathname.startsWith('/_next/static/') || STATIC_ASSETS.includes(url.pathname)) {
+  // Network-First for Next.js static assets to guarantee fresh chunk loads after redeploy
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith((async () => {
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw new Error('Static asset offline and not cached');
+      }
+    })());
+    return;
+  }
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request);
