@@ -1988,6 +1988,7 @@ model inventoryItem {
   unit            String              @default("pcs") // Unit of measurement (pcs, box, meter, etc)
   minimumStock    Int                 @default(0) // Alert when stock below this
   currentStock    Float               @default(0)
+  packUnit        String?             // Satuan Kemasan: Pack, Box, Dus, Roll, Karton
   packSize        Int?                // jumlah pcs per pack/dus untuk kemudahan restock
   purchasePrice   Int                 @default(0) // Harga beli
   sellingPrice    Int                 @default(0) // Harga jual

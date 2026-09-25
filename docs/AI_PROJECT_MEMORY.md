@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.79
+- **Version**: 2.40.81
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,24 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.81: Inventory Items Overhaul, Packaging Unit Conversions & ONT Sync Engine)
+
+- **Hard Invariant: Simplified 1-Step Master Item Form & Stock Conversion (`src/app/admin/inventory/items/page.tsx`)**:
+  - Modal pembuatan/edit barang (`/admin/inventory/items`) WAJIB berupa modal 1-langkah yang bersih tanpa wizard multi-step atau dropdown sub-kategori yang membingungkan.
+  - SKU field berupa input teks acak/manual yang secara otomatis meng-generate SKU default (cth: `CAT-NAME-123`) jika dikosongkan saat menyimpan.
+  - Form WAJIB mendukung Satuan Utama (`unit`: pcs, meter, unit) dan Satuan Kemasan (`packUnit`: Pack, Box, Dus, Roll, Karton) beserta Isi per Kemasan (`packSize`) dengan teks bantuan `"Contoh: 1 Pack = 100 pcs"`.
+  - Tabel master barang WAJIB merender konversi stok otomatis jika `packSize > 1` (cth: `"500 pcs (5 Pack @ 100 pcs)"`).
+
+- **Hard Invariant: Direct OLT Vendor/Model ONT Sync (`scripts/sync-ont-inventory.ts`, `src/lib/olt/ont-detector.ts`)**:
+  - Engine sinkronisasi ONT DILARANG KERAS menggunakan dictionary prefix SKU/SN yang kompleks (`VENDOR_PREFIXES`).
+  - Sistem WAJIB menggunakan raw vendor/model yang dilaporkan langsung oleh OLT atau fallback bersih ke `"ONT Modem"`.
+
+### Recent Patch Log (September 25, 2026 — v2.40.80: Manual Invoice Cancel-Payment & Obsolete Scripts Cleanup)
+
+- **Hard Invariant: Manual Invoice Cancel Payment Reversal (`src/app/api/manual-invoices/[id]/cancel-payment/route.ts`)**:
+  - Saat pembatalan pelunasan invoice manual diproses, sistem wajib menjalankan Prisma `$transaction` yang secara atomic mengembalikan status ke `PENDING`, menghapus `paidAt` dan `transactionId`, serta secara otomatis menghapus record transaksi `Transaction` (INCOME) terkait berdasarkan `transactionId` atau `reference`.
+  - Setelah status kembali ke `PENDING`, UI `/admin/manual-invoices` secara otomatis mengaktifkan kembali tombol `openEdit` dan menyembunyikan tombol pembatalan.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.79: 13-Step Setup Wizard, Footer Direct Links, & POSTPAID Invoice Due Date Calculation Fix)
 

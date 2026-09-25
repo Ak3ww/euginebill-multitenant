@@ -45,6 +45,7 @@ import {
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBalancePrivacy } from '@/lib/balance-privacy';
@@ -363,6 +364,29 @@ export default function ManualInvoicesPage() {
       }
     } catch {
       showError('Terjadi kesalahan saat menandai lunas');
+    }
+  }
+
+  // ── Cancel Payment ─────────────────────────────────────────────────────────
+
+  async function handleCancelPayment(inv: ManualInvoice) {
+    const confirmed = await showConfirm(
+      `Batalkan pelunasan invoice ${inv.invoiceNumber}?\n\nStatus invoice akan dikembalikan ke MENUNGGU PEMBAYARAN dan pencatatan pemasukan terkait akan dihapus dari sistem keuangan.`,
+      'Batalkan Pelunasan'
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/manual-invoices/${inv.id}/cancel-payment`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showSuccess(data.message || 'Pelunasan invoice manual berhasil dibatalkan');
+        fetchInvoices();
+      } else {
+        showError(data.error || `HTTP ${res.status}: Gagal membatalkan pelunasan`);
+      }
+    } catch {
+      showError('Terjadi kesalahan saat membatalkan pelunasan');
     }
   }
 
@@ -840,6 +864,19 @@ export default function ManualInvoicesPage() {
                             onClick={() => handleMarkPaid(inv)}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+
+                        {/* Cancel Payment (only if PAID) */}
+                        {inv.status === 'PAID' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            title="Batalkan Pelunasan"
+                            onClick={() => handleCancelPayment(inv)}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
                         )}
 

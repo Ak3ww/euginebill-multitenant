@@ -24,50 +24,14 @@ const isWipe = process.argv.includes('--wipe');
 // ==========================
 // Vendor Detection
 // ==========================
-const VENDOR_PREFIXES: Record<string, { vendor: string; model: string }> = {
-  // ZTE
-  ZTEG: { vendor: 'ZTE', model: 'F670L' },
-  ZTED: { vendor: 'ZTE', model: 'F670L' },
-  ZTEC: { vendor: 'ZTE', model: 'F609' },
-  ZTEF: { vendor: 'ZTE', model: 'F609' },
-  // Huawei
-  HWTC: { vendor: 'Huawei', model: 'HG8245H' },
-  HUAWEI: { vendor: 'Huawei', model: 'HG8245H' },
-  // FiberHome
-  FHTT: { vendor: 'FiberHome', model: 'AN5506' },
-  FHT: { vendor: 'FiberHome', model: 'AN5506' },
-  // Skyworth (VSOL/EFiber OEM)
-  SCOM: { vendor: 'Skyworth', model: 'EN101' },
-  // Realtek
-  RLTK: { vendor: 'Realtek', model: 'OEM' },
-  // C-Data / Gigalink
-  GGL: { vendor: 'Gigalink', model: 'FD511G' },
-  CDAT: { vendor: 'C-Data', model: 'FD511GX' },
-};
-
 function detectVendorModel(
   sn: string | null | undefined,
-  oltVendor?: string | null
+  oltVendor?: string | null,
+  rawModel?: string | null
 ): { vendor: string; model: string } {
-  if (!sn) return { vendor: 'Generic', model: 'ONT' };
-
-  const upper = sn.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-  // Match by SN prefix
-  for (const [prefix, info] of Object.entries(VENDOR_PREFIXES)) {
-    if (upper.startsWith(prefix)) return info;
-  }
-
-  // Guess from OLT vendor
-  if (oltVendor) {
-    const v = oltVendor.toLowerCase();
-    if (v.includes('zte')) return { vendor: 'ZTE', model: 'ONT' };
-    if (v.includes('huawei')) return { vendor: 'Huawei', model: 'ONT' };
-    if (v.includes('fiberhome')) return { vendor: 'FiberHome', model: 'ONT' };
-    if (v.includes('vsol')) return { vendor: 'VSOL', model: 'ONT' };
-  }
-
-  return { vendor: 'Generic', model: 'ONT' };
+  const vendor = oltVendor?.trim() || 'ONT';
+  const model = rawModel?.trim() || 'ONT Modem';
+  return { vendor, model };
 }
 
 function normalizeSN(sn: string | null | undefined): string | null {

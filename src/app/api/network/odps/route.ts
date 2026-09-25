@@ -75,6 +75,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check ODC capacity if connected to ODC
+    if (odcId) {
+      const targetOdc = await prisma.networkODC.findUnique({
+        where: { id: odcId },
+        include: {
+          _count: {
+            select: { odps: true },
+          },
+        },
+      });
+
+      if (!targetOdc) {
+        return NextResponse.json(
+          { success: false, error: 'ODC not found' },
+          { status: 404 }
+        );
+      }
+
+      if (targetOdc._count.odps >= targetOdc.portCount) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `ODC "${targetOdc.name}" is FULL (${targetOdc._count.odps}/${targetOdc.portCount} ODPs). Exceeding ODC port capacity is not allowed.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create ODP
     const odp = await prisma.networkODP.create({
       data: {
@@ -151,6 +180,35 @@ export async function PUT(request: NextRequest) {
         { success: false, error: 'ODP not found' },
         { status: 404 }
       );
+    }
+
+    // Check ODC capacity if assigning to a new/different ODC
+    if (odcId && odcId !== existingOdp.odcId) {
+      const targetOdc = await prisma.networkODC.findUnique({
+        where: { id: odcId },
+        include: {
+          _count: {
+            select: { odps: true },
+          },
+        },
+      });
+
+      if (!targetOdc) {
+        return NextResponse.json(
+          { success: false, error: 'ODC not found' },
+          { status: 404 }
+        );
+      }
+
+      if (targetOdc._count.odps >= targetOdc.portCount) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `ODC "${targetOdc.name}" is FULL (${targetOdc._count.odps}/${targetOdc.portCount} ODPs). Exceeding ODC port capacity is not allowed.`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Update ODP

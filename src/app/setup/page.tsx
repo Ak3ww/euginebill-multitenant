@@ -97,9 +97,8 @@ const ALL_STEPS = [
   { id: 7, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
   { id: 8, title: 'RADIUS Server', icon: Radio, desc: 'Switch Auth & Port 1812/1813' },
   { id: 9, title: 'TR-069 & GenieACS', icon: Globe, desc: 'Auto Config ONT (VLAN 4000)' },
-  { id: 10, title: 'FTTH OLT Management', icon: Cable, desc: 'VSOL 1600GS Config' },
-  { id: 11, title: 'Tim & SPK', icon: UserCheck, desc: 'Akun Teknisi & Role' },
-  { id: 12, title: 'Peluncuran Sistem', icon: Sparkles, desc: 'Turnkey Readiness Recap' },
+  { id: 10, title: 'Tim & SPK', icon: UserCheck, desc: 'Akun Teknisi & Role' },
+  { id: 11, title: 'Peluncuran Sistem', icon: Sparkles, desc: 'Turnkey Readiness Recap' },
 ];
 
 export default function UnifiedSetupWizardPage() {
@@ -2282,98 +2281,6 @@ export default function UnifiedSetupWizardPage() {
                     Kembali
                   </Button>
                   <Button onClick={() => { markStepCompleted(9); setCurrentStep(10); }}>
-                    <span>Lanjut ke FTTH OLT Management</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
-            )}
-
-            {/* STEP 10: FTTH OLT MANAGEMENT */}
-            {currentStep === 10 && (
-              <Card className="border-border shadow-xs bg-card">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Cable className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <CardTitle>FTTH OLT Management (VSOL Standard)</CardTitle>
-                      <CardDescription>
-                        Template konfigurasi OLT VSOL Seri V1600GS-ZF (ZTE Falcon) dan Cortina Standard.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pilih Varian Hardware OLT</Label>
-                    <div className="grid grid-cols-2 gap-2 bg-muted p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setOltVariant('v1600gs_zf')}
-                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          oltVariant === 'v1600gs_zf'
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        VSOL V1600GS-ZF (ZTE Falcon)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOltVariant('v1600gs_std')}
-                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          oltVariant === 'v1600gs_std'
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        VSOL V1600GS (Cortina Standard)
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi CLI OLT</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const text = oltVariant === 'v1600gs_zf'
-                            ? `# Configuration Template: VSOL V1600GS-ZF (ZTE Falcon Chipset)\n# MANDATORY: service-port line inside line-profile\nprofile line V1600GS-ZF\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n  service-port 1 gemport 1 uservlan 20 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
-                            : `# Configuration Template: VSOL V1600GS Standar (Cortina Chipset)\nprofile line V1600GS-STD\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`;
-                          copyToClipboard(text);
-                          setCopiedOltScript(true);
-                          setTimeout(() => setCopiedOltScript(false), 2000);
-                        }}
-                        className="text-xs gap-1.5 h-8"
-                      >
-                        {copiedOltScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedOltScript ? 'Tersalin!' : 'Salin Skrip OLT'}</span>
-                      </Button>
-                    </div>
-                    <textarea
-                      readOnly
-                      rows={7}
-                      value={
-                        oltVariant === 'v1600gs_zf'
-                          ? `# Configuration Template: VSOL V1600GS-ZF (ZTE Falcon Chipset)\n# MANDATORY: service-port line inside line-profile\nprofile line V1600GS-ZF\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n  service-port 1 gemport 1 uservlan 20 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
-                          : `# Configuration Template: VSOL V1600GS Standar (Cortina Chipset)\nprofile line V1600GS-STD\n  tcont 1 profile-id 1\n  gem add 1 tcont 1\n  gem mapping 1 1 vlan 20\n!\ninterface ge 0/1\n  speed 1000\n  no spanning-tree\n!`
-                      }
-                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
-                    />
-                  </div>
-                </CardContent>
-
-                <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(9)}>
-                    Kembali
-                  </Button>
-                  <Button onClick={() => { markStepCompleted(10); setCurrentStep(11); }}>
                     <span>Lanjut ke Tim & SPK</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
@@ -2381,8 +2288,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 11: TIM & SPK TEKNISI */}
-            {currentStep === 11 && (
+            {/* STEP 10: TIM & SPK TEKNISI */}
+            {currentStep === 10 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-3">
@@ -2457,8 +2364,8 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 12: PELUNCURAN SISTEM */}
-            {currentStep === 12 && (
+            {/* STEP 11: PELUNCURAN SISTEM */}
+            {currentStep === 11 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -2471,7 +2378,7 @@ export default function UnifiedSetupWizardPage() {
                           Sistem Billing EugineBill Siap Diluncurkan!
                         </CardTitle>
                         <CardDescription>
-                          Semua 12 modul utama infrastruktur jaringan dan operasional ISP telah terkonfigurasi 100%.
+                          Semua 11 modul utama infrastruktur jaringan dan operasional ISP telah terkonfigurasi 100%.
                         </CardDescription>
                       </div>
                     </div>
@@ -2495,14 +2402,13 @@ export default function UnifiedSetupWizardPage() {
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Bot WhatsApp Baileys PM2 Service</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> FreeRADIUS Integration Ready</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> TR-069 GenieACS VLAN 4000</div>
-                      <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> FTTH OLT VSOL 1600GS Config</div>
                       <div className="flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Akun Teknisi & Manajemen SPK</div>
                     </div>
                   </div>
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(11)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(10)}>
                     Kembali
                   </Button>
                   <Button
@@ -2512,7 +2418,7 @@ export default function UnifiedSetupWizardPage() {
                       if (typeof window !== 'undefined') {
                         localStorage.setItem('euginebill_wizard_completed', 'true');
                       }
-                      markStepCompleted(12);
+                      markStepCompleted(11);
                       router.push('/admin');
                     }}
                   >

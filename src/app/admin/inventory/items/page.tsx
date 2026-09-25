@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { showSuccess, showError, showConfirm } from '@/lib/sweetalert';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -10,25 +10,16 @@ import {
   Trash2,
   Package,
   Search,
-  Filter,
   AlertTriangle,
   TrendingDown,
   TrendingUp,
   RefreshCcw,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
-  XCircle,
   ExternalLink,
   Boxes,
   MapPin,
   RefreshCw,
-  Check,
-  ArrowRight,
-  ShieldAlert,
   Info,
-  Layers,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -54,27 +45,6 @@ interface Supplier {
   name: string;
 }
 
-interface SkuCategory {
-  id: string;
-  code: string;
-  label: string;
-  description?: string;
-  sortOrder: number;
-  isActive: boolean;
-  _count?: { subCategories: number };
-}
-
-interface SkuSubCategory {
-  id: string;
-  code: string;
-  name: string;
-  categoryCode: string;
-  requiresBrand: boolean;
-  defaultUnit?: string;
-  isSerialized: boolean;
-  isActive: boolean;
-}
-
 interface Item {
   id: string;
   sku: string;
@@ -82,10 +52,11 @@ interface Item {
   description?: string;
   categoryId?: string;
   categoryCode?: string;
-  subCategory?: string;
   isSerialized?: boolean;
   supplierId?: string;
   unit: string;
+  packUnit?: string;
+  packSize?: number;
   minimumStock: number;
   currentStock: number;
   purchasePrice: number;
@@ -118,8 +89,6 @@ export default function InventoryItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [skuCategories, setSkuCategories] = useState<SkuCategory[]>([]);
-  const [availableSubCategories, setAvailableSubCategories] = useState<SkuSubCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
@@ -128,42 +97,23 @@ export default function InventoryItemsPage() {
   const [filterSupplier, setFilterSupplier] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
-  // Wizard state for Add Item modal
-  const [wizardStep, setWizardStep] = useState<'check_duplicate' | 'details'>('check_duplicate');
-  const [duplicateSearchTerm, setDuplicateSearchTerm] = useState('');
-  const [duplicateMatches, setDuplicateMatches] = useState<Item[]>([]);
-
-  // SKU Builder state
-  const [selectedCatCode, setSelectedCatCode] = useState('');
-  const [selectedSubCatCode, setSelectedSubCatCode] = useState('');
-  const [isBranded, setIsBranded] = useState(true);
-  const [brandInput, setBrandInput] = useState('');
-  const [modelInput, setModelInput] = useState('');
-  const [specInput, setSpecInput] = useState('');
-  const [liveGeneratedSku, setLiveGeneratedSku] = useState('');
-  const [skuChecking, setSkuChecking] = useState(false);
-  const [skuExists, setSkuExists] = useState(false);
-  const [existingMatchedItem, setExistingMatchedItem] = useState<{ id: string; name: string; sku: string; currentStock: number } | null>(null);
-  const [showManualSkuOverride, setShowManualSkuOverride] = useState(false);
-  const [manualSkuValue, setManualSkuValue] = useState('');
-
-  // Form data
+  // Form data state
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
     description: '',
     categoryId: '',
-    categoryCode: '',
-    subCategory: '',
-    isSerialized: false,
     supplierId: '',
     unit: 'pcs',
+    packUnit: 'Pack',
+    packSize: 100,
     minimumStock: 0,
     currentStock: 0,
     purchasePrice: 0,
     sellingPrice: 0,
     location: '',
     notes: '',
+    isSerialized: false,
     isActive: true,
   });
 
@@ -176,7 +126,6 @@ export default function InventoryItemsPage() {
 
   useEffect(() => {
     loadData();
-    loadSkuCategories();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -199,205 +148,26 @@ export default function InventoryItemsPage() {
     }
   };
 
-  const loadSkuCategories = async () => {
-    try {
-      const res = await fetch('/api/admin/sku-settings/categories?activeOnly=true');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setSkuCategories(data.categories || []);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load SKU categories:', err);
-    }
-  };
-
-  // Fetch subcategories when categoryCode changes
-  useEffect(() => {
-    if (!selectedCatCode) {
-      setAvailableSubCategories([]);
-      setSelectedSubCatCode('');
-      return;
-    }
-
-    const fetchSubCategories = async () => {
-      try {
-        const res = await fetch(`/api/admin/sku-settings/categories/${selectedCatCode}/subcategories?activeOnly=true`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            const subs: SkuSubCategory[] = data.subcategories || [];
-            setAvailableSubCategories(subs);
-            if (subs.length > 0) {
-              const defaultSub = subs[0];
-              setSelectedSubCatCode(defaultSub.code);
-              setIsBranded(defaultSub.requiresBrand);
-              setFormData((prev) => ({
-                ...prev,
-                categoryCode: selectedCatCode,
-                subCategory: defaultSub.code,
-                unit: defaultSub.defaultUnit || prev.unit,
-                isSerialized: defaultSub.isSerialized,
-              }));
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch subcategories:', err);
-      }
-    };
-
-    fetchSubCategories();
-  }, [selectedCatCode]);
-
-  // When selectedSubCatCode changes, update requiresBrand, defaultUnit, and isSerialized
-  const handleSubCategorySelect = (subCode: string) => {
-    setSelectedSubCatCode(subCode);
-    const sub = availableSubCategories.find((s) => s.code === subCode);
-    if (sub) {
-      setIsBranded(sub.requiresBrand);
-      setFormData((prev) => ({
-        ...prev,
-        categoryCode: selectedCatCode,
-        subCategory: subCode,
-        unit: sub.defaultUnit || prev.unit,
-        isSerialized: sub.isSerialized,
-      }));
-    }
-  };
-
-  // Debounced auto-generate SKU
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const triggerGenerateSku = useCallback(async () => {
-    if (!selectedCatCode || !selectedSubCatCode) {
-      setLiveGeneratedSku('');
-      setSkuExists(false);
-      setExistingMatchedItem(null);
-      return;
-    }
-
-    setSkuChecking(true);
-    try {
-      const res = await fetch('/api/inventory/sku/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          categoryCode: selectedCatCode,
-          subCategoryCode: selectedSubCatCode,
-          isBranded,
-          brand: brandInput,
-          model: modelInput,
-          spec: specInput,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setLiveGeneratedSku(data.sku);
-          setSkuExists(data.exists);
-          setExistingMatchedItem(data.existingItem || null);
-
-          // If manual override is OFF, sync with formData.sku
-          if (!showManualSkuOverride) {
-            setFormData((prev) => ({
-              ...prev,
-              sku: data.sku,
-            }));
-          }
-
-          // Auto-suggest item name if empty or user hasn't heavily customized
-          const currentSub = availableSubCategories.find((s) => s.code === selectedSubCatCode);
-          let suggestedName = '';
-          if (isBranded && (brandInput || modelInput)) {
-            suggestedName = `${brandInput} ${modelInput}`.trim();
-          } else if (!isBranded && specInput) {
-            suggestedName = `${currentSub?.name || selectedSubCatCode} ${specInput}`.trim();
-          }
-          if (suggestedName && (!formData.name || formData.name === liveGeneratedSku)) {
-            setFormData((prev) => ({ ...prev, name: suggestedName }));
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error generating SKU:', err);
-    } finally {
-      setSkuChecking(false);
-    }
-  }, [
-    selectedCatCode,
-    selectedSubCatCode,
-    isBranded,
-    brandInput,
-    modelInput,
-    specInput,
-    showManualSkuOverride,
-    availableSubCategories,
-    formData.name,
-    liveGeneratedSku,
-  ]);
-
-  useEffect(() => {
-    if (editingItem) return;
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      triggerGenerateSku();
-    }, 350);
-
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
-  }, [triggerGenerateSku, editingItem]);
-
-  // Live check duplicate in Step 0
-  const handleDuplicateSearch = (query: string) => {
-    setDuplicateSearchTerm(query);
-    if (!query.trim()) {
-      setDuplicateMatches([]);
-      return;
-    }
-    const q = query.toLowerCase().trim();
-    const matches = items.filter(
-      (item) => item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q)
-    );
-    setDuplicateMatches(matches.slice(0, 5));
-  };
-
   const resetForm = () => {
     setFormData({
       sku: '',
       name: '',
       description: '',
       categoryId: '',
-      categoryCode: '',
-      subCategory: '',
-      isSerialized: false,
       supplierId: '',
       unit: 'pcs',
+      packUnit: 'Pack',
+      packSize: 100,
       minimumStock: 0,
       currentStock: 0,
       purchasePrice: 0,
       sellingPrice: 0,
       location: '',
       notes: '',
+      isSerialized: false,
       isActive: true,
     });
-    setWizardStep('check_duplicate');
-    setDuplicateSearchTerm('');
-    setDuplicateMatches([]);
-    setSelectedCatCode(skuCategories[0]?.code || '');
-    setSelectedSubCatCode('');
-    setIsBranded(true);
-    setBrandInput('');
-    setModelInput('');
-    setSpecInput('');
-    setLiveGeneratedSku('');
-    setSkuExists(false);
-    setExistingMatchedItem(null);
-    setShowManualSkuOverride(false);
-    setManualSkuValue('');
+    setEditingItem(null);
   };
 
   const handleEdit = (item: Item) => {
@@ -407,42 +177,43 @@ export default function InventoryItemsPage() {
       name: item.name,
       description: item.description || '',
       categoryId: item.categoryId || '',
-      categoryCode: item.categoryCode || '',
-      subCategory: item.subCategory || '',
-      isSerialized: item.isSerialized ?? false,
       supplierId: item.supplierId || '',
-      unit: item.unit,
-      minimumStock: item.minimumStock,
-      currentStock: item.currentStock,
-      purchasePrice: item.purchasePrice,
-      sellingPrice: item.sellingPrice,
+      unit: item.unit || 'pcs',
+      packUnit: item.packUnit || 'Pack',
+      packSize: item.packSize || 100,
+      minimumStock: item.minimumStock || 0,
+      currentStock: item.currentStock || 0,
+      purchasePrice: item.purchasePrice || 0,
+      sellingPrice: item.sellingPrice || 0,
       location: item.location || '',
       notes: item.notes || '',
-      isActive: item.isActive,
+      isSerialized: item.isSerialized ?? false,
+      isActive: item.isActive ?? true,
     });
-    setSelectedCatCode(item.categoryCode || '');
-    setSelectedSubCatCode(item.subCategory || '');
-    setShowManualSkuOverride(false);
-    setManualSkuValue(item.sku);
     setIsDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const finalSku = showManualSkuOverride ? manualSkuValue : formData.sku;
-
-    if (!finalSku || !formData.name) {
-      await showError(t('inventory.skuRequired') + ' & ' + t('inventory.itemNameRequired'));
+    if (!formData.name.trim()) {
+      await showError(t('inventory.itemNameRequired'));
       return;
     }
 
-    if (!editingItem && skuExists) {
-      const proceed = await showConfirm(
-        'Peringatan Duplikasi SKU',
-        `SKU "${finalSku}" sudah terdaftar di inventori (${existingMatchedItem?.name}). Apakah Anda yakin ingin melanjutkan penyimpanan?`
-      );
-      if (!proceed) return;
+    // Auto-generate default SKU if empty
+    let finalSku = formData.sku.trim();
+    if (!finalSku) {
+      const selectedCat = categories.find((c) => c.id === formData.categoryId);
+      const prefix = selectedCat
+        ? selectedCat.name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'CAT')
+        : 'INV';
+      const namePart = formData.name
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 10) || 'ITEM';
+      finalSku = `${prefix}-${namePart}-${Math.floor(100 + Math.random() * 900)}`;
     }
 
     try {
@@ -450,8 +221,8 @@ export default function InventoryItemsPage() {
       const payload = {
         ...formData,
         sku: finalSku,
-        categoryCode: selectedCatCode || formData.categoryCode || undefined,
-        subCategory: selectedSubCatCode || formData.subCategory || undefined,
+        packSize: formData.packSize ? Number(formData.packSize) : null,
+        packUnit: formData.packUnit ? formData.packUnit.trim() : null,
         ...(editingItem ? { id: editingItem.id } : {}),
       };
 
@@ -468,7 +239,6 @@ export default function InventoryItemsPage() {
           editingItem ? t('inventory.itemUpdated') : t('inventory.itemCreated')
         );
         setIsDialogOpen(false);
-        setEditingItem(null);
         resetForm();
         loadData();
       } else {
@@ -550,9 +320,7 @@ export default function InventoryItemsPage() {
       if (res.ok && data.success) {
         setReconcileResult(data);
         await showSuccess(`Rekonsiliasi selesai! ${data.synced} pelanggan tersinkronisasi.`);
-        // Reload data
         loadData();
-        // Refresh diagnostics
         const diagRes = await fetch('/api/admin/inventory/reconcile-customer-ont');
         if (diagRes.ok) {
           const diagData = await diagRes.json();
@@ -573,8 +341,7 @@ export default function InventoryItemsPage() {
       !searchTerm ||
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.categoryCode && item.categoryCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (item.subCategory && item.subCategory.toLowerCase().includes(searchTerm.toLowerCase()));
+      (item.categoryCode && item.categoryCode.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchCategory = !filterCategory || item.categoryId === filterCategory;
     const matchSupplier = !filterSupplier || item.supplierId === filterSupplier;
     const matchLowStock =
@@ -588,6 +355,19 @@ export default function InventoryItemsPage() {
     lowStock: items.filter((i) => i.stockStatus === 'low_stock').length,
     outOfStock: items.filter((i) => i.stockStatus === 'out_of_stock').length,
     totalValue: items.reduce((sum, i) => sum + i.currentStock * i.purchasePrice, 0),
+  };
+
+  const formatStockDisplay = (item: Item) => {
+    const baseUnit = item.unit || 'pcs';
+    const baseStock = `${item.currentStock} ${baseUnit}`;
+    if (item.packSize && item.packSize > 1) {
+      const packs = Math.floor(item.currentStock / item.packSize);
+      const remainder = item.currentStock % item.packSize;
+      const packUnit = item.packUnit || 'Pack';
+      const remainderText = remainder > 0 ? ` + ${remainder} ${baseUnit}` : '';
+      return `${baseStock} (${packs} ${packUnit} @ ${item.packSize} ${baseUnit}${remainderText})`;
+    }
+    return baseStock;
   };
 
   if (loading) {
@@ -675,7 +455,6 @@ export default function InventoryItemsPage() {
             </button>
             <button
               onClick={() => {
-                setEditingItem(null);
                 resetForm();
                 setIsDialogOpen(true);
               }}
@@ -830,9 +609,9 @@ export default function InventoryItemsPage() {
                       <span className="text-xs font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
                         {item.sku}
                       </span>
-                      {item.categoryCode && (
+                      {item.category && (
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                          {item.categoryCode}{item.subCategory ? ` / ${item.subCategory}` : ''}
+                          {item.category.name}
                         </span>
                       )}
                     </div>
@@ -855,10 +634,10 @@ export default function InventoryItemsPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1 border-t border-border">
-                  <div>
+                  <div className="col-span-2">
                     <span>Stok: </span>
                     <span className="font-semibold text-foreground">
-                      {item.currentStock} {item.unit}
+                      {formatStockDisplay(item)}
                     </span>
                     <span className="text-[10px]"> (min: {item.minimumStock})</span>
                   </div>
@@ -930,7 +709,7 @@ export default function InventoryItemsPage() {
                     Nama Barang
                   </th>
                   <th className="px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Kategori & Jenis
+                    Kategori
                   </th>
                   <th className="px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     Stok
@@ -988,13 +767,7 @@ export default function InventoryItemsPage() {
                       </td>
                       <td className="px-3 py-2.5 text-xs">
                         <div className="flex flex-col gap-0.5">
-                          {item.categoryCode ? (
-                            <span className="font-mono text-[10px] text-primary font-semibold">
-                              {item.categoryCode}{item.subCategory ? ` / ${item.subCategory}` : ''}
-                            </span>
-                          ) : (
-                            <span className="text-foreground">{item.category?.name || '-'}</span>
-                          )}
+                          <span className="text-foreground">{item.category?.name || item.categoryCode || '-'}</span>
                           {item.isSerialized ? (
                             <span className="text-[9px] text-muted-foreground">Unit Berseri (SN)</span>
                           ) : (
@@ -1012,9 +785,9 @@ export default function InventoryItemsPage() {
                               : 'text-emerald-600 dark:text-emerald-400'
                           }`}
                         >
-                          {item.currentStock}
+                          {formatStockDisplay(item)}
                         </div>
-                        <div className="text-[10px] text-muted-foreground">Min: {item.minimumStock}</div>
+                        <div className="text-[10px] text-muted-foreground">Min: {item.minimumStock} {item.unit}</div>
                         {(item as any).deployedCount > 0 && (
                           <div className="mt-1">
                             <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-500/10 text-blue-600 border border-blue-500/30" title="Jumlah unit terpasang aktif di jaringan OLT / ODP / ODC">
@@ -1079,7 +852,7 @@ export default function InventoryItemsPage() {
           </div>
         </div>
 
-        {/* Modal Wizard Tambah / Edit Barang */}
+        {/* Modal Clean 1-Step Tambah / Edit Barang */}
         <SimpleModal
           isOpen={isDialogOpen}
           onClose={() => {
@@ -1087,7 +860,7 @@ export default function InventoryItemsPage() {
             setEditingItem(null);
             resetForm();
           }}
-          size="xl"
+          size="lg"
         >
           <ModalHeader>
             <ModalTitle>
@@ -1095,474 +868,223 @@ export default function InventoryItemsPage() {
             </ModalTitle>
           </ModalHeader>
 
-          {/* STEP 0: Cek Duplikasi Sebelum Tambah Baru (Hanya untuk tambah baru) */}
-          {!editingItem && wizardStep === 'check_duplicate' && (
-            <div>
-              <ModalBody>
-                <div className="space-y-4 py-2">
-                  <div className="p-3 bg-muted/40 rounded-xl border border-border">
-                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                      <Search className="h-4 w-4 text-primary" />
-                      Langkah 1: Cek Ketersediaan Barang di Inventori
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Ketik nama merek, tipe, atau spesifikasi barang untuk memastikan barang ini belum pernah dibuat sebelumnya.
+          <form onSubmit={handleSubmit}>
+            <ModalBody>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 py-1">
+                {/* Nama Barang */}
+                <div className="md:col-span-2">
+                  <ModalLabel required>Nama Barang</ModalLabel>
+                  <ModalInput
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="cth: ZTE F609 V9 GPON ONT, Patch Cord SC-UPC 3m..."
+                    required
+                  />
+                </div>
+
+                {/* Kategori Inventori */}
+                <div>
+                  <ModalLabel>Kategori Inventori</ModalLabel>
+                  <ModalSelect
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                  >
+                    <option value="">-- Pilih Kategori --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </ModalSelect>
+                </div>
+
+                {/* Kode SKU */}
+                <div>
+                  <ModalLabel>Kode SKU</ModalLabel>
+                  <ModalInput
+                    type="text"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                    placeholder="Auto-generate jika dikosongkan"
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                {/* Satuan Utama & Satuan Kemasan */}
+                <div>
+                  <ModalLabel required>Satuan Utama (Base Unit)</ModalLabel>
+                  <ModalInput
+                    type="text"
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    placeholder="pcs, meter, unit, roll"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <ModalLabel>Satuan Kemasan (Pack Unit)</ModalLabel>
+                  <ModalInput
+                    type="text"
+                    value={formData.packUnit}
+                    onChange={(e) => setFormData({ ...formData, packUnit: e.target.value })}
+                    placeholder="Pack, Box, Dus, Roll, Karton"
+                  />
+                </div>
+
+                {/* Isi per Kemasan (Pack Size) */}
+                <div className="md:col-span-2">
+                  <ModalLabel>Isi per Kemasan (Jumlah Base Unit per Pack)</ModalLabel>
+                  <ModalInput
+                    type="number"
+                    value={formData.packSize}
+                    onChange={(e) => setFormData({ ...formData, packSize: parseInt(e.target.value) || 1 })}
+                    placeholder="100"
+                    min={1}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1 font-medium">
+                    <Info className="h-3.5 w-3.5 text-primary shrink-0" />
+                    Contoh: 1 {formData.packUnit || 'Pack'} = {formData.packSize || 100} {formData.unit || 'pcs'}
+                  </p>
+                </div>
+
+                {/* Batas Minimum Stock & Stok Awal */}
+                <div>
+                  <ModalLabel>Batas Minimum Stok</ModalLabel>
+                  <ModalInput
+                    type="number"
+                    value={formData.minimumStock}
+                    onChange={(e) => setFormData({ ...formData, minimumStock: parseInt(e.target.value) || 0 })}
+                    min={0}
+                  />
+                </div>
+
+                <div>
+                  <ModalLabel>Stok Awal Masuk</ModalLabel>
+                  <ModalInput
+                    type="number"
+                    value={formData.currentStock}
+                    onChange={(e) => setFormData({ ...formData, currentStock: parseFloat(e.target.value) || 0 })}
+                    disabled={!!editingItem}
+                  />
+                  {editingItem && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Ubah stok melalui menu Riwayat Masuk/Keluar.
                     </p>
-
-                    <div className="relative mt-3">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <input
-                        type="text"
-                        placeholder="Contoh: ZTE F609, Patchcord, Precon 100m, Fast Connector..."
-                        value={duplicateSearchTerm}
-                        onChange={(e) => handleDuplicateSearch(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  {duplicateMatches.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-amber-600 flex items-center gap-1">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        Ditemukan {duplicateMatches.length} barang serupa di gudang:
-                      </p>
-                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                        {duplicateMatches.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-2.5 rounded-lg border border-border bg-card flex items-center justify-between gap-3 text-xs"
-                          >
-                            <div>
-                              <div className="font-semibold text-foreground">{item.name}</div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                  {item.sku}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  Stok: <strong className="text-foreground">{item.currentStock} {item.unit}</strong>
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsDialogOpen(false);
-                                handleEdit(item);
-                              }}
-                              className="px-2.5 py-1 bg-primary/10 text-primary hover:bg-primary/20 rounded font-medium text-xs whitespace-nowrap transition-colors"
-                            >
-                              Gunakan / Edit Barang Ini
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : duplicateSearchTerm.trim().length > 2 ? (
-                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      <span>Belum ada barang dengan kata kunci &quot;{duplicateSearchTerm}&quot;. Silakan lanjutkan input master baru.</span>
-                    </div>
-                  ) : null}
-                </div>
-              </ModalBody>
-              <ModalFooter>
-                <ModalButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setIsDialogOpen(false);
-                    resetForm();
-                  }}
-                >
-                  Batal
-                </ModalButton>
-                <ModalButton
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    setWizardStep('details');
-                    if (duplicateSearchTerm.trim()) {
-                      setModelInput(duplicateSearchTerm.trim());
-                    }
-                  }}
-                >
-                  Lanjut Buat Master Barang Baru <ArrowRight className="h-3.5 w-3.5 ml-1 inline" />
-                </ModalButton>
-              </ModalFooter>
-            </div>
-          )}
-
-          {/* STEP 1+: Form Generator SKU & Detail Barang */}
-          {(editingItem || wizardStep === 'details') && (
-            <form onSubmit={handleSubmit}>
-              <ModalBody>
-                <div className="space-y-4">
-                  {/* SKU Generator Box (Hanya untuk tambah baru) */}
-                  {!editingItem && (
-                    <div className="p-3 bg-muted/40 border border-border rounded-xl space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-foreground flex items-center gap-1">
-                          <Sparkles className="h-3.5 w-3.5 text-primary" />
-                          Smart SKU Generator (Standar EMG)
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setWizardStep('check_duplicate')}
-                          className="text-[10px] text-muted-foreground hover:text-foreground underline"
-                        >
-                          &larr; Cek Duplikat Ulang
-                        </button>
-                      </div>
-
-                      {/* Baris 1: Kategori Induk & Sub-Kategori */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <ModalLabel required>Kategori Induk</ModalLabel>
-                          <ModalSelect
-                            value={selectedCatCode}
-                            onChange={(e) => setSelectedCatCode(e.target.value)}
-                            required
-                          >
-                            <option value="">-- Pilih Kategori Induk --</option>
-                            {skuCategories.map((cat) => (
-                              <option key={cat.id} value={cat.code}>
-                                {cat.code} - {cat.label}
-                              </option>
-                            ))}
-                          </ModalSelect>
-                        </div>
-
-                        <div>
-                          <ModalLabel required>Sub-Kategori</ModalLabel>
-                          <ModalSelect
-                            value={selectedSubCatCode}
-                            onChange={(e) => handleSubCategorySelect(e.target.value)}
-                            disabled={!selectedCatCode || availableSubCategories.length === 0}
-                            required
-                          >
-                            <option value="">-- Pilih Sub-Kategori --</option>
-                            {availableSubCategories.map((sub) => (
-                              <option key={sub.id} value={sub.code}>
-                                {sub.code} - {sub.name}
-                              </option>
-                            ))}
-                          </ModalSelect>
-                        </div>
-                      </div>
-
-                      {/* Baris 2: Mode Merek vs Generic */}
-                      <div className="pt-2 border-t border-border/60">
-                        <div className="flex items-center gap-4 mb-2">
-                          <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer font-medium">
-                            <input
-                              type="radio"
-                              name="brandMode"
-                              checked={isBranded}
-                              onChange={() => setIsBranded(true)}
-                              className="accent-primary"
-                            />
-                            Barang Bermerek (Ada Brand & Tipe)
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer font-medium">
-                            <input
-                              type="radio"
-                              name="brandMode"
-                              checked={!isBranded}
-                              onChange={() => setIsBranded(false)}
-                              className="accent-primary"
-                            />
-                            Generic / Spesifikasi Varian
-                          </label>
-                        </div>
-
-                        {isBranded ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <ModalLabel required>Merek / Brand</ModalLabel>
-                              <ModalInput
-                                type="text"
-                                placeholder="cth: ZTE, HUAWEI, TOTOLINK"
-                                value={brandInput}
-                                onChange={(e) => setBrandInput(e.target.value)}
-                                required={isBranded}
-                              />
-                            </div>
-                            <div>
-                              <ModalLabel required>Tipe / Model</ModalLabel>
-                              <ModalInput
-                                type="text"
-                                placeholder="cth: F609 V9, HG8245H, X6"
-                                value={modelInput}
-                                onChange={(e) => setModelInput(e.target.value)}
-                                required={isBranded}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            <ModalLabel required>Spesifikasi / Varian</ModalLabel>
-                            <ModalInput
-                              type="text"
-                              placeholder="cth: 1CORE 1000M, SC-UPC 0.9MM, 8 PORT"
-                              value={specInput}
-                              onChange={(e) => setSpecInput(e.target.value)}
-                              required={!isBranded}
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Live Monospace SKU Preview Box */}
-                      <div className="p-2.5 rounded-lg border border-border bg-card">
-                        <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="text-muted-foreground font-medium">Preview SKU Otomatis:</span>
-                          {skuChecking ? (
-                            <span className="text-muted-foreground flex items-center gap-1 text-[10px]">
-                              <RefreshCcw className="h-3 w-3 animate-spin" /> Memeriksa...
-                            </span>
-                          ) : skuExists ? (
-                            <span className="text-destructive font-semibold flex items-center gap-1 text-[10px]">
-                              <AlertTriangle className="h-3 w-3" /> SKU Sudah Ada!
-                            </span>
-                          ) : liveGeneratedSku ? (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 text-[10px]">
-                              <Check className="h-3 w-3" /> SKU Siap
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <div className="font-mono text-sm font-bold text-foreground bg-muted/60 p-2 rounded border border-border/80 tracking-wider">
-                          {showManualSkuOverride ? manualSkuValue || '(Ketik SKU Manual di Bawah)' : liveGeneratedSku || '(Lengkapi data di atas)'}
-                        </div>
-
-                        {skuExists && existingMatchedItem && !showManualSkuOverride && (
-                          <p className="text-[11px] text-destructive mt-1.5 flex items-center gap-1">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                            SKU ini sudah dipakai oleh: <strong>{existingMatchedItem.name}</strong> (Stok: {existingMatchedItem.currentStock}).
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Collapsible Manual SKU Override */}
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setShowManualSkuOverride(!showManualSkuOverride)}
-                          className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                        >
-                          {showManualSkuOverride ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          Override SKU Manual (Khusus Kasus Tertentu)
-                        </button>
-                        {showManualSkuOverride && (
-                          <div className="mt-2 p-2.5 bg-muted/20 border border-border rounded-lg">
-                            <ModalLabel>Kode SKU Manual</ModalLabel>
-                            <ModalInput
-                              type="text"
-                              value={manualSkuValue}
-                              onChange={(e) => setManualSkuValue(e.target.value.toUpperCase())}
-                              placeholder="cth: EMG-CUSTOM-SKU-001"
-                              className="font-mono text-xs"
-                            />
-                            <p className="text-[10px] text-muted-foreground mt-1">
-                              Gunakan opsi ini hanya jika barang memiliki kode SKU khusus yang wajib dicatat secara independen.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   )}
-
-                  {/* Form Fields Detail Barang */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
-                    {/* Jika sedang edit, tampilkan SKU readonly/editable */}
-                    {editingItem && (
-                      <div className="md:col-span-2">
-                        <ModalLabel required>Kode SKU</ModalLabel>
-                        <ModalInput
-                          type="text"
-                          value={formData.sku}
-                          onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
-                          className="font-mono text-xs"
-                          required
-                        />
-                      </div>
-                    )}
-
-                    <div className="md:col-span-2">
-                      <ModalLabel required>Nama Barang</ModalLabel>
-                      <ModalInput
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="cth: ZTE F609 V9 GPON ONT"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <ModalLabel>Kategori Inventori (Lama/Umum)</ModalLabel>
-                      <ModalSelect
-                        value={formData.categoryId}
-                        onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                      >
-                        <option value="">-- Pilih Kategori --</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </ModalSelect>
-                    </div>
-
-                    <div>
-                      <ModalLabel>Supplier</ModalLabel>
-                      <ModalSelect
-                        value={formData.supplierId}
-                        onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
-                      >
-                        <option value="">-- Pilih Supplier --</option>
-                        {suppliers.map((sup) => (
-                          <option key={sup.id} value={sup.id}>
-                            {sup.name}
-                          </option>
-                        ))}
-                      </ModalSelect>
-                    </div>
-
-                    <div>
-                      <ModalLabel required>Satuan (Unit)</ModalLabel>
-                      <ModalInput
-                        type="text"
-                        value={formData.unit}
-                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                        placeholder="pcs, unit, meter, roll, box"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <ModalLabel>Lokasi Rak / Gudang</ModalLabel>
-                      <ModalInput
-                        type="text"
-                        value={formData.location}
-                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                        placeholder="Gudang A, Rak B-02"
-                      />
-                    </div>
-
-                    <div>
-                      <ModalLabel>Stok Awal Masuk</ModalLabel>
-                      <ModalInput
-                        type="number"
-                        value={formData.currentStock}
-                        onChange={(e) =>
-                          setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })
-                        }
-                        disabled={!!editingItem}
-                      />
-                      {editingItem && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Ubah stok melalui menu Riwayat Masuk/Keluar.
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <ModalLabel>Batas Minimum Stok</ModalLabel>
-                      <ModalInput
-                        type="number"
-                        value={formData.minimumStock}
-                        onChange={(e) =>
-                          setFormData({ ...formData, minimumStock: parseInt(e.target.value) || 0 })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <ModalLabel>Harga Beli Satuan (Rp)</ModalLabel>
-                      <ModalInput
-                        type="number"
-                        value={formData.purchasePrice}
-                        onChange={(e) =>
-                          setFormData({ ...formData, purchasePrice: parseInt(e.target.value) || 0 })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <ModalLabel>Harga Jual Satuan (Rp)</ModalLabel>
-                      <ModalInput
-                        type="number"
-                        value={formData.sellingPrice}
-                        onChange={(e) =>
-                          setFormData({ ...formData, sellingPrice: parseInt(e.target.value) || 0 })
-                        }
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <ModalLabel>Deskripsi Barang</ModalLabel>
-                      <ModalTextarea
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        rows={2}
-                        placeholder="Keterangan spesifikasi teknis tambahan..."
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <ModalLabel>Catatan Internal</ModalLabel>
-                      <ModalTextarea
-                        value={formData.notes}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        rows={1}
-                      />
-                    </div>
-
-                    <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-1">
-                      <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer font-medium">
-                        <input
-                          type="checkbox"
-                          checked={formData.isSerialized}
-                          onChange={(e) => setFormData({ ...formData, isSerialized: e.target.checked })}
-                          className="rounded border-border accent-primary w-4 h-4"
-                        />
-                        <span>Lacak Satuan Individual (Unit Berseri / Roll Kabel)</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer font-medium">
-                        <input
-                          type="checkbox"
-                          checked={formData.isActive}
-                          onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                          className="rounded border-border accent-primary w-4 h-4"
-                        />
-                        <span>Barang Aktif</span>
-                      </label>
-                    </div>
-                  </div>
                 </div>
-              </ModalBody>
-              <ModalFooter>
-                <ModalButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setIsDialogOpen(false);
-                    setEditingItem(null);
-                    resetForm();
-                  }}
-                >
-                  {t('common.cancel')}
-                </ModalButton>
-                <ModalButton type="submit" variant="primary">
-                  {editingItem ? t('common.update') : 'Simpan Master Barang'}
-                </ModalButton>
-              </ModalFooter>
-            </form>
-          )}
+
+                {/* Harga Beli & Harga Jual */}
+                <div>
+                  <ModalLabel>Harga Beli Satuan (Rp)</ModalLabel>
+                  <ModalInput
+                    type="number"
+                    value={formData.purchasePrice}
+                    onChange={(e) => setFormData({ ...formData, purchasePrice: parseInt(e.target.value) || 0 })}
+                    min={0}
+                  />
+                </div>
+
+                <div>
+                  <ModalLabel>Harga Jual Satuan (Rp)</ModalLabel>
+                  <ModalInput
+                    type="number"
+                    value={formData.sellingPrice}
+                    onChange={(e) => setFormData({ ...formData, sellingPrice: parseInt(e.target.value) || 0 })}
+                    min={0}
+                  />
+                </div>
+
+                {/* Supplier */}
+                <div>
+                  <ModalLabel>Supplier</ModalLabel>
+                  <ModalSelect
+                    value={formData.supplierId}
+                    onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
+                  >
+                    <option value="">-- Pilih Supplier --</option>
+                    {suppliers.map((sup) => (
+                      <option key={sup.id} value={sup.id}>
+                        {sup.name}
+                      </option>
+                    ))}
+                  </ModalSelect>
+                </div>
+
+                {/* Lokasi Rak / Gudang */}
+                <div>
+                  <ModalLabel>Lokasi Rak / Gudang</ModalLabel>
+                  <ModalInput
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Gudang A, Rak B-02"
+                  />
+                </div>
+
+                {/* Deskripsi Barang */}
+                <div className="md:col-span-2">
+                  <ModalLabel>Deskripsi Barang</ModalLabel>
+                  <ModalTextarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    placeholder="Spesifikasi teknis tambahan..."
+                  />
+                </div>
+
+                {/* Catatan Internal */}
+                <div className="md:col-span-2">
+                  <ModalLabel>Catatan Internal</ModalLabel>
+                  <ModalTextarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={1}
+                  />
+                </div>
+
+                {/* Toggles */}
+                <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-1">
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer font-medium">
+                    <input
+                      type="checkbox"
+                      checked={formData.isSerialized}
+                      onChange={(e) => setFormData({ ...formData, isSerialized: e.target.checked })}
+                      className="rounded border-border accent-primary w-4 h-4"
+                    />
+                    <span>Lacak Satuan Individual (Unit Berseri / Roll Kabel)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer font-medium">
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                      className="rounded border-border accent-primary w-4 h-4"
+                    />
+                    <span>Barang Aktif</span>
+                  </label>
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter>
+              <ModalButton
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  setEditingItem(null);
+                  resetForm();
+                }}
+              >
+                {t('common.cancel')}
+              </ModalButton>
+              <ModalButton type="submit" variant="primary">
+                {editingItem ? t('common.update') : 'Simpan Master Barang'}
+              </ModalButton>
+            </ModalFooter>
+          </form>
         </SimpleModal>
 
         {/* Modal Audit & Rekonsiliasi ONT Pelanggan */}

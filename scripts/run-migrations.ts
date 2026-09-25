@@ -51,12 +51,16 @@ async function main() {
     console.log('   ✅ currentStock type ensured.');
   } catch { console.log('   ✅ Already correct type.'); }
 
-  // ─── Migration 3: Add packSize ─────────────────────────────────────────────
-  console.log('3️⃣  [inventory_items] Adding packSize column...');
+  // ─── Migration 3: Add packSize & packUnit ──────────────────────────────────
+  console.log('3️⃣  [inventory_items] Adding packSize & packUnit columns...');
   if (!(await columnExists('inventory_items', 'packSize'))) {
     await prisma.$executeRawUnsafe(`ALTER TABLE \`inventory_items\` ADD COLUMN \`packSize\` INT NULL`);
     console.log('   ✅ packSize added.');
   } else { console.log('   ✅ packSize already exists.'); }
+  if (!(await columnExists('inventory_items', 'packUnit'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE \`inventory_items\` ADD COLUMN \`packUnit\` VARCHAR(191) NULL`);
+    console.log('   ✅ packUnit added.');
+  } else { console.log('   ✅ packUnit already exists.'); }
 
   // ─── Migration 4: Add categoryCode ────────────────────────────────────────
   console.log('4️⃣  [inventory_items] Adding categoryCode column...');

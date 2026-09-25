@@ -72,6 +72,7 @@ const DEFAULT_INVENTORY_ITEMS = [
   { sku: 'MKT-BROSUR-A5-150', name: 'BROSUR A5 ART PAPER 150', categoryCode: 'MKT', unit: 'rim', packSize: 500, isSerialized: false },
 
   // ─── TOOLS (TLS) ───
+  { sku: 'TLS-TANG-POTONG', name: 'TANG POTONG', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
   { sku: 'TLS-FIBER-CLEAVER', name: 'FIBER CLEAVER', categoryCode: 'TLS', unit: 'unit', packSize: 1, isSerialized: false },
   { sku: 'TLS-OBENG-KEMBANG', name: 'OBENG KEMBANG', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },
   { sku: 'TLS-OBENG-MIN', name: 'OBENG MIN', categoryCode: 'TLS', unit: 'pcs', packSize: 1, isSerialized: false },

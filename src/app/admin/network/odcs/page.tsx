@@ -1,12 +1,16 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { showSuccess, showError, showConfirm } from '@/lib/sweetalert';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
   Plus, Pencil, Trash2, Server, MapPin, Map, X, RefreshCcw,
-  Activity, Box, HardDrive,
+  Activity, Box, HardDrive, AlertTriangle,
 } from 'lucide-react';
+
+const getOdcHardwareSpecs = (portCount: number) => {
+  return `Box ODC ${portCount} Port (Splitter PLC 1:${portCount})`;
+};
 import MapPicker from '@/components/MapPicker';
 import {
   SimpleModal,
@@ -282,80 +286,96 @@ export default function ODCsPage() {
               No ODCs found. Click &quot;Add ODC&quot; to create one.
             </div>
           ) : (
-            filteredOdcs.map((odc) => (
-              <div key={odc.id} className="bg-card/80 backdrop-blur-xl rounded-xl border border-[#bc13fe]/20 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <HardDrive className="h-4 w-4 text-orange-600" />
-                    <span className="text-sm font-medium">{odc.name}</span>
-                  </div>
-                  <span
-                    className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${odc.status === 'active'
-                      ? 'bg-success/20 text-success dark:bg-green-900/30'
-                      : 'bg-destructive/20 text-destructive dark:bg-red-900/30'
-                    }`}
-                  >
-                    {odc.status}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                  <div>
-                    <span className="text-muted-foreground text-[10px]">OLT</span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Server className="h-3 w-3 text-primary" />
-                      <span className="text-xs">{odc.olt?.name}</span>
+            filteredOdcs.map((odc) => {
+              const odcCount = odc._count?.odps || 0;
+              const isOverCapacity = odcCount > odc.portCount;
+              return (
+                <div key={odc.id} className="bg-card/80 backdrop-blur-xl rounded-xl border border-[#bc13fe]/20 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="h-4 w-4 text-orange-600 shrink-0" />
+                      <div>
+                        <span className="text-sm font-medium block">{odc.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          {getOdcHardwareSpecs(odc.portCount)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px]">PON Port</span>
-                    <p className="mt-0.5">
-                      <span className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
-                        PON {odc.ponPort}
-                      </span>
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px]">Ports / ODPs</span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/30 rounded">
-                        {odc.portCount} ports
-                      </span>
-                      <span className="px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded">
-                        {odc._count?.odps || 0} ODPs
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground text-[10px]">Location</span>
-                    <a
-                      href={`https://www.google.com/maps?q=${odc.latitude},${odc.longitude}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-primary hover:underline text-[10px] mt-0.5"
+                    <span
+                      className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${odc.status === 'active'
+                        ? 'bg-success/20 text-success dark:bg-green-900/30'
+                        : 'bg-destructive/20 text-destructive dark:bg-red-900/30'
+                      }`}
                     >
-                      <MapPin className="h-3 w-3" />
-                      {odc.latitude.toFixed(6)}, {odc.longitude.toFixed(6)}
-                    </a>
+                      {odc.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                    <div>
+                      <span className="text-muted-foreground text-[10px]">OLT</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Server className="h-3 w-3 text-primary" />
+                        <span className="text-xs">{odc.olt?.name}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-[10px]">PON Port</span>
+                      <p className="mt-0.5">
+                        <span className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
+                          PON {odc.ponPort}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <span className="text-muted-foreground text-[10px]">Ports / ODPs</span>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/30 rounded font-medium">
+                          {odc.portCount} Ports
+                        </span>
+                        <span className="text-muted-foreground text-xs font-bold">|</span>
+                        <span className="px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded font-medium">
+                          {odcCount} ODPs
+                        </span>
+                        {isOverCapacity && (
+                          <span className="px-1.5 py-0.5 text-[10px] bg-destructive/20 text-destructive border border-destructive/40 rounded font-bold flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            OVER-CAPACITY: {odcCount}/{odc.portCount} ODPs
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground text-[10px]">Location</span>
+                      <a
+                        href={`https://www.google.com/maps?q=${odc.latitude},${odc.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-primary hover:underline text-[10px] mt-0.5"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        {odc.latitude.toFixed(6)}, {odc.longitude.toFixed(6)}
+                      </a>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-1 border-t border-border pt-2">
+                    <button
+                      onClick={() => handleEdit(odc)}
+                      className="p-2 text-muted-foreground hover:bg-muted rounded"
+                      title="Edit ODC"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(odc)}
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded"
+                      title="Hapus ODC"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex justify-end gap-1 border-t border-border pt-2">
-                  <button
-                    onClick={() => handleEdit(odc)}
-                    className="p-2 text-muted-foreground hover:bg-muted rounded"
-                    title="Edit ODC"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(odc)}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded"
-                    title="Hapus ODC"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -372,7 +392,7 @@ export default function ODCsPage() {
                   <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase">OLT</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase hidden sm:table-cell">PON Port</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase hidden md:table-cell">Location</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase">Ports/ODPs</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase">Ports / ODPs</th>
                   <th className="px-3 py-2 text-left text-[10px] font-medium text-muted-foreground uppercase">Status</th>
                   <th className="px-3 py-2 text-right text-[10px] font-medium text-muted-foreground uppercase"></th>
                 </tr>
@@ -385,46 +405,61 @@ export default function ODCsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredOdcs.map((odc) => (
-                    <tr key={odc.id} className="hover:bg-muted">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <HardDrive className="h-4 w-4 text-orange-600" />
-                          <span className="text-xs font-medium">{odc.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <Server className="h-3 w-3 text-primary" />
-                          <span className="text-xs">{odc.olt?.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-xs hidden sm:table-cell">
-                        <span className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
-                          PON {odc.ponPort}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell">
-                        <a
-                          href={`https://www.google.com/maps?q=${odc.latitude},${odc.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-primary hover:underline"
-                        >
-                          <MapPin className="h-3 w-3" />
-                          {odc.latitude.toFixed(6)}, {odc.longitude.toFixed(6)}
-                        </a>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/30 rounded">
-                            {odc.portCount} ports
+                  filteredOdcs.map((odc) => {
+                    const odcCount = odc._count?.odps || 0;
+                    const isOverCapacity = odcCount > odc.portCount;
+                    return (
+                      <tr key={odc.id} className="hover:bg-muted">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <HardDrive className="h-4 w-4 text-orange-600 shrink-0" />
+                            <div>
+                              <span className="text-xs font-medium block">{odc.name}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono block">
+                                {getOdcHardwareSpecs(odc.portCount)}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <Server className="h-3 w-3 text-primary" />
+                            <span className="text-xs">{odc.olt?.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-xs hidden sm:table-cell">
+                          <span className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
+                            PON {odc.ponPort}
                           </span>
-                          <span className="px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded">
-                            {odc._count?.odps || 0} ODPs
-                          </span>
-                        </div>
-                      </td>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground hidden md:table-cell">
+                          <a
+                            href={`https://www.google.com/maps?q=${odc.latitude},${odc.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <MapPin className="h-3 w-3" />
+                            {odc.latitude.toFixed(6)}, {odc.longitude.toFixed(6)}
+                          </a>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/30 rounded font-medium">
+                              {odc.portCount} Ports
+                            </span>
+                            <span className="text-muted-foreground text-xs font-bold">|</span>
+                            <span className="px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary rounded font-medium">
+                              {odcCount} ODPs
+                            </span>
+                            {isOverCapacity && (
+                              <span className="px-1.5 py-0.5 text-[10px] bg-destructive/20 text-destructive border border-destructive/40 rounded font-bold flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                OVER-CAPACITY: {odcCount}/{odc.portCount} ODPs
+                              </span>
+                            )}
+                          </div>
+                        </td>
                       <td className="px-3 py-2">
                         <span
                           className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${odc.status === 'active'
@@ -454,8 +489,9 @@ export default function ODCsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })
+              )}
               </tbody>
             </table>
           </div>
@@ -490,6 +526,9 @@ export default function ODCsPage() {
                 <div>
                   <ModalLabel>{t('network.portCount')}</ModalLabel>
                   <ModalInput type="number" value={formData.portCount} onChange={(e) => setFormData({ ...formData, portCount: e.target.value })} min={1} placeholder="8" />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Detected Specs: <span className="font-mono text-primary font-medium">{getOdcHardwareSpecs(parseInt(formData.portCount) || 8)}</span>
+                  </p>
                 </div>
                 <div>
                   <ModalLabel>Status</ModalLabel>

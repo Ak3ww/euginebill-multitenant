@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { showSuccess, showError, showConfirm } from '@/lib/sweetalert';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
   Plus, Pencil, Trash2, Server, MapPin, Map, X, RefreshCcw,
-  Activity, Box, Users, HardDrive, Link as LinkIcon,
+  Activity, Box, Users, HardDrive, Link as LinkIcon, AlertTriangle,
 } from 'lucide-react';
 import MapPicker from '@/components/MapPicker';
 import {
@@ -55,10 +55,18 @@ interface OLT {
   ipAddress: string;
 }
 
+const getOdpHardwareSpecs = (portCount: number) => {
+  return `Box ODP ${portCount} Port (Splitter PLC 1:${portCount})`;
+};
+
 interface ODC {
   id: string;
   name: string;
   oltId: string;
+  portCount: number;
+  _count?: {
+    odps: number;
+  };
 }
 
 export default function ODPsPage() {
@@ -364,13 +372,20 @@ export default function ODPsPage() {
               <div key={odp.id} className="bg-card/80 backdrop-blur-xl rounded-xl border border-[#bc13fe]/20 p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Box className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">{odp.name}</span>
-                    {(odp._count?.childOdps || 0) > 0 && (
-                      <span className="px-1 py-0.5 text-[9px] bg-orange-100 text-orange-700 rounded">
-                        {odp._count.childOdps} children
+                    <Box className="h-4 w-4 text-primary shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium">{odp.name}</span>
+                        {(odp._count?.childOdps || 0) > 0 && (
+                          <span className="px-1 py-0.5 text-[9px] bg-orange-100 text-orange-700 rounded">
+                            {odp._count.childOdps} children
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-mono block">
+                        {getOdpHardwareSpecs(odp.portCount)}
                       </span>
-                    )}
+                    </div>
                   </div>
                   <span
                     className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${odp.status === 'active'
@@ -483,14 +498,19 @@ export default function ODPsPage() {
                     <tr key={odp.id} className="hover:bg-muted">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <Box className="h-4 w-4 text-primary" />
+                          <Box className="h-4 w-4 text-primary shrink-0" />
                           <div>
-                            <span className="text-xs font-medium">{odp.name}</span>
-                            {(odp._count?.childOdps || 0) > 0 && (
-                              <span className="ml-1 px-1 py-0.5 text-[9px] bg-orange-100 text-orange-700 rounded">
-                                {odp._count.childOdps} children
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-medium">{odp.name}</span>
+                              {(odp._count?.childOdps || 0) > 0 && (
+                                <span className="ml-1 px-1 py-0.5 text-[9px] bg-orange-100 text-orange-700 rounded">
+                                  {odp._count.childOdps} children
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-muted-foreground font-mono block">
+                              {getOdpHardwareSpecs(odp.portCount)}
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -607,10 +627,35 @@ export default function ODPsPage() {
                   </button>
                 </div>
                 {connectionType === 'odc' ? (
-                  <ModalSelect value={formData.odcId} onChange={(e) => setFormData({ ...formData, odcId: e.target.value })} required={connectionType === 'odc'}>
-                    <option value="" className="dark:bg-[#0a0520]">{t('network.selectOdc')}</option>
-                    {filteredOdcs.map(odc => (<option key={odc.id} value={odc.id} className="dark:bg-[#0a0520]">{odc.name}</option>))}
-                  </ModalSelect>
+                  <div>
+                    <ModalSelect value={formData.odcId} onChange={(e) => setFormData({ ...formData, odcId: e.target.value })} required={connectionType === 'odc'}>
+                      <option value="" className="dark:bg-[#0a0520]">{t('network.selectOdc')}</option>
+                      {filteredOdcs.map(odc => {
+                        const odcCount = odc._count?.odps || 0;
+                        const isFull = odcCount >= odc.portCount;
+                        const statusText = isFull
+                          ? `${odc.name} (${odcCount}/${odc.portCount} FULL - Over capacity)`
+                          : `${odc.name} (${odcCount}/${odc.portCount} Ports)`;
+                        return (
+                          <option key={odc.id} value={odc.id} className="dark:bg-[#0a0520]">
+                            {statusText}
+                          </option>
+                        );
+                      })}
+                    </ModalSelect>
+                    {formData.odcId && (() => {
+                      const selectedOdc = odcs.find(o => o.id === formData.odcId);
+                      if (selectedOdc && (selectedOdc._count?.odps || 0) >= selectedOdc.portCount) {
+                        return (
+                          <div className="mt-2 p-2.5 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                            <span>Warning: Selected ODC &quot;{selectedOdc.name}&quot; is FULL ({selectedOdc._count?.odps || 0}/{selectedOdc.portCount} ODPs). Exceeding capacity will reject creation on server.</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                 ) : (
                   <ModalSelect value={formData.parentOdpId} onChange={(e) => setFormData({ ...formData, parentOdpId: e.target.value })} required={connectionType === 'odp'}>
                     <option value="" className="dark:bg-[#0a0520]">{t('network.selectParentOdp')}</option>
@@ -622,6 +667,9 @@ export default function ODPsPage() {
                 <div>
                   <ModalLabel>{t('network.portCount')}</ModalLabel>
                   <ModalInput type="number" value={formData.portCount} onChange={(e) => setFormData({ ...formData, portCount: e.target.value })} min={1} placeholder={t('network.portCountPlaceholder')} />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Detected Specs: <span className="font-mono text-primary font-medium">{getOdpHardwareSpecs(parseInt(formData.portCount) || 8)}</span>
+                  </p>
                 </div>
                 <div>
                   <ModalLabel>{t('common.status')}</ModalLabel>

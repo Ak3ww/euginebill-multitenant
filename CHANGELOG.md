@@ -4,6 +4,68 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.81] — 2026-09-25
+
+### Inventory Items Overhaul, Packaging Unit Conversions & ONT Sync Engine (`src/app/admin/inventory/items/page.tsx`, `src/app/api/admin/inventory/seed-defaults/route.ts`, `scripts/sync-ont-inventory.ts`, `src/lib/olt/ont-detector.ts`, `prisma/schema.prisma`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Simplified Master Item Creation Modal**: Form pembuatan barang sebelumnya menggunakan wizard multi-langkah dan SKU builder yang terlalu rumit dengan sub-kategori. Pengguna membutuhkan form 1-langkah yang bersih dan cepat dengan SKU auto-generate jika dikosongkan.
+  2. **Kemasan & Konversi Stok (Pack Unit & Pack Size)**: Diperlukan dukungan penuh untuk mencatat Satuan Kemasan (`packUnit`: Pack, Box, Dus, Roll, Karton) dan Isi per Kemasan (`packSize`), serta menampilkan konversi stok otomatis pada tabel barang (cth: "500 pcs (5 Pack @ 100 pcs)").
+  3. **Master Seed Goods Update**: Menambahkan `TLS-TANG-POTONG` ("TANG POTONG", categoryCode: "TLS", unit: "pcs", isSerialized: false) ke daftar master default items.
+  4. **Direct OLT Vendor/Model Reported**: Menghapus dictionary mapping `VENDOR_PREFIXES` yang rumit (ZTEG, ZTED, F670L, dll) pada engine sinkronisasi ONT, sehingga sistem menggunakan vendor/model mentah yang dilaporkan oleh OLT secara langsung atau fallback ke "ONT Modem".
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Clean 1-Step Item Modal & Stock Unit Conversion (`src/app/admin/inventory/items/page.tsx`)**:
+     - Mengubah form input barang dari wizard multi-step menjadi modal 1-langkah bersih (Nama Barang, Kategori, SKU auto-generate jika kosong, Satuan Utama, Satuan Kemasan, Isi per Kemasan, Minimum Stock, Stok Awal, Harga Beli, Harga Jual, Lacak Unit Berseri, Lokasi Rak, Catatan).
+     - Menambahkan teks bantuan form `"Contoh: 1 Pack = 100 pcs"`.
+     - Merealisasikan helper render konversi stok `formatStockDisplay()` pada tabel desktop dan card view mobile (cth: `"500 pcs (5 Pack @ 100 pcs)"`).
+  2. **Schema & API Update (`prisma/schema.prisma`, `src/app/api/inventory/items/route.ts`, `scripts/run-migrations.ts`)**:
+     - Menambahkan kolom `packUnit String?` pada model `inventoryItem` di schema Prisma, API POST/PUT route, dan migrasi DDL database.
+  3. **Seed Master Update (`src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+     - Menambahkan `TLS-TANG-POTONG` ke daftar `DEFAULT_INVENTORY_ITEMS` dengan `categoryCode: 'TLS'`, `unit: 'pcs'`, dan `isSerialized: false`.
+  4. **Simplified ONT Sync Engine (`scripts/sync-ont-inventory.ts`, `src/lib/olt/ont-detector.ts`)**:
+     - Menghapus objek dictionary `VENDOR_PREFIXES` / `VENDOR_PREFIX_MAP`.
+     - Mengubah fungsi `detectVendorModel` & `detectOntVendorAndModel` untuk mengambil raw vendor/model yang dilaporkan oleh OLT langsung atau fallback bersih ke `"ONT Modem"`.
+
+- **Files**:
+  - Modified: `src/app/admin/inventory/items/page.tsx`
+  - Modified: `src/app/api/admin/inventory/seed-defaults/route.ts`
+  - Modified: `scripts/sync-ont-inventory.ts`
+  - Modified: `src/lib/olt/ont-detector.ts`
+  - Modified: `src/app/api/inventory/items/route.ts`
+  - Modified: `prisma/schema.prisma`
+  - Modified: `scripts/run-migrations.ts`
+
+## [2.40.80] — 2026-09-25
+
+### Manual Invoice Cancel-Payment Endpoint & Obsolete Scripts Cleanup (`src/app/api/manual-invoices/[id]/cancel-payment/route.ts`, `src/app/admin/manual-invoices/page.tsx`, `package.json`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Manual Invoice Payment Reversal**: Admin membutuhkan fitur untuk membatalkan pelunasan invoice manual yang terlanjur ditandai LUNAS, mengembalikan status ke PENDING, serta menghapus record transaksi pemasukan keuangan terkait.
+  2. **Re-Enable Editing on Pending**: Setelah pelunasan dibatalkan, invoice harus dapat diedit kembali (`openEdit`).
+  3. **Obsolete Scripts Cleanup**: Pembersihan skrip-skrip sekali pakai (`scripts/reseed-clean-inventory.ts`, `scripts/seed-olts.ts`, `scripts/olt-full-refresh.ts`, `scripts/sync-router-vpn-ports.ts`) beserta aliasnya di `package.json`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **API Cancel-Payment (`src/app/api/manual-invoices/[id]/cancel-payment/route.ts`)**:
+     - Membuat endpoint HTTP POST yang memverifikasi status `PAID`. Dalam transaksi Prisma (`$transaction`), mengembalikan status ke `PENDING`, menghapus `paidAt` & `transactionId`, serta menghapus transaksi pemasukan keuangan (`Transaction`) terkait berdasarkan `transactionId` atau `reference`.
+  2. **Admin UI Action & SweetAlert (`src/app/admin/manual-invoices/page.tsx`)**:
+     - Menambahkan tombol "Batalkan Pelunasan" (`RotateCcw`) dengan SweetAlert konfirmasi untuk invoice berstatus `PAID`.
+     - Merefresh tabel invoice secara otomatis dan mengaktifkan kembali tombol `Edit` saat status kembali ke `PENDING`.
+  3. **Scripts & Package.json Cleanup**:
+     - Menghapus skrip `reseed-clean-inventory.ts`, `seed-olts.ts`, `olt-full-refresh.ts`, `sync-router-vpn-ports.ts` dan memperbarui `package.json` & `scripts/safe-update.sh`.
+
+- **Files**:
+  - Added: `src/app/api/manual-invoices/[id]/cancel-payment/route.ts`
+  - Modified: `src/app/admin/manual-invoices/page.tsx`
+  - Modified: `package.json`
+  - Modified: `scripts/safe-update.sh`
+  - Modified: `src/app/admin/network/odcs/page.tsx`
+  - Modified: `src/app/api/inventory/items/route.ts`
+  - Deleted: `scripts/reseed-clean-inventory.ts`
+  - Deleted: `scripts/seed-olts.ts`
+  - Deleted: `scripts/olt-full-refresh.ts`
+  - Deleted: `scripts/sync-router-vpn-ports.ts`
+
 ## [2.40.79] — 2026-09-25
 
 ### 13-Step Setup Wizard Overhaul, Footer Official Link Direct, and POSTPAID Invoice Due Date Calculation Fix (`src/app/setup/page.tsx`, `src/server/jobs/voucher-sync.ts`, `src/app/api/admin/invoices/reconcile/route.ts`)
