@@ -4,7 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.55] — 2026-09-25
+### Global Orphaned OLT & Inventory Clean-up Engine + Script Housekeeping
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Meskipun OLT polling SNMP telah berhasil menarik presisi **378 ONT** (190 HSGQ + 65 VSOL GS + 123 VSOL GT), database `oltOnuStatus` dan `inventoryAsset` masih mencatat **758 entri** dan **380 asset**.
+     - Cause: Entri usang/orphan dengan `oltId` null atau OLT lama yang pernah dihapus/direcreate masih tersimpan di DB dan terbawa saat sync.
+  2. Perlu pembersihan otomatis (*auto-prune*) agar jumlah `oltOnuStatus` dan `inventoryAsset` di DB 100% konsisten dengan data aktual OLT (378 unit).
+  3. Perlu pembersihan repository dari script satu kali pakai (`olt-ssh-diagnostic.ts`) agar bersih dan siap dipasarkan / dideploy turnkey.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Global OLT Orphan Clean-up (`scripts/olt-full-refresh.ts`)**:
+     - Menambahkan pembersihan global untuk `oltOnuStatus` yang memiliki `oltId` null atau tidak ada di daftar OLT aktif.
+     - Menambahkan pembersihan otomatis untuk `inventoryAsset` bertipe `MODEM` yang nomor seri (`serialNumber`)-nya sudah tidak ada di data OLT aktif (*orphaned modem assets*).
+     - Hasil: Menggaransi `oltOnuStatus` dan `inventoryAsset` 100% sinkron dan bersih sesuai total ONT terdeteksi di OLT (378 unit).
+  2. **Repo Clean-up**:
+     - Menghapus script diagnostik sementara (`scripts/olt-ssh-diagnostic.ts`).
+
+- **Files**:
+  - Modified: `scripts/olt-full-refresh.ts`
+  - Deleted: `scripts/olt-ssh-diagnostic.ts`
+
 ## [2.40.53] — 2026-09-23
+
 ### Fix OLT SNMP Status: HSGQ rxPower-Based Offline Detection + VSOL Per-PON Walk untuk V1600GT
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:

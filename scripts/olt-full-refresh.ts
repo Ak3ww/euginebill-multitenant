@@ -383,11 +383,30 @@ async function main() {
       console.log(`  Selesai: ${onts.length} ONT di-upsert. Total di DB: ${total} (online: ${online}, offline: ${offline})`);
     }
 
+    // Clean orphaned oltOnuStatus records whose oltId is null or not in current olts list
+    const activeOltIds = olts.map(o => o.id);
+    const orphanedDbOnus = await prisma.oltOnuStatus.findMany({
+      where: {
+        OR: [
+          { oltId: { notIn: activeOltIds } },
+          { oltId: null as any },
+        ],
+      },
+      select: { id: true },
+    });
+    if (orphanedDbOnus.length > 0 && !isDryRun) {
+      await prisma.oltOnuStatus.deleteMany({
+        where: { id: { in: orphanedDbOnus.map(o => o.id) } },
+      });
+      console.log(`\n  [Clean] Menghapus ${orphanedDbOnus.length} data oltOnuStatus orphan (OLT ID usang/tidak aktif).`);
+    }
+
     console.log(`\nTotal ONT ditemukan dari semua OLT: ${totalDiscovered}`);
     console.log(`Total di-upsert ke oltOnuStatus: ${isDryRun ? '(dry run)' : totalUpserted}`);
   }
 
   if (isOltOnly || isDryRun) {
+
     console.log('\n[Done] OLT refresh selesai. Untuk sync ke inventori, jalankan tanpa --olt-only.');
     await prisma.$disconnect();
     return;
@@ -486,7 +505,26 @@ async function main() {
     }
   }
 
+  // Delete orphaned MODEM assets that no longer exist in any active OLT record
+  const activeSns = new Set(validOnus.map(o => o.serialNumber!));
+  const allModemAssets = await prisma.inventoryAsset.findMany({
+    where: { assetType: 'MODEM' },
+    select: { id: true, serialNumber: true },
+  });
+  const orphanedAssets = allModemAssets.filter(a => a.serialNumber && !activeSns.has(a.serialNumber));
+  if (orphanedAssets.length > 0) {
+    await prisma.inventoryAsset.updateMany({
+      where: { id: { in: orphanedAssets.map(a => a.id) } },
+      data: { currentCustomerId: null },
+    });
+    const delAssetRes = await prisma.inventoryAsset.deleteMany({
+      where: { id: { in: orphanedAssets.map(a => a.id) } },
+    });
+    console.log(`\n  [Clean] Menghapus ${delAssetRes.count} inventoryAsset MODEM orphan yang tidak ada di OLT.`);
+  }
+
   // ─── STEP 4: Hitung ulang currentStock ──────────────────────
+
   console.log('\n=== STEP 4: Hitung ulang currentStock ===');
   const ontItems = await prisma.inventoryItem.findMany({
     where: { categoryCode: 'CPE', subCategory: 'ONT' },

@@ -10,9 +10,9 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.53
+- **Version**: 2.40.55
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
-- **Last Updated**: September 23, 2026
+- **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
@@ -20,7 +20,16 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 25, 2026 — v2.40.55: Global Orphaned OLT/Inventory Clean-up & Script Housekeeping)
+
+- **Hard Invariant: Global OLT & Inventory Orphan Auto-Pruning (`scripts/olt-full-refresh.ts`)**:
+  - `oltOnuStatus` auto-prunes any records with `oltId: null` or pointing to an obsolete/deleted OLT ID not in the active `NetworkOLT` list.
+  - `inventoryAsset` (type `MODEM`) auto-prunes any assets whose `serialNumber` is not present in active `oltOnuStatus` list (unlinks customer before deletion).
+  - Guarantees DB totals for `oltOnuStatus` and `inventoryAsset` MODEM 100% equal actual active OLT discovery count (exactly **378 ONT** across HSGQ 190, VSOL GS 65, VSOL GT 123).
+  - Temporary diagnostic scripts (e.g. `olt-ssh-diagnostic.ts`) are removed from repository to keep codebase production-ready.
+
 ### Recent Patch Log (September 23, 2026 — v2.40.53: HSGQ rxPower Offline + VSOL Per-PON Walk for GT)
+
 
 - **Hard Invariant: HSGQ Online/Offline Detection**:
   - OID `1.3.6.1.4.1.50224.3.12.2.1.3` (column .3) adalah **registration flag**, bukan online/offline indicator.
