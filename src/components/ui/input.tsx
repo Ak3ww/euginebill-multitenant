@@ -1,5 +1,4 @@
 import * as React from "react"
-
 import { cn } from "@/lib/utils"
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
@@ -8,17 +7,12 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       type={type}
       data-slot="input"
       className={cn(
-        "file:text-foreground placeholder:text-muted-foreground/50 selection:bg-cyan-400/20 selection:text-foreground",
-        "h-10 sm:h-11 w-full min-w-0 rounded-xl border-2 border-cyan-500/30 bg-background/50 px-3.5 sm:px-4 py-2 text-base sm:text-sm",
-        "shadow-[0_0_10px_rgba(0,255,255,0.05)] backdrop-blur-sm",
-        "transition-all duration-300 outline-none",
-        "hover:border-cyan-500/50 hover:shadow-[0_0_15px_rgba(0,255,255,0.1)]",
-        "focus-visible:border-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-400/30",
-        "focus-visible:shadow-[0_0_20px_rgba(0,255,255,0.2)]",
-        "dark:focus-visible:neon-glow",
-        "file:inline-flex file:h-8 file:border-0 file:bg-cyan-500/20 file:rounded-lg file:px-3 file:text-sm file:font-medium file:mr-3 file:text-cyan-400",
-        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted/40",
-        "aria-invalid:border-red-500/50 aria-invalid:ring-2 aria-invalid:ring-red-500/15 aria-invalid:shadow-[0_0_10px_rgba(255,51,102,0.1)]",
+        "flex h-10 w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500",
+        "shadow-xs transition-all duration-200 outline-none",
+        "hover:border-slate-400 dark:hover:border-slate-600",
+        "focus-visible:border-blue-600 dark:focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-600/20 dark:focus-visible:ring-blue-500/20",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800",
+        "aria-invalid:border-red-500 aria-invalid:ring-2 aria-invalid:ring-red-500/20",
         className
       )}
       {...props}

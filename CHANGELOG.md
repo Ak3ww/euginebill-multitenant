@@ -4,6 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.72] — 2026-09-25
+
+### Clean Light SaaS UI Primitives Refactor & Setup Wizard Input Overhaul (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`, `src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Input form pada Setup Wizard (`/setup`) dan berbagai modal admin tampak seperti kotak abu-abu gelap terpotong dengan teks samar (seperti tidak memuat stylesheet secara sempurna).
+  2. Komponen dasar Shadcn UI (`Input`, `Card`, `Button`) sebelumnya memegang styling cyberpunk legacy (`border-cyan-500/30`, `bg-background/50`, `shadow-[0_0_20px_rgba(0,255,255,0.3)]`) yang menyebabkan distorsi visual, background tembus pandang 50%, dan garis tepi neon cyan ketika dirender di atas latar belakang terang (*Light Mode*).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Standard Clean SaaS UI Primitives (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
+     - `Input`: Mengubah background menjadi `bg-white dark:bg-slate-900` padat (100% opacity, tanpa bleed opacity 50%), teks eksplisit `text-slate-900 dark:text-slate-100`, placeholder `text-slate-400`, border `border-slate-300`, dan focus ring `focus-visible:ring-blue-600/20 focus-visible:border-blue-600`.
+     - `Card`: Mengubah container menjadi `bg-white dark:bg-slate-900`, hairline border `border-slate-200/80`, dan `shadow-sm` tanpa bayangan neon cyan.
+     - `Button`: Mengubah variant default menjadi `bg-blue-600 hover:bg-blue-700 text-white font-semibold` tanpa gradien cyan atau glow cyberpunk.
+  2. **Left-Icon Input Decorators & Setup Wizard UI Redesign (`src/app/setup/page.tsx`)**:
+     - Menambahkan dekorator ikon di sebelah kiri seluruh input field (`Building2`, `Smartphone`, `Globe`, `User`, `Mail`, `Lock`, `KeyRound`, `Layers`, `Sliders`) dengan offset `pl-10`.
+     - Mereset total tampilan form inisialisasi awal (Step 0) dengan kartu putih bersih, navigasi tab pill yang responsif, teks ber-kontras tinggi, dan tombol aksi berstandar Antigravity Light SaaS.
+
+- **Files**:
+  - Modified: `src/components/ui/input.tsx`
+  - Modified: `src/components/ui/card.tsx`
+  - Modified: `src/components/ui/button.tsx`
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.71] — 2026-09-25
 
 ### Continuous Onboarding Setup Flow & Admin Light SaaS Standard Enforcement (`src/app/setup/page.tsx`, `src/app/admin/login/page.tsx`, `src/app/globals.css`)

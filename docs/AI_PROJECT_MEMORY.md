@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.71
+- **Version**: 2.40.72
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,12 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.71: Continuous Setup Wizard & Light Theme Standard)
+### Recent Patch Log (September 25, 2026 — v2.40.72: Clean Light SaaS UI Primitives & Setup Wizard Redesign)
+
+- **Hard Invariant: Solid White Input & Shadcn Primitives (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
+  - Komponen `Input` WAJIB menggunakan `bg-white dark:bg-slate-900` padat (100% opacity) dengan warna teks eksplisit `text-slate-900 dark:text-slate-100` dan hairline border `border-slate-300`. DILARANG KERAS menggunakan `bg-background/50` atau border neon cyan pada komponen dasar yang memicu distorsi kotak abu-abu di mode terang.
+- **Hard Invariant: Left Icon Input Decorator Standard (`src/app/setup/page.tsx`)**:
+  - Seluruh input form di Setup Wizard wajib memiliki ikon dekorator di sebelah kiri (`pl-10`) untuk kejelasan hirarki visual dan legibilitas tinggi.
 
 - **Hard Invariant: Continuous Setup Wizard Flow (`src/app/setup/page.tsx`)**:
   - Setelah pengiriman Step 0 (`handleInitialSubmit`), handler wajib mengeksekusi `signIn('credentials', { redirect: false, username, password })` dan memperbarui `isInitialized(true)` untuk melanjutkan ke Step 1-6 secara kontinyu tanpa melempar admin ke halaman `/admin/login`.

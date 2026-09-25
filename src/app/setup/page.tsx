@@ -39,6 +39,8 @@ import {
   ShieldCheck,
   Loader2,
   LogIn,
+  User,
+  Mail,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -733,26 +735,30 @@ export default function UnifiedSetupWizardPage() {
   // 2. CASE: SYSTEM NOT INITIALIZED (First-run Superadmin & ISP setup)
   if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-xl relative z-10 px-4">
+      <div className="min-h-screen bg-slate-50/80 text-slate-900 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        {/* Soft background decoration */}
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-100/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-sky-100/40 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="sm:mx-auto sm:w-full sm:max-w-xl relative z-10">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-600 text-white shadow-md mb-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-900 text-white shadow-md mb-4">
               <Server className="w-7 h-7" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
               Inisialisasi Sistem EugineBill
             </h1>
-            <p className="mt-2 text-xs sm:text-sm text-slate-600 max-w-md mx-auto">
-              Selamat datang! Lengkapi form awal berikut untuk membuat akun Superadmin dan profil usaha ISP Anda.
+            <p className="mt-2 text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+              Selamat datang! Lengkapi 3 form awal berikut untuk mengonfigurasi akun Superadmin dan profil usaha ISP Anda.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-6 bg-white p-2 rounded-xl border border-slate-200 shadow-xs">
+          <div className="grid grid-cols-3 gap-2 mb-6 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs">
             <button
               type="button"
               onClick={() => setInitStep(1)}
-              className={`flex items-center justify-center gap-2 p-2 rounded-lg text-xs font-semibold transition-all ${
-                initStep === 1 ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500'
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                initStep === 1 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <Building2 className="w-3.5 h-3.5" /> Profil ISP
@@ -760,8 +766,8 @@ export default function UnifiedSetupWizardPage() {
             <button
               type="button"
               onClick={() => setInitStep(2)}
-              className={`flex items-center justify-center gap-2 p-2 rounded-lg text-xs font-semibold transition-all ${
-                initStep === 2 ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500'
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                initStep === 2 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <UserCheck className="w-3.5 h-3.5" /> Akun Admin
@@ -769,19 +775,19 @@ export default function UnifiedSetupWizardPage() {
             <button
               type="button"
               onClick={() => setInitStep(3)}
-              className={`flex items-center justify-center gap-2 p-2 rounded-lg text-xs font-semibold transition-all ${
-                initStep === 3 ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-500'
+              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                initStep === 3 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" /> Billing Default
             </button>
           </div>
 
-          <Card className="border-border shadow-sm bg-white">
-            <CardContent className="pt-6">
+          <Card className="border-slate-200/90 shadow-sm bg-white rounded-2xl overflow-hidden">
+            <CardContent className="p-6 sm:p-8">
               {initError && (
-                <div className="mb-5 p-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <div className="mb-6 p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs flex items-center gap-2.5 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                   <span>{initError}</span>
                 </div>
               )}
@@ -791,44 +797,56 @@ export default function UnifiedSetupWizardPage() {
                 {initStep === 1 && (
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Nama ISP / Brand Usaha *</Label>
-                      <Input
-                        required
-                        value={initFormData.companyName}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyName: e.target.value })}
-                        placeholder="Contoh: PT Solusi Cepat Net"
-                        className="h-9 text-sm"
-                      />
+                      <Label className="text-xs font-semibold text-slate-800">Nama ISP / Brand Usaha *</Label>
+                      <div className="relative">
+                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Input
+                          required
+                          value={initFormData.companyName}
+                          onChange={(e) => setInitFormData({ ...initFormData, companyName: e.target.value })}
+                          placeholder="Contoh: PT Solusi Cepat Net"
+                          className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">No. WhatsApp Admin / CS *</Label>
-                      <Input
-                        required
-                        value={initFormData.companyPhone}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyPhone: e.target.value })}
-                        placeholder="0812xxxxxxxx"
-                        className="h-9 text-sm"
-                      />
+                      <Label className="text-xs font-semibold text-slate-800">No. WhatsApp Admin / CS *</Label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Input
+                          required
+                          value={initFormData.companyPhone}
+                          onChange={(e) => setInitFormData({ ...initFormData, companyPhone: e.target.value })}
+                          placeholder="0812xxxxxxxx"
+                          className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Base URL / Domain Billing</Label>
-                      <Input
-                        value={initFormData.baseUrl}
-                        onChange={(e) => setInitFormData({ ...initFormData, baseUrl: e.target.value })}
-                        placeholder="https://billing.isp.net"
-                        className="h-9 text-sm"
-                      />
+                      <Label className="text-xs font-semibold text-slate-800">Base URL / Domain Billing</Label>
+                      <div className="relative">
+                        <Globe className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Input
+                          value={initFormData.baseUrl}
+                          onChange={(e) => setInitFormData({ ...initFormData, baseUrl: e.target.value })}
+                          placeholder="https://billing.isp.net"
+                          className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Alamat Kantor</Label>
-                      <Input
-                        value={initFormData.companyAddress}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyAddress: e.target.value })}
-                        placeholder="Jl. Telekomunikasi No. 88"
-                        className="h-9 text-sm"
-                      />
+                      <Label className="text-xs font-semibold text-slate-800">Alamat Kantor</Label>
+                      <div className="relative">
+                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Input
+                          value={initFormData.companyAddress}
+                          onChange={(e) => setInitFormData({ ...initFormData, companyAddress: e.target.value })}
+                          placeholder="Jl. Telekomunikasi No. 88"
+                          className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                        />
+                      </div>
                     </div>
-                    <div className="pt-2 flex justify-end">
+                    <div className="pt-4 flex justify-end">
                       <Button
                         type="button"
                         onClick={() => {
@@ -839,9 +857,9 @@ export default function UnifiedSetupWizardPage() {
                           setInitError(null);
                           setInitStep(2);
                         }}
-                        className="h-9 text-xs px-5 gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
+                        className="h-10 text-xs sm:text-sm px-6 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                       >
-                        Lanjut ke Akun Admin <ArrowRight className="w-3.5 h-3.5" />
+                        Lanjut ke Akun Admin <ArrowRight className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -851,68 +869,83 @@ export default function UnifiedSetupWizardPage() {
                 {initStep === 2 && (
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium">Nama Lengkap Superadmin *</Label>
-                      <Input
-                        required
-                        value={initFormData.adminName}
-                        onChange={(e) => setInitFormData({ ...initFormData, adminName: e.target.value })}
-                        placeholder="Nama Administrator"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Username Login *</Label>
+                      <Label className="text-xs font-semibold text-slate-800">Nama Lengkap Superadmin *</Label>
+                      <div className="relative">
+                        <UserCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <Input
                           required
-                          value={initFormData.adminUsername}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminUsername: e.target.value })}
-                          placeholder="admin"
-                          className="h-9 text-sm font-mono"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Email *</Label>
-                        <Input
-                          required
-                          type="email"
-                          value={initFormData.adminEmail}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminEmail: e.target.value })}
-                          placeholder="admin@isp.net"
-                          className="h-9 text-sm"
+                          value={initFormData.adminName}
+                          onChange={(e) => setInitFormData({ ...initFormData, adminName: e.target.value })}
+                          placeholder="Nama Administrator"
+                          className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Password Baru *</Label>
-                        <Input
-                          required
-                          type="password"
-                          value={initFormData.adminPassword}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminPassword: e.target.value })}
-                          placeholder="Minimal 6 karakter"
-                          className="h-9 text-sm"
-                        />
+                        <Label className="text-xs font-semibold text-slate-800">Username Login *</Label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            required
+                            value={initFormData.adminUsername}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminUsername: e.target.value })}
+                            placeholder="admin"
+                            className="pl-10 h-10 text-sm font-mono bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Konfirmasi Password *</Label>
-                        <Input
-                          required
-                          type="password"
-                          value={initFormData.adminPasswordConfirm}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminPasswordConfirm: e.target.value })}
-                          placeholder="Ulangi password"
-                          className="h-9 text-sm"
-                        />
+                        <Label className="text-xs font-semibold text-slate-800">Email Admin *</Label>
+                        <div className="relative">
+                          <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            required
+                            type="email"
+                            value={initFormData.adminEmail}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminEmail: e.target.value })}
+                            placeholder="admin@isp.net"
+                            className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="pt-2 flex justify-between">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-800">Password Baru *</Label>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            required
+                            type="password"
+                            value={initFormData.adminPassword}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminPassword: e.target.value })}
+                            placeholder="Minimal 6 karakter"
+                            className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-slate-800">Konfirmasi Password *</Label>
+                        <div className="relative">
+                          <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            required
+                            type="password"
+                            value={initFormData.adminPasswordConfirm}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminPasswordConfirm: e.target.value })}
+                            placeholder="Ulangi password"
+                            className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex justify-between">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => setInitStep(1)}
-                        className="h-9 text-xs"
+                        className="h-10 text-xs sm:text-sm px-5"
                       >
                         Kembali
                       </Button>
@@ -930,9 +963,9 @@ export default function UnifiedSetupWizardPage() {
                           setInitError(null);
                           setInitStep(3);
                         }}
-                        className="h-9 text-xs px-5 gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
+                        className="h-10 text-xs sm:text-sm px-6 gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                       >
-                        Lanjut ke Billing Default <ArrowRight className="w-3.5 h-3.5" />
+                        Lanjut ke Billing Default <ArrowRight className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -941,49 +974,55 @@ export default function UnifiedSetupWizardPage() {
                 {/* STEP 3: Billing Defaults */}
                 {initStep === 3 && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Prefix ID Pelanggan</Label>
-                        <Input
-                          value={initFormData.customerIdPrefix}
-                          onChange={(e) => setInitFormData({ ...initFormData, customerIdPrefix: e.target.value })}
-                          placeholder="EB-"
-                          className="h-9 text-sm font-mono"
-                        />
+                        <Label className="text-xs font-semibold text-slate-800">Prefix ID Pelanggan</Label>
+                        <div className="relative">
+                          <Layers className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            value={initFormData.customerIdPrefix}
+                            onChange={(e) => setInitFormData({ ...initFormData, customerIdPrefix: e.target.value })}
+                            placeholder="EB-"
+                            className="pl-10 h-10 text-sm font-mono bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-medium">Tanggal Tagihan Bulanan (1-28)</Label>
-                        <Input
-                          type="number"
-                          value={initFormData.fixedBillingDate}
-                          onChange={(e) => setInitFormData({ ...initFormData, fixedBillingDate: e.target.value })}
-                          placeholder="20"
-                          className="h-9 text-sm"
-                        />
+                        <Label className="text-xs font-semibold text-slate-800">Tanggal Tagihan Bulanan (1-28)</Label>
+                        <div className="relative">
+                          <Sliders className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <Input
+                            type="number"
+                            value={initFormData.fixedBillingDate}
+                            onChange={(e) => setInitFormData({ ...initFormData, fixedBillingDate: e.target.value })}
+                            placeholder="20"
+                            className="pl-10 h-10 text-sm bg-white border-slate-300 text-slate-900"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="p-3 rounded-lg border border-sky-200 bg-sky-50 text-sky-900 text-xs flex items-center gap-2">
-                      <Info className="w-4 h-4 text-sky-600 shrink-0" />
+                    <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 text-blue-900 text-xs flex items-center gap-2.5">
+                      <Info className="w-4 h-4 text-blue-600 shrink-0" />
                       <span>Data ini akan menginisialisasi database dan mengunci akses publik ke form awal.</span>
                     </div>
-                    <div className="pt-2 flex justify-between">
+                    <div className="pt-4 flex justify-between">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => setInitStep(2)}
-                        className="h-9 text-xs"
+                        className="h-10 text-xs sm:text-sm px-5"
                       >
                         Kembali
                       </Button>
                       <Button
                         type="submit"
                         disabled={initSubmitting}
-                        className="h-9 text-xs px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                        className="h-10 text-xs sm:text-sm px-7 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                       >
                         {initSubmitting ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <RefreshCw className="w-4 h-4 animate-spin" />
                         ) : (
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-4 h-4" />
                         )}
                         Simpan & Inisialisasi Sistem
                       </Button>

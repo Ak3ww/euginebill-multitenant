@@ -1,72 +1,30 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.98] touch-action-manipulation overflow-hidden",
+  "inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap rounded-xl text-sm font-semibold transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 focus-visible:ring-offset-2 active:scale-[0.99] touch-action-manipulation select-none",
   {
     variants: {
       variant: {
-        default: [
-          "bg-gradient-to-r from-cyan-500 to-cyan-400 text-black",
-          "border-2 border-cyan-400",
-          "shadow-[0_0_20px_rgba(0,255,255,0.3)]",
-          "hover:shadow-[0_0_30px_rgba(0,255,255,0.5)] hover:border-cyan-300",
-          "dark:neon-glow"
-        ].join(" "),
-        destructive: [
-          "bg-gradient-to-r from-red-500 to-red-400 text-white",
-          "border-2 border-red-400",
-          "shadow-[0_0_20px_rgba(255,51,102,0.3)]",
-          "hover:shadow-[0_0_30px_rgba(255,51,102,0.5)]"
-        ].join(" "),
-        outline: [
-          "bg-transparent text-cyan-400",
-          "border-2 border-cyan-500/50",
-          "shadow-[0_0_10px_rgba(0,255,255,0.1)]",
-          "hover:bg-cyan-400/10 hover:border-cyan-400",
-          "hover:shadow-[0_0_20px_rgba(0,255,255,0.3)]",
-          "dark:neon-border"
-        ].join(" "),
-        secondary: [
-          "bg-white/5 text-foreground",
-          "border-2 border-white/10",
-          "hover:bg-white/10 hover:border-cyan-400/30"
-        ].join(" "),
-        ghost: [
-          "bg-transparent text-foreground",
-          "border-2 border-transparent",
-          "hover:bg-white/5 hover:text-cyan-400 hover:border-cyan-400/30"
-        ].join(" "),
-        link: [
-          "text-cyan-400 underline-offset-4",
-          "hover:underline hover:text-cyan-300",
-          "drop-shadow-[0_0_10px_rgba(0,255,255,0.5)]",
-          "dark:neon-text"
-        ].join(" "),
-        success: [
-          "bg-gradient-to-r from-green-500 to-green-400 text-black",
-          "border-2 border-green-400",
-          "shadow-[0_0_20px_rgba(0,255,136,0.3)]",
-          "hover:shadow-[0_0_30px_rgba(0,255,136,0.5)]"
-        ].join(" "),
-        warning: [
-          "bg-gradient-to-r from-orange-500 to-orange-400 text-black",
-          "border-2 border-orange-400",
-          "shadow-[0_0_20px_rgba(255,170,0,0.3)]",
-          "hover:shadow-[0_0_30px_rgba(255,170,0,0.5)]"
-        ].join(" "),
+        default: "bg-blue-600 hover:bg-blue-700 text-white shadow-xs border border-blue-600/20 active:bg-blue-800",
+        destructive: "bg-red-600 hover:bg-red-700 text-white shadow-xs border border-red-600/20 active:bg-red-800",
+        outline: "bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 shadow-xs",
+        secondary: "bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-700 shadow-xs",
+        ghost: "bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+        link: "text-blue-600 dark:text-blue-400 underline-offset-4 hover:underline",
+        success: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border border-emerald-600/20",
+        warning: "bg-amber-600 hover:bg-amber-700 text-white shadow-xs border border-amber-600/20",
       },
       size: {
-        default: "h-10 px-6 py-2.5 has-[>svg]:px-4",
-        sm: "h-8 rounded-lg gap-1.5 px-4 text-xs has-[>svg]:px-3",
-        lg: "h-12 rounded-xl px-8 text-sm has-[>svg]:px-6",
-        xl: "h-14 rounded-2xl px-10 text-base has-[>svg]:px-8",
+        default: "h-10 px-5 py-2 has-[>svg]:px-4",
+        sm: "h-8 rounded-lg gap-1.5 px-3 text-xs has-[>svg]:px-2.5",
+        lg: "h-11 rounded-xl px-7 text-sm font-semibold has-[>svg]:px-5",
+        xl: "h-12 rounded-2xl px-8 text-base font-semibold has-[>svg]:px-6",
         icon: "size-10 rounded-xl",
         "icon-sm": "size-8 rounded-lg",
-        "icon-lg": "size-12 rounded-xl",
+        "icon-lg": "size-11 rounded-xl",
       },
     },
     defaultVariants: {
