@@ -4,6 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.83] — 2026-09-25
+
+### Setup Wizard Multi-Bank Account Manager, Live WhatsApp Bot Provider Monitor, and Standard TR-069 Script (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Step 6 (Payment Gateway)**: Form konfigurasi pembayaran sebelumnya minimalis. Diperlukan Multi-Bank Account Manager (Nama Bank, Nomor Rekening, Nama Pemilik, + Tambah Rekening) yang menyimpan ke `/api/company` serta tabbed gateway parameter controls untuk Midtrans, Xendit, Tripay, Duitku, dan QRIN yang menyimpan ke `/api/payment-gateway/config`.
+  2. **Step 7 (WhatsApp Bot)**: Mengganti tampilan statis dengan live WhatsApp Provider Monitor grid persis `/admin/settings/whatsapp` yang mengambil data langsung dari `/api/whatsapp/providers` & `/api/whatsapp/providers/[id]/status`, disertai fitur Tambah/Edit Provider Modal, QR Code Scan Modal (auto-polling status), dan Restart Sesi.
+  3. **Step 9 (TR-069 & GenieACS)**: Mengintegrasikan skrip RouterOS standar produksi TR-069: interface `vlan4000-tr069` di `bridge-LAN`, IP `10.40.10.1/24`, pool `10.40.10.2-10.40.11.254`, gateway `10.40.10.1`, DNS `1.1.1.1, 8.8.8.8`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Step 6 Multi-Bank & Payment Gateways (`src/app/setup/page.tsx`)**:
+     - Mengembangkan Multi-Bank Account Manager dengan state `bankAccounts` yang terhubung ke API perusahaan `/api/company`.
+     - Menambahkan tabbed parameter manager untuk Midtrans, Xendit, Tripay, Duitku, dan QRIN yang menyimpan konfigurasi secara langsung ke `/api/payment-gateway/config`.
+  2. **Step 7 Live WhatsApp Provider Monitor & Modals (`src/app/setup/page.tsx`)**:
+     - Mengimplementasikan grid kartu provider WhatsApp live dengan indikator koneksi real-time, toggle saklar aktif/nonaktif, dan tombol aksi cepat.
+     - Menyediakan Modal Tambah/Edit WhatsApp Provider (Baileys, Fonnte, Wablas, MPWA, WAHA, Gowa, Kirimi.id).
+     - Menyediakan Modal QR Code Scanner dengan auto-polling status hingga sesi Baileys terhubung.
+  3. **Step 9 TR-069 Production Script (`src/app/setup/page.tsx`)**:
+     - Memperbarui skrip RouterOS TR-069 pada textarea dan tombol salin skrip agar 100% sesuai dengan standar produksi: `vlan4000-tr069` pada `bridge-LAN`, IP `10.40.10.1/24`, pool `10.40.10.2-10.40.11.254`, gateway `10.40.10.1`, DNS Cloudflare & Google `1.1.1.1, 8.8.8.8`.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.82] — 2026-09-25
 
 ### FTTH ODC/ODP Capacity Validation & Auto-Detect Hardware Specs (`src/app/admin/network/odcs/page.tsx`, `src/app/admin/network/odps/page.tsx`, `src/app/api/network/odps/route.ts`)

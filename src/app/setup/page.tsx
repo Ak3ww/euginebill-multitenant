@@ -2570,8 +2570,8 @@ export default function UnifiedSetupWizardPage() {
                       {waLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4 text-primary" />}
                       <span>Cek Status WA</span>
                     </Button>
-                    <Button onClick={() => { markStepCompleted(7); setCurrentStep(8); }}>
-                      <span>Lanjut ke RADIUS Server</span>
+                    <Button onClick={() => { markStepCompleted(7); setCurrentStep(radiusEnabled ? 8 : 9); }}>
+                      <span>{radiusEnabled ? 'Lanjut ke RADIUS Server' : 'Lanjut ke TR-069 & GenieACS'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </div>
@@ -2704,7 +2704,7 @@ export default function UnifiedSetupWizardPage() {
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(8)}>
+                  <Button variant="outline" onClick={() => setCurrentStep(radiusEnabled ? 8 : 7)}>
                     Kembali
                   </Button>
                   <Button onClick={() => { markStepCompleted(9); setCurrentStep(10); }}>
@@ -2855,6 +2855,9 @@ export default function UnifiedSetupWizardPage() {
                 </CardFooter>
               </Card>
             )}
+          </div>
+        </div>
+
       {/* ── MODAL 1: ADD / EDIT WHATSAPP PROVIDER ── */}
       {showWaModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">

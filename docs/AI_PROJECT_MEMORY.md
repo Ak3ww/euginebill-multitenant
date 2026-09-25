@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.82
+- **Version**: 2.40.83
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,16 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.83: Multi-Bank Manager, Live WA Bot Monitor Grid & Standard TR-069 Script)
+
+- **Hard Invariant: Multi-Bank & Payment Gateway Config (`src/app/setup/page.tsx`)**:
+  - Step 6 Setup Wizard WAJIB menyediakan Multi-Bank Account Manager (BCA, Mandiri, BRI, BNI, BSI, CIMB, dll) yang tersimpan ke `/api/company`, serta parameter manager bertab untuk Midtrans, Xendit, Tripay, Duitku, dan QRIN yang menyimpan ke `/api/payment-gateway/config`.
+- **Hard Invariant: Live WhatsApp Provider Monitor & Auto-Checking QR Scanner (`src/app/setup/page.tsx`)**:
+  - Step 7 Setup Wizard WAJIB merender grid kartu provider WhatsApp live dari `/api/whatsapp/providers` & status real-time `/api/whatsapp/providers/[id]/status` persis seperti `/admin/settings/whatsapp`.
+  - WAJIB dilengkapi Modal Tambah/Edit Provider dan Modal QR Code Scanner dengan auto-polling status hingga sesi terhubung.
+- **Hard Invariant: Production Standard TR-069 RouterOS Script (`src/app/setup/page.tsx`)**:
+  - Step 9 Setup Wizard WAJIB merender dan menyalin skrip RouterOS TR-069 sesuai standar produksi: interface `vlan4000-tr069` pada `bridge-LAN`, IP `10.40.10.1/24`, pool `10.40.10.2-10.40.11.254`, gateway `10.40.10.1`, DNS `1.1.1.1, 8.8.8.8`.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.82: FTTH ODC/ODP Capacity Validation & Hardware Specs Auto-Detection)
 
