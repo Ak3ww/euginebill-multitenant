@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.61
+- **Version**: 2.40.62
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,18 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.61: Clean Master Inventory Catalog, Duplicate Removal & Stock 0 Initial Policy)
+### Recent Patch Log (September 25, 2026 — v2.40.62: Simplified Pure Vendor CPE Master Items Without Equipment IDs)
+
+- **Hard Invariant: Pure Vendor CPE Master Item Standard (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+  - Master Item modem CPE disederhanakan murni berdasarkan nama vendor tanpa menggunakan kode equipment ID spesifik:
+    - `EMG-CPE-ONT-ZTE` -> `Modem ONT ZTE`
+    - `EMG-CPE-ONT-HUAWEI` -> `Modem ONT Huawei`
+    - `EMG-CPE-ONT-SKYWORTH` -> `Modem ONT Skyworth`
+    - `EMG-CPE-ONT-FIBERHOME` -> `Modem ONT FiberHome`
+    - `EMG-CPE-ONT-HSGQ` -> `Modem ONT HSGQ`
+    - `EMG-CPE-ONT-VSOL` -> `Modem ONT VSOL`
+    - `EMG-CPE-ONT-GENERIC` -> `Modem ONT Generic`
+  - Seluruh unit modem bermerek terkait dihubungkan secara otomatis ke Master Item Vendor murni ini.
 
 - **Hard Invariant: Clean Master Inventory Standard (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
   - Seluruh barang dikelompokkan ke dalam 8 Kategori Master: Consumable (CNS), Marketing (MKT), Tools (TLS), Passive (PAS), Hardware (HDW), Office Supplies (SUP), Cable (CBL), dan CPE Modem (CPE).

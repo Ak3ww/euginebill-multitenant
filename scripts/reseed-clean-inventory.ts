@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('=== SEEDING & PERAPIHAN INVENTORI EUGINEBILL ===\n');
+  console.log('=== SEEDING & PERAPIHAN INVENTORI EUGINEBILL (SIMPLE VENDOR CPE) ===\n');
 
   // 1. Master Categories
   const CATEGORIES = [
@@ -14,7 +14,7 @@ async function main() {
     { code: 'HDW', name: 'Perangkat Keras Utama (Hardware)', description: 'MikroTik Routerboard, OLT, Printer Kantor' },
     { code: 'SUP', name: 'Perlengkapan & ATK Kantor (Supplies)', description: 'Kertas HVS A4, pulpen, pensil, stempel, sticky note, isi staples' },
     { code: 'CBL', name: 'Kabel FTTH & Network (Cable)', description: 'Kabel Dropcore 1 Core 50m - 300m, Kabel Precon, Kabel UTP' },
-    { code: 'CPE', name: 'Customer Premises Equipment (CPE / Modem)', description: 'Modem ONT ZTE, HSGQ, VSOL, Skyworth, Huawei, FiberHome, Generic' },
+    { code: 'CPE', name: 'Customer Premises Equipment (CPE / Modem)', description: 'Modem ONT ZTE, Huawei, Skyworth, FiberHome, HSGQ, VSOL, Generic' },
   ];
 
   const catMap = new Map<string, string>(); // code -> id
@@ -30,7 +30,7 @@ async function main() {
   }
   console.log(`  ✓ ${catMap.size} kategori aktif.`);
 
-  // 2. Master Item List (Katalog Rapi & SKU Standar)
+  // 2. Master Item List (Katalog Rapi & SKU Standar Tanpa Equipment ID)
   const MASTER_ITEMS = [
     // ─── CONSUMABLE (CNS) ───
     { sku: 'CNS-ISOLASI-HITAM', name: 'ISOLASI HITAM', categoryCode: 'CNS', unit: 'pack', packSize: 1, isSerialized: false },
@@ -94,14 +94,14 @@ async function main() {
     { sku: 'CBL-DROPCORE-1C-250M', name: 'KABEL DROPCORE 1 CORE 250M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
     { sku: 'CBL-DROPCORE-1C-300M', name: 'KABEL DROPCORE 1 CORE 300M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
 
-    // ─── CPE MODEM (VENDOR MASTER ITEMS) ───
-    { sku: 'EMG-CPE-ONT-ZTE-F670L', name: 'Modem ONT ZTE (F609 / F670L)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-HSGQ-ONT', name: 'Modem ONT HSGQ', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-VSOL-ONT', name: 'Modem ONT VSOL', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-SKYWORTH-OEM', name: 'Modem ONT Skyworth', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-HUAWEI-HG8245H', name: 'Modem ONT Huawei (HG8245H)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-FIBERHOME-AN5506', name: 'Modem ONT FiberHome (AN5506)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-    { sku: 'EMG-CPE-ONT-GENERIC-ONT', name: 'Modem ONT Generic', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    // ─── CPE MODEM (VENDOR MASTER ITEMS - SIMPLE TANPA EQUIPMENT ID) ───
+    { sku: 'EMG-CPE-ONT-ZTE', name: 'Modem ONT ZTE', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-HUAWEI', name: 'Modem ONT Huawei', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-SKYWORTH', name: 'Modem ONT Skyworth', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-FIBERHOME', name: 'Modem ONT FiberHome', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-HSGQ', name: 'Modem ONT HSGQ', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-VSOL', name: 'Modem ONT VSOL', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+    { sku: 'EMG-CPE-ONT-GENERIC', name: 'Modem ONT Generic', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
   ];
 
   console.log('\n2. Upserting Item Katalog Rapi...');
@@ -140,8 +140,8 @@ async function main() {
   }
   console.log(`  ✓ ${MASTER_ITEMS.length} master items tersimpan.`);
 
-  // 3. Re-link inventoryAsset (Modem) ke Item Katalog Utama berdasarkan Vendor
-  console.log('\n3. Re-linking inventoryAsset (Modem) ke Item Katalog Vendor...');
+  // 3. Re-link inventoryAsset (Modem) ke Simple Vendor Items
+  console.log('\n3. Re-linking inventoryAsset (Modem) ke Item Master Vendor...');
   const assets = await prisma.inventoryAsset.findMany({
     where: { assetType: 'MODEM' },
     select: { id: true, vendor: true, model: true, serialNumber: true },
@@ -152,13 +152,13 @@ async function main() {
   
   for (const item of allMasterCpeItems) {
     const sku = item.sku.toUpperCase();
-    if (sku.includes('ZTE')) vendorItemMap.set('ZTE', item.id);
-    else if (sku.includes('HSGQ')) vendorItemMap.set('HSGQ', item.id);
-    else if (sku.includes('VSOL')) vendorItemMap.set('VSOL', item.id);
-    else if (sku.includes('SKYWORTH') || sku.includes('SKW')) vendorItemMap.set('SKYWORTH', item.id);
-    else if (sku.includes('HUAWEI') || sku.includes('HWA')) vendorItemMap.set('HUAWEI', item.id);
-    else if (sku.includes('FIBERHOME') || sku.includes('FBH')) vendorItemMap.set('FIBERHOME', item.id);
-    else if (sku.includes('GENERIC')) vendorItemMap.set('GENERIC', item.id);
+    if (sku === 'EMG-CPE-ONT-ZTE') vendorItemMap.set('ZTE', item.id);
+    else if (sku === 'EMG-CPE-ONT-HUAWEI') vendorItemMap.set('HUAWEI', item.id);
+    else if (sku === 'EMG-CPE-ONT-SKYWORTH') vendorItemMap.set('SKYWORTH', item.id);
+    else if (sku === 'EMG-CPE-ONT-FIBERHOME') vendorItemMap.set('FIBERHOME', item.id);
+    else if (sku === 'EMG-CPE-ONT-HSGQ') vendorItemMap.set('HSGQ', item.id);
+    else if (sku === 'EMG-CPE-ONT-VSOL') vendorItemMap.set('VSOL', item.id);
+    else if (sku === 'EMG-CPE-ONT-GENERIC') vendorItemMap.set('GENERIC', item.id);
   }
 
   const genericId = vendorItemMap.get('GENERIC') || allMasterCpeItems[0]?.id;
@@ -169,11 +169,11 @@ async function main() {
     let targetItemId = genericId;
 
     if (vUpper.includes('ZTE')) targetItemId = vendorItemMap.get('ZTE') || targetItemId;
-    else if (vUpper.includes('HSGQ')) targetItemId = vendorItemMap.get('HSGQ') || targetItemId;
-    else if (vUpper.includes('VSOL')) targetItemId = vendorItemMap.get('VSOL') || targetItemId;
-    else if (vUpper.includes('SKYWORTH')) targetItemId = vendorItemMap.get('SKYWORTH') || targetItemId;
-    else if (vUpper.includes('HUAWEI')) targetItemId = vendorItemMap.get('HUAWEI') || targetItemId;
-    else if (vUpper.includes('FIBERHOME')) targetItemId = vendorItemMap.get('FIBERHOME') || targetItemId;
+    else if (vUpper.includes('HUA') || vUpper.includes('HW')) targetItemId = vendorItemMap.get('HUAWEI') || targetItemId;
+    else if (vUpper.includes('SKY') || vUpper.includes('SK')) targetItemId = vendorItemMap.get('SKYWORTH') || targetItemId;
+    else if (vUpper.includes('FIB') || vUpper.includes('FB')) targetItemId = vendorItemMap.get('FIBERHOME') || targetItemId;
+    else if (vUpper.includes('HSG')) targetItemId = vendorItemMap.get('HSGQ') || targetItemId;
+    else if (vUpper.includes('VSOL') || vUpper.includes('VSL')) targetItemId = vendorItemMap.get('VSOL') || targetItemId;
 
     if (targetItemId) {
       await prisma.inventoryAsset.update({
@@ -185,8 +185,8 @@ async function main() {
   }
   console.log(`  ✓ ${relinkedCount} modem assets terhubung ke master item vendor.`);
 
-  // 4. Bersihkan duplikasi / item usang yang tidak terpakai
-  console.log('\n4. Membersihkan item duplikat / tidak terpakai...');
+  // 4. Migrasi / gabung / bersihkan item CPE lama yang menggunakan equipment ID spesifik (seperti F670L)
+  console.log('\n4. Membersihkan item duplikat / spesifik model usang...');
   const unusedItems = await prisma.inventoryItem.findMany({
     where: {
       sku: { notIn: Array.from(activeSkus) },
@@ -211,7 +211,7 @@ async function main() {
       });
     }
   }
-  console.log(`  ✓ ${deletedUnused} item duplikat usang dibersihkan/dinonaktifkan.`);
+  console.log(`  ✓ ${deletedUnused} item usang dibersihkan.`);
 
   // 5. Hitung Ulang Current Stock
   console.log('\n5. Menghitung Ulang Current Stock...');

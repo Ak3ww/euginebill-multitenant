@@ -115,14 +115,14 @@ const DEFAULT_INVENTORY_ITEMS = [
   { sku: 'CBL-DROPCORE-1C-250M', name: 'KABEL DROPCORE 1 CORE 250M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
   { sku: 'CBL-DROPCORE-1C-300M', name: 'KABEL DROPCORE 1 CORE 300M', categoryCode: 'CBL', unit: 'roll', packSize: 1, isSerialized: true },
 
-  // ─── CPE MODEM (VENDOR MASTER ITEMS) ───
-  { sku: 'EMG-CPE-ONT-ZTE-F670L', name: 'Modem ONT ZTE (F609 / F670L)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-HSGQ-ONT', name: 'Modem ONT HSGQ', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-VSOL-ONT', name: 'Modem ONT VSOL', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-SKYWORTH-OEM', name: 'Modem ONT Skyworth', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-HUAWEI-HG8245H', name: 'Modem ONT Huawei (HG8245H)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-FIBERHOME-AN5506', name: 'Modem ONT FiberHome (AN5506)', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
-  { sku: 'EMG-CPE-ONT-GENERIC-ONT', name: 'Modem ONT Generic', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  // ─── CPE MODEM (VENDOR MASTER ITEMS - TANPA EQUIPMENT ID) ───
+  { sku: 'EMG-CPE-ONT-ZTE', name: 'Modem ONT ZTE', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-HUAWEI', name: 'Modem ONT Huawei', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-SKYWORTH', name: 'Modem ONT Skyworth', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-FIBERHOME', name: 'Modem ONT FiberHome', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-HSGQ', name: 'Modem ONT HSGQ', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-VSOL', name: 'Modem ONT VSOL', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
+  { sku: 'EMG-CPE-ONT-GENERIC', name: 'Modem ONT Generic', categoryCode: 'CPE', subCategory: 'ONT', unit: 'unit', packSize: 1, isSerialized: true },
 ];
 
 // ─── Standard Initial Stock Levels & Pack Size for Consumables ────────────────

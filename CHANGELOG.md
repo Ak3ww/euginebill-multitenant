@@ -4,6 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.62] — 2026-09-25
+
+### Penyederhanaan Master Item Modem CPE Berbasis Vendor Murni (Tanpa Equipment ID)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Staf gudang meminta agar nama dan SKU master item modem CPE disederhanakan murni berdasarkan nama vendor (`ZTE`, `Huawei`, `Skyworth`, `FiberHome`, `HSGQ`, `VSOL`, `Generic`) tanpa menggunakan kode equipment ID spesifik (seperti `F670L`, `F609`, `HG8245H`, dll).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Penyederhanaan SKU Master CPE (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
+     - Mengubah daftar Master Item CPE menjadi:
+       - `EMG-CPE-ONT-ZTE` -> `Modem ONT ZTE`
+       - `EMG-CPE-ONT-HUAWEI` -> `Modem ONT Huawei`
+       - `EMG-CPE-ONT-SKYWORTH` -> `Modem ONT Skyworth`
+       - `EMG-CPE-ONT-FIBERHOME` -> `Modem ONT FiberHome`
+       - `EMG-CPE-ONT-HSGQ` -> `Modem ONT HSGQ`
+       - `EMG-CPE-ONT-VSOL` -> `Modem ONT VSOL`
+       - `EMG-CPE-ONT-GENERIC` -> `Modem ONT Generic`
+     - Menghubungkan seluruh `inventoryAsset` bermerek terkait secara otomatis ke Master Item Vendor murni ini dan menghapus item spesifik model lama yang sudah tidak terpakai.
+
+- **Files**:
+  - Modified: `scripts/reseed-clean-inventory.ts`
+  - Modified: `src/app/api/admin/inventory/seed-defaults/route.ts`
+
 ## [2.40.61] — 2026-09-25
 
 ### Perapihan Katalog Inventori Master, Pembersihan Duplikasi & Pencatatan Stok Awal 0
