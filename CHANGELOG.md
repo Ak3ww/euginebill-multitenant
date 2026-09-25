@@ -4,6 +4,28 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.60] — 2026-09-25
+
+### Perbaikan Otomatis Pruning Phantom ONU OLT Monitoring & Desain Styling Badge Condition Inventori (USED_GOOD)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. OLT Monitoring (`/admin/olt/monitoring`) pada OLT HSGQ sempat menampilkan 570 ONU dari yang seharusnya 190 ONU (182 online, 8 offline) akibat entri `oltOnuStatus` usang/phantom dari format indeks OID lama yang belum terhapus saat polling background berjalan.
+  2. Tampilan kondisi unit inventori `USED_GOOD` (Bekas Layak Pakai) sebelumnya hanya berupa teks polos biasa tanpa badge UI Shadcn.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Pruning Timestamp & Phantom Purging OLT Poller (`src/lib/olt/poller.ts`)**:
+     - Menambahkan parameter `pollStartTime` ke dalam fungsi `pruneMissingOnus(oltId, discoveredKeys, pollStartTime)`.
+     - Setiap entri `oltOnuStatus` pada OLT terkait yang tidak diperbarui selama siklus polling berjalan akan secara otomatis di-prune dari database.
+     - Jumlah ONU OLT HSGQ pada OLT Monitoring langsung mencerminkan data akurat (190 ONU total, 182 online, 8 offline, dengan total ONU dari seluruh OLT menjadi 378 unit).
+  2. **Shadcn Badge UI untuk Kondisi Fisik Inventori (`src/app/admin/inventory/ont/page.tsx`, `src/app/admin/inventory/assets/page.tsx`)**:
+     - Menggantikan render teks polos `USED_GOOD` / `NEW` / `DEFECTIVE` dengan komponen `ConditionBadge` berstandar Shadcn UI.
+     - Memberikan styling badge khusus: `USED_GOOD` (Badge Amber/Cyan dengan border hairline lembut "Bekas Bagus"), `NEW` (Badge Emerald "Baru"), `DEFECTIVE` (Badge Rose/Red "Rusak").
+
+- **Files**:
+  - Modified: `src/lib/olt/poller.ts`
+  - Modified: `src/app/admin/inventory/ont/page.tsx`
+  - Modified: `src/app/admin/inventory/assets/page.tsx`
+
 ## [2.40.59] — 2026-09-25
 ### Penyempurnaan Hak Akses Role WAREHOUSE & Audit Alur Pasang Baru (PSB) Portal Teknisi
 

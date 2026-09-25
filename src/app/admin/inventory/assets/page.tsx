@@ -138,6 +138,27 @@ const CONDITION_LABELS: Record<AssetCondition, string> = {
   SCRAP: 'Scrap',
 };
 
+const CONDITION_CONFIG: Record<string, { label: string; badgeClass: string }> = {
+  NEW: { label: 'Baru', badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:border-emerald-800' },
+  GOOD: { label: 'Baik', badgeClass: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:border-emerald-800' },
+  USED_GOOD: { label: 'Bekas Bagus', badgeClass: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:border-amber-800' },
+  DAMAGED: { label: 'Rusak', badgeClass: 'bg-red-500/10 text-red-600 border-red-500/30 dark:border-red-800' },
+  DEFECTIVE: { label: 'Rusak', badgeClass: 'bg-red-500/10 text-red-600 border-red-500/30 dark:border-red-800' },
+  SCRAP: { label: 'Afkir', badgeClass: 'bg-zinc-500/10 text-zinc-600 border-zinc-500/30 dark:border-zinc-800' },
+};
+
+function ConditionBadge({ condition }: { condition: string }) {
+  const cfg = CONDITION_CONFIG[condition] ?? {
+    label: CONDITION_LABELS[condition as AssetCondition] ?? condition,
+    badgeClass: 'bg-muted text-muted-foreground border-border',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.badgeClass}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
 const ASSET_TYPE_CONFIG: Record<AssetType, { label: string; icon: React.ReactNode }> = {
   MODEM: { label: 'Modem/ONT', icon: <Wifi className="w-3 h-3" /> },
   CABLE_ROLL: { label: 'Kabel Roll', icon: <Package className="w-3 h-3" /> },
@@ -246,7 +267,9 @@ function DetailModal({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Kondisi</p>
-              <p>{CONDITION_LABELS[asset.condition] ?? asset.condition}</p>
+              <div className="mt-0.5">
+                <ConditionBadge condition={asset.condition} />
+              </div>
             </div>
             {asset.macAddress && (
               <div>
@@ -912,8 +935,8 @@ export default function InventoryAssetsPage() {
                     <TableCell>
                       <StatusBadge status={asset.status} />
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {CONDITION_LABELS[asset.condition] ?? asset.condition}
+                    <TableCell>
+                      <ConditionBadge condition={asset.condition} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {asset.assetType === 'CABLE_ROLL' && asset.remainingLength != null

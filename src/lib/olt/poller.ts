@@ -157,7 +157,7 @@ export async function pollOLTWithOptions(
     }
 
     if (discoveredOnus.length > 0) {
-      await pruneMissingOnus(oltId, discoveredKeys);
+      await pruneMissingOnus(oltId, discoveredKeys, now);
     }
 
     // Count ONU statuses
@@ -266,10 +266,10 @@ function buildOnuKey(onu: { frame?: number | null; slot?: number | null; port: n
   return [onu.frame ?? 0, onu.slot ?? 0, onu.port, onu.onuId].join(':');
 }
 
-async function pruneMissingOnus(oltId: string, discoveredKeys: Set<string>): Promise<void> {
+async function pruneMissingOnus(oltId: string, discoveredKeys: Set<string>, pollStartTime: Date): Promise<void> {
   const currentOnus = await prisma.oltOnuStatus.findMany({
     where: { oltId },
-    select: { id: true, frame: true, slot: true, port: true, onuId: true, status: true },
+    select: { id: true, frame: true, slot: true, port: true, onuId: true, status: true, lastSeenAt: true },
   });
 
   const staleIds = currentOnus

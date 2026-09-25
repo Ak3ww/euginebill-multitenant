@@ -133,11 +133,23 @@ const STATUS_CONFIG: Record<string, { label: string; badgeClass: string }> = {
   },
 };
 
-const CONDITION_CONFIG: Record<string, { label: string; color: string }> = {
-  NEW: { label: 'Baru', color: 'text-green-600' },
-  USED_GOOD: { label: 'Bekas Bagus', color: 'text-amber-600' },
-  DEFECTIVE: { label: 'Rusak', color: 'text-red-600' },
+const CONDITION_CONFIG: Record<string, { label: string; badgeClass: string }> = {
+  NEW: { label: 'Baru', badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:border-emerald-800' },
+  USED_GOOD: { label: 'Bekas Bagus', badgeClass: 'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:border-amber-800' },
+  DEFECTIVE: { label: 'Rusak', badgeClass: 'bg-red-500/10 text-red-600 border-red-500/30 dark:border-red-800' },
 };
+
+function ConditionBadge({ condition }: { condition: string }) {
+  const cfg = CONDITION_CONFIG[condition] ?? {
+    label: condition,
+    badgeClass: 'bg-muted text-muted-foreground border-border',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.badgeClass}`}>
+      {cfg.label}
+    </span>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? {
@@ -206,9 +218,9 @@ function OntDetailModal({
             )}
             <div>
               <p className="text-xs text-muted-foreground">Kondisi Fisik</p>
-              <p className={`font-medium ${CONDITION_CONFIG[asset.condition]?.color || ''}`}>
-                {CONDITION_CONFIG[asset.condition]?.label || asset.condition}
-              </p>
+              <div className="mt-0.5">
+                <ConditionBadge condition={asset.condition} />
+              </div>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Vendor</p>
@@ -976,9 +988,7 @@ export default function OntInventoryPage() {
                       </TableCell>
 
                       <TableCell>
-                        <span className={`text-xs font-medium ${CONDITION_CONFIG[asset.condition]?.color || ''}`}>
-                          {CONDITION_CONFIG[asset.condition]?.label || asset.condition}
-                        </span>
+                        <ConditionBadge condition={asset.condition} />
                       </TableCell>
 
                       <TableCell>

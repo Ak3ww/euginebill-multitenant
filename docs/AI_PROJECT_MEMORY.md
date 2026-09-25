@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.59
+- **Version**: 2.40.60
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,15 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.59: Strict WAREHOUSE Scope & Technician PSB Zero-Manual-Typing Workflow)
+### Recent Patch Log (September 25, 2026 — v2.40.60: OLT Poller Pruning Timestamp & Inventory USED_GOOD Badge UI Styling)
+
+- **Hard Invariant: OLT Poller Pruning Timestamp (`src/lib/olt/poller.ts`)**:
+  - `pollOLTWithOptions` mengirimkan `pollStartTime` ke `pruneMissingOnus(oltId, discoveredKeys, pollStartTime)`.
+  - Setiap entri `oltOnuStatus` pada OLT yang tidak diperbarui selama siklus polling berjalan akan secara otomatis di-prune dari DB, sehingga menghapus data phantom dari format OID OLT lama.
+  - Jumlah total ONU OLT monitoring mencerminkan data akurat (190 ONU total untuk HSGQ: 182 online, 8 offline; total 378 ONUs across all OLTs).
+
+- **Hard Invariant: Inventory Condition Badge Standard (`src/app/admin/inventory/ont/page.tsx`, `src/app/admin/inventory/assets/page.tsx`)**:
+  - Seluruh status kondisi fisik barang (`NEW`, `USED_GOOD`, `DEFECTIVE`) wajib menggunakan komponen `ConditionBadge` Shadcn UI dengan border hairline dan background tint yang sesuai (`bg-amber-500/10 text-amber-700` untuk `USED_GOOD`). Dilarang keras menampilkan teks polos tanpa badge.
 
 - **Hard Invariant: Strict WAREHOUSE Scope**:
   - Role `WAREHOUSE` HANYA memegang `inventory.view`, `inventory.manage`, `inventory.assets`, `inventory.export`, `notifications.view`.
