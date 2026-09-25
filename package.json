@@ -1,6 +1,6 @@
 {
   "name": "EugineBill-radius",
-  "version": "2.40.52",
+  "version": "2.40.66",
   "private": false,
   "scripts": {
     "dev": "next dev",
@@ -9,10 +9,9 @@
     "postinstall": "node scripts/patch-node-routeros.js",
     "sync:readme-changelog": "node scripts/sync-readme-changelog.mjs",
     "sync:olt-modems": "tsx scripts/olt-full-refresh.ts",
-    "migrate:october-2026": "tsx scripts/migrate-billing-october-2026.ts",
+    "reseed:inventory": "tsx scripts/reseed-clean-inventory.ts",
     "sync:ont-inventory": "tsx scripts/sync-ont-inventory.ts",
     "sync:ont-inventory:wipe": "tsx scripts/sync-ont-inventory.ts --wipe",
-    "analyze:inventory": "tsx scripts/analyze-inventory-duplicates.ts",
     "olt:full-refresh": "tsx scripts/olt-full-refresh.ts",
     "olt:full-refresh:dry": "tsx scripts/olt-full-refresh.ts --dry-run",
     "olt:full-refresh:olt-only": "tsx scripts/olt-full-refresh.ts --olt-only",

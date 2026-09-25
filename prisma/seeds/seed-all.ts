@@ -276,6 +276,16 @@ export async function seedAll(forceTemplates = false) {
   }
   console.log('');
 
+  // 14. Seed SKU Dictionary Categories & Subcategories
+  console.log('📦 Seeding SKU Dictionary...');
+  try {
+    const { seedSkuDictionary } = await import('./sku-dictionary');
+    await seedSkuDictionary(prisma);
+  } catch (error) {
+    console.error('   ⚠️ Warning: Failed to seed SKU dictionary:', error);
+  }
+  console.log('');
+
   console.log('🎉 Database seeding completed!\n');
   console.log('================================');
   console.log('Default Admin Login:');
