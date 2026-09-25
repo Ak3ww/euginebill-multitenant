@@ -4,7 +4,23 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.56] — 2026-09-25
+### Fix Prisma Query Filter untuk Orphaned oltOnuStatus Clean-Up
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Eksekusi `npm run olt:full-refresh` di VPS melempar `PrismaClientValidationError` saat query pencarian `oltOnuStatus` orphan: `Argument oltId is missing`.
+     - Root cause: `oltId` pada tabel `oltOnuStatus` bersifat non-nullable required string (`oltId String`), sehingga filter `{ oltId: null }` ditolak oleh Prisma validation engine.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Prisma Query Fix (`scripts/olt-full-refresh.ts`)**:
+     - Memperbaiki query filter dari `{ OR: [ { oltId: { notIn: activeOltIds } }, { oltId: null } ] }` menjadi `{ oltId: { notIn: activeOltIds } }`.
+     - Script sekarang berjalan 100% lancar tanpa error validasi Prisma.
+
+- **Files**:
+  - Modified: `scripts/olt-full-refresh.ts`
+
 ## [2.40.55] — 2026-09-25
+
 ### Global Orphaned OLT & Inventory Clean-up Engine + Script Housekeeping
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
