@@ -126,8 +126,9 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} ${hankenGrotesk.variable} antialiased`}>
-        {children}
-        <ClientProviders />
+        <ClientProviders>
+          {children}
+        </ClientProviders>
       </body>
     </html>
   );

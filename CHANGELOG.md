@@ -4,6 +4,26 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.70] — 2026-09-25
+
+### Fix Missing Root SessionProvider & TypeError `useSession` is undefined (`src/app/layout.tsx`, `src/components/client-providers.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman `/setup` dan komponen client mengalami error `TypeError: Cannot destructure property 'data' of '(0 , r.useSession)(...)' as it is undefined`.
+  2. Penyebabnya adalah `<SessionProvider>` dari NextAuth belum membungkus seluruh hierarki `{children}` di `RootLayout` (`src/app/layout.tsx`).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Root SessionProvider Wrapping (`src/app/layout.tsx`, `src/components/client-providers.tsx`)**:
+     - Membungkus seluruh aplikasi `{children}` dengan `<SessionProvider>` di tingkat `RootLayout`.
+     - Menjamin bahwa seluruh rute client (termasuk `/setup`) memegang konteks NextAuth secara utuh sehingga `useSession()` tidak pernah bernilai `undefined`.
+  2. **Safe Optional Chaining (`src/app/setup/page.tsx`)**:
+     - Mengubah pemanggilan `useSession()` di `/setup` menjadi pembacaan aman `sessionContext?.data` dan `sessionContext?.status || 'unauthenticated'` untuk mencegah error `TypeError` saat inisialisasi awal.
+
+- **Files**:
+  - Modified: `src/app/layout.tsx`
+  - Modified: `src/components/client-providers.tsx`
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.69] — 2026-09-25
 
 ### Fix React SSR Hydration Mismatch pada Setup Wizard & Dynamic Brand Logo Fallback (`src/app/setup/page.tsx`, `src/app/customer/login/page.tsx`)

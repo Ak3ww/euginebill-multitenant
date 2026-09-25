@@ -93,7 +93,9 @@ const WIZARD_STEPS = [
 
 export default function UnifiedSetupWizardPage() {
   const router = useRouter();
-  const { data: session, status: sessionStatus } = useSession();
+  const sessionContext = useSession();
+  const session = sessionContext?.data;
+  const sessionStatus = sessionContext?.status || 'unauthenticated';
 
   // Initialization check state
   const [checkingInit, setCheckingInit] = useState(true);
