@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.66
+- **Version**: 2.40.67
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,11 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.67: Upsert Setup Wizard Admin Credentials)
+
+- **Hard Invariant: Setup Wizard Credentials Upsert (`src/app/api/setup/route.ts`)**:
+  - POST `/api/setup` secara otomatis memproses upsert (buat/perbarui) pada akun `SUPER_ADMIN` dengan username, email, dan password yang dimasukkan oleh admin pada Setup Wizard `/setup`.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.66: Fix Foreign Key Constraint in SKU Dictionary Seeding)
 

@@ -4,6 +4,21 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.67] — 2026-09-25
+
+### Upsert Kredensial Super Admin pada Setup Wizard (`src/app/api/setup/route.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pada instalasi baru, jika skrip seeding awal telah membuat pengguna `superadmin` default, pengisian form akun admin baru di Setup Wizard (`/setup`) sebelumnya mengabaikan pembuatan/pembaruan kredensial superadmin baru karena pengecekan `adminCount === 0`.
+  2. Menyebabkan ketidaksesuaian password saat pengguna mencoba login setelah menyelesaikan Setup Wizard.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. Mengubah handler `POST /api/setup` untuk secara otomatis meng-upsert (membuat atau memperbarui) akun `SUPER_ADMIN` dengan username, email, dan password persis yang diinputkan pengguna pada form Setup Wizard.
+  2. Menjamin alur inisialisasi `/setup` berjalan 100% mulus dari tahap awal hingga login pertama.
+
+- **Files**:
+  - Modified: `src/app/api/setup/route.ts`
+
 ## [2.40.66] — 2026-09-25
 
 ### Fix Foreign Key Constraint Violation pada Seeding Pengaturan SKU (`prisma/seeds/sku-dictionary.ts`)

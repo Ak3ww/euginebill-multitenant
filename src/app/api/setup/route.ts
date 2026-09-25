@@ -123,9 +123,24 @@ export async function POST(req: Request) {
       });
     }
 
-    // Create superadmin user in admin_users if none exists
+    // Create or update superadmin user in admin_users
     let adminUser;
-    if (adminCount === 0) {
+    const existingAdmin = await prisma.adminUser.findFirst({
+      where: { role: 'SUPER_ADMIN' },
+    });
+
+    if (existingAdmin) {
+      adminUser = await prisma.adminUser.update({
+        where: { id: existingAdmin.id },
+        data: {
+          name: adminName.trim(),
+          username: resolvedUsername,
+          email: adminEmail.trim().toLowerCase(),
+          password: hashedPassword,
+          isActive: true,
+        },
+      });
+    } else {
       adminUser = await prisma.adminUser.create({
         data: {
           id: resolvedUserId,
@@ -137,9 +152,23 @@ export async function POST(req: Request) {
           isActive: true,
         },
       });
+    }
 
-      // Also mirror to legacy users table for backward compatibility
-      try {
+    // Also mirror to legacy users table for backward compatibility
+    try {
+      const existingUser = await prisma.users.findFirst({
+        where: { role: 'ADMIN' },
+      });
+      if (existingUser) {
+        await prisma.users.update({
+          where: { id: existingUser.id },
+          data: {
+            name: adminName.trim(),
+            email: adminEmail.trim().toLowerCase(),
+            password: hashedPassword,
+          },
+        });
+      } else {
         await prisma.users.create({
           data: {
             id: resolvedUserId,
@@ -149,8 +178,8 @@ export async function POST(req: Request) {
             role: 'ADMIN',
           },
         });
-      } catch {}
-    }
+      }
+    } catch {}
 
     // Note: Master catalog seeding (SKU Dictionary, Permissions, Templates)
     // is executed via CLI during installation: npm run db:seed:clean
