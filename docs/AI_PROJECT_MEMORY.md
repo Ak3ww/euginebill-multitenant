@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.57
+- **Version**: 2.40.58
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,15 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.57: Global lastSeenAt Purge Engine for oltOnuStatus)
+### Recent Patch Log (September 25, 2026 — v2.40.58: WAREHOUSE Role Isolation & Stock Management Access)
+
+- **Hard Invariant: WAREHOUSE Role Permission Boundaries**:
+  - Role `WAREHOUSE` HANYA boleh memegang hak akses `inventory.view`, `inventory.manage`, `inventory.assets`, `inventory.export`, `documents.*`, `notifications.view`.
+  - Role `WAREHOUSE` DILARANG KERAS memegang `dashboard.view` atau `reports.view`.
+  - `getUserPermissions()` secara ketat menyaring `dashboard.view` & `reports.view` jika `user.role === 'WAREHOUSE'`.
+  - Ketika pengguna ber-role `WAREHOUSE` membuka URL `/admin`, sistem otomatis mengalihkan (*redirect*) ke `/admin/inventory/items`.
+  - Sidebar untuk role `WAREHOUSE` hanya menampilkan kategori Inventori (Gudang) & Dokumen. Seluruh menu billing, transaksi, router, dan hotspot otomatis tersembunyi.
+
 
 - **Hard Invariant: Timestamp-Based Global Purge (`scripts/olt-full-refresh.ts`)**:
   - `runStartTime` mencatat timestamp awal eksekusi script.

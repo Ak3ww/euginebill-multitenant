@@ -99,7 +99,6 @@ export const ROLE_TEMPLATES: Record<AdminRole, string[]> = {
   SUPER_ADMIN: PERMISSIONS.map(p => p.key), // All permissions
 
   WAREHOUSE: [
-    'dashboard.view',
     'inventory.view',
     'inventory.manage',
     'inventory.assets',
@@ -107,7 +106,6 @@ export const ROLE_TEMPLATES: Record<AdminRole, string[]> = {
     'documents.view',
     'documents.create',
     'documents.issue',
-    'reports.view',
     'notifications.view',
   ],
 

@@ -4,7 +4,29 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.58] — 2026-09-25
+### Isoasi Hak Akses Role WAREHOUSE (Staf Gudang) & Perbaikan Manajemen Stok Inventori
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Staf gudang (role `WAREHOUSE`) sebelumnya masih dapat mengakses dashboard billing & laporan keuangan (`dashboard.view` & `reports.view`).
+  2. Pengguna role `WAREHOUSE` perlu isolasi penuh sehingga HANYA bisa mengakses menu Inventori & Gudang (`/admin/inventory/*`) serta Dokumen, tanpa pernah melihat pendapatan billing maupun statistik pelanggan.
+  3. Memastikan role `WAREHOUSE` memegang hak akses penuh untuk mengelola stok, item inventori, aset modem/kabel, serta pergerakan barang (`inventory.view`, `inventory.manage`, `inventory.assets`, `inventory.export`).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Warehouse Permission Isolation (`src/server/auth/permissions.ts`, `prisma/seeds/permissions.ts`)**:
+     - Menghapus `dashboard.view` dan `reports.view` secara permanen dari template role `WAREHOUSE`.
+     - Menambahkan *hard safety constraint* di `getUserPermissions()` yang secara otomatis menyaring (`filter`) `dashboard.view` dan `reports.view` dari pengguna ber-role `WAREHOUSE`.
+     - Ketika pengguna ber-role `WAREHOUSE` mengakses `/admin`, sistem secara otomatis mengalihkan (*redirect*) lokasi halaman ke `/admin/inventory/items`.
+  2. **Role Template Fallback & API Sync (`src/app/api/permissions/role-templates/route.ts`)**:
+     - Menambahkan fallback otomatis ke `DEFAULT_ROLE_TEMPLATES` jika database `rolePermission` belum di-seed/kosong.
+
+- **Files**:
+  - Modified: `src/server/auth/permissions.ts`
+  - Modified: `prisma/seeds/permissions.ts`
+  - Modified: `src/app/api/permissions/role-templates/route.ts`
+
 ## [2.40.57] — 2026-09-25
+
 ### Global `lastSeenAt` Purge Engine untuk `oltOnuStatus` (Guaranteed 378 ONTs)
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:

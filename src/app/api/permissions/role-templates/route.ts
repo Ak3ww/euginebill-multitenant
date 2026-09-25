@@ -4,6 +4,8 @@ import { AdminRole } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 
+import { DEFAULT_ROLE_TEMPLATES } from '@/server/auth/permissions';
+
 /**
  * GET /api/permissions/role-templates
  * Get permission templates for all roles
@@ -41,7 +43,21 @@ export async function GET() {
     };
 
     rolePermissions.forEach((rp) => {
-      templates[rp.role].push(rp.permission.key);
+      if (rp.role in templates) {
+        templates[rp.role].push(rp.permission.key);
+      }
+    });
+
+    // Fallback to DEFAULT_ROLE_TEMPLATES if a role has no DB entries
+    (Object.keys(templates) as AdminRole[]).forEach((role) => {
+      if (templates[role].length === 0 && DEFAULT_ROLE_TEMPLATES[role]) {
+        templates[role] = [...DEFAULT_ROLE_TEMPLATES[role]];
+      }
+      if (role === 'WAREHOUSE') {
+        templates.WAREHOUSE = templates.WAREHOUSE.filter(
+          (k) => k !== 'dashboard.view' && k !== 'reports.view'
+        );
+      }
     });
 
     return NextResponse.json({
