@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.75
+- **Version**: 2.40.76
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,17 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.76: Setup Wizard Router API & Port Configuration & First-Time Company Setup Fix)
+
+- **Hard Invariant: Unauthenticated First-Time Company Setup Creation (`src/app/api/company/route.ts`)**:
+  - `POST /api/company` WAJIB mengizinkan pendaftaran profil perusahaan jika belum ada record di basis data (`!existingCompany`) atau jika sesi NextAuth terautentikasi. Hal ini menjamin inisialisasi pertama pada Setup Wizard (`/setup`) tidak akan pernah terblokir oleh galat `401 Unauthorized`.
+  - Fungsi `prisma.company.create` WAJIB menyertakan nilai *fallback default* aman untuk seluruh field teks utama untuk mencegah *database validation exception*.
+
+- **Hard Invariant: Setup Wizard Router API & Port Configuration Transparency (`src/app/setup/page.tsx`)**:
+  - Step 2 Setup Wizard WAJIB menyediakan input eksplisit untuk **Port API MikroTik** (default: `8728`) dan **Port Winbox MikroTik** (default: `8291`) agar pengguna dapat menyesuaikan service port yang digunakan oleh VPS Billing Server.
+  - Step 2 WAJIB menampilkan *Contextual Guidance Banner* yang secara transparan menerangkan alur kerja koneksi VPN (VPS sebagai Server, MikroTik sebagai Client dengan IP Tunnel `10.254.1.2`, serta skrip otomatisasi Winbox Terminal).
+  - Handler `handleSaveCompany` WAJIB menguraikan `data.error` dari respon JSON jika `!res.ok` agar pengguna mendapatkan feedback pesan galat yang presisi.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.75: Absolute Light Mode First Initialization)
 

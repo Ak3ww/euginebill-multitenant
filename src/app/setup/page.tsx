@@ -438,8 +438,9 @@ export default function UnifiedSetupWizardPage() {
         body: JSON.stringify(companyForm),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error('Gagal menyimpan profil perusahaan');
+        throw new Error(data.error || 'Gagal menyimpan profil perusahaan');
       }
 
       setCompanySaved(true);
@@ -1095,24 +1096,53 @@ export default function UnifiedSetupWizardPage() {
                     </div>
                   </div>
 
+                  {/* Contextual Guidance Callout */}
+                  <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-foreground space-y-1.5 text-xs">
+                    <div className="font-bold flex items-center gap-2 text-primary">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <span>
+                        {connectionMethod === 'direct'
+                          ? 'Petunjuk Koneksi Direct IP API:'
+                          : `Petunjuk Alur Koneksi ${connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'} VPN Tunnel:`}
+                      </span>
+                    </div>
+                    {connectionMethod === 'direct' ? (
+                      <p className="text-muted-foreground leading-relaxed">
+                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 jaringan lokal LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground leading-relaxed">
+                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> di bawah (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk berkomunikasi langsung dengan MikroTik menembus NAT ISP. Cukup <strong className="text-foreground">Salin Skrip</strong> di bawah lalu <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
+                      </p>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="routerName">Nama Router *</Label>
+                      <Label htmlFor="routerName">Nama Identitas Router *</Label>
                       <Input
                         id="routerName"
                         value={routerForm.name}
                         onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
                         placeholder="MikroTik-Utama"
                       />
+                      <p className="text-[11px] text-muted-foreground">Label pengenal router di dashboard billing.</p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="routerIp">IP Address / VPN Client IP *</Label>
+                      <Label htmlFor="routerIp">
+                        {connectionMethod === 'direct' ? 'IP Address MikroTik (Publik / LAN) *' : 'IP Target Tunnel VPN Client *'}
+                      </Label>
                       <Input
                         id="routerIp"
                         value={routerForm.ipAddress}
                         onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
                         placeholder="10.254.1.2"
                       />
+                      <p className="text-[11px] text-muted-foreground">
+                        {connectionMethod === 'direct'
+                          ? 'IP Publik Static atau IP LAN lokal MikroTik (contoh: 192.168.88.1).'
+                          : 'IP Tunnel VPN Client yang dialokasikan di VPS (contoh: 10.254.1.2).'}
+                      </p>
                     </div>
                   </div>
 
@@ -1135,6 +1165,31 @@ export default function UnifiedSetupWizardPage() {
                         onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
                         placeholder="Password API"
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerPort">Port API MikroTik *</Label>
+                      <Input
+                        id="routerPort"
+                        type="number"
+                        value={routerForm.port}
+                        onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
+                        placeholder="8728"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Default: 8728. Port service API yang dibuka di MikroTik.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="winboxPort">Port Winbox MikroTik</Label>
+                      <Input
+                        id="winboxPort"
+                        type="number"
+                        value={routerForm.winboxPort}
+                        onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
+                        placeholder="8291"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Default: 8291. Port manajemen Winbox untuk remote proxy.</p>
                     </div>
                   </div>
 

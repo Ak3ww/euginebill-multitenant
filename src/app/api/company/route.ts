@@ -52,14 +52,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    const existingCompany = await prisma.company.findFirst();
+
+    // Allow company update if session is authenticated OR if no company exists yet (first-time setup)
+    if (!session && existingCompany) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const data = await request.json();
-    
-    // Check if company already exists
-    const existingCompany = await prisma.company.findFirst();
     
     // Parse bank accounts if provided
     let bankAccounts = data.bankAccounts;
@@ -78,30 +78,30 @@ export async function POST(request: Request) {
       company = await prisma.company.update({
         where: { id: existingCompany.id },
         data: {
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          address: data.address,
-          baseUrl: data.baseUrl,
-          adminPhone: data.adminPhone,
-          logo: data.logo,
-          timezone: data.timezone,
-          poweredBy: data.poweredBy,
-          customerIdPrefix: data.customerIdPrefix ?? null,
-          footerAdmin: data.footerAdmin,
-          footerCustomer: data.footerCustomer,
-          footerTechnician: data.footerTechnician,
-          footerAgent: data.footerAgent,
-          bankAccounts: bankAccounts,
-          invoiceGenerateDays: data.invoiceGenerateDays ? parseInt(data.invoiceGenerateDays) : undefined,
-          radiusEnabled: Boolean(data.radiusPppoeEnabled),
-          radiusHotspotEnabled: data.radiusHotspotEnabled ?? false,
-          radiusPppoeEnabled: data.radiusPppoeEnabled ?? false,
-          enableProrate: data.enableProrate ?? true,
-          fixedBillingDate: data.fixedBillingDate ? parseInt(data.fixedBillingDate) : 6,
-          shiftBillingDateIfLate: data.shiftBillingDateIfLate ?? false,
-          isolateProfileName: data.isolateProfileName ?? null,
-          psbWaGroupId: data.psbWaGroupId !== undefined ? (data.psbWaGroupId || null) : undefined,
+          name: data.name || existingCompany.name,
+          email: data.email ?? existingCompany.email,
+          phone: data.phone ?? data.adminPhone ?? existingCompany.phone,
+          address: data.address ?? existingCompany.address,
+          baseUrl: data.baseUrl ?? existingCompany.baseUrl,
+          adminPhone: data.adminPhone ?? data.phone ?? existingCompany.adminPhone,
+          logo: data.logo ?? existingCompany.logo,
+          timezone: data.timezone ?? existingCompany.timezone,
+          poweredBy: data.poweredBy ?? existingCompany.poweredBy,
+          customerIdPrefix: data.customerIdPrefix ?? existingCompany.customerIdPrefix,
+          footerAdmin: data.footerAdmin ?? existingCompany.footerAdmin,
+          footerCustomer: data.footerCustomer ?? existingCompany.footerCustomer,
+          footerTechnician: data.footerTechnician ?? existingCompany.footerTechnician,
+          footerAgent: data.footerAgent ?? existingCompany.footerAgent,
+          bankAccounts: bankAccounts ?? existingCompany.bankAccounts,
+          invoiceGenerateDays: data.invoiceGenerateDays ? parseInt(data.invoiceGenerateDays) : existingCompany.invoiceGenerateDays,
+          radiusEnabled: data.radiusPppoeEnabled !== undefined ? Boolean(data.radiusPppoeEnabled) : existingCompany.radiusEnabled,
+          radiusHotspotEnabled: data.radiusHotspotEnabled ?? existingCompany.radiusHotspotEnabled,
+          radiusPppoeEnabled: data.radiusPppoeEnabled ?? existingCompany.radiusPppoeEnabled,
+          enableProrate: data.enableProrate ?? existingCompany.enableProrate,
+          fixedBillingDate: data.fixedBillingDate ? parseInt(data.fixedBillingDate) : existingCompany.fixedBillingDate,
+          shiftBillingDateIfLate: data.shiftBillingDateIfLate ?? existingCompany.shiftBillingDateIfLate,
+          isolateProfileName: data.isolateProfileName ?? existingCompany.isolateProfileName,
+          psbWaGroupId: data.psbWaGroupId !== undefined ? (data.psbWaGroupId || null) : existingCompany.psbWaGroupId,
         },
       });
 
@@ -138,15 +138,15 @@ export async function POST(request: Request) {
       company = await prisma.company.create({
         data: {
           id: crypto.randomUUID(),
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          address: data.address,
-          baseUrl: data.baseUrl,
-          adminPhone: data.adminPhone,
-          logo: data.logo,
-          timezone: data.timezone,
-          poweredBy: data.poweredBy,
+          name: data.name || 'PT Eugine Solusi Internet',
+          email: data.email || 'admin@isp.net',
+          phone: data.phone || data.adminPhone || '081234567890',
+          address: data.address || 'Jakarta, Indonesia',
+          baseUrl: data.baseUrl || 'http://localhost:3000',
+          adminPhone: data.adminPhone || data.phone || '081234567890',
+          logo: data.logo || null,
+          timezone: data.timezone || 'Asia/Jakarta',
+          poweredBy: data.poweredBy || 'EugineBill RADIUS',
           customerIdPrefix: data.customerIdPrefix ?? null,
           footerAdmin: data.footerAdmin || 'Powered by EugineBill RADIUS',
           footerCustomer: data.footerCustomer || 'Powered by EugineBill RADIUS',

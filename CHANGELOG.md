@@ -4,6 +4,28 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.76] — 2026-09-25
+
+### Setup Wizard Router API & Port Configuration Enhancement & Company Setup Unauthenticated Fix (`src/app/api/company/route.ts`, `src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pengguna mengalami kesalahan *"Gagal menyimpan data perusahaan"* pada Step 1 Setup Wizard saat inisialisasi pertama. Hal ini terjadi karena endpoint `POST /api/company` membutuhkan sesi NextAuth aktif, padahal sesi cookies baru di-set atau sedang dipropagasikan oleh `signIn`.
+  2. Pada Step 2 (Koneksi Router MikroTik), pengguna merasa bingung dengan alur koneksi VPN vs Direct IP, pengisian IP address/VPN client IP, serta tidak adanya kolom isian Port API MikroTik (`8728`) dan Port Winbox (`8291`) pada form yang nantinya dikonfigurasi dan dihubungi oleh VPS Billing Server.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **First-Time Setup Company Creation (`src/app/api/company/route.ts`)**:
+     - Memperbarui `POST /api/company` sehingga mengizinkan penyimpanan profil perusahaan jika akun terautentikasi ATAU jika belum ada record perusahaan di basis data (`!existingCompany`).
+     - Menambahkan nilai *fallback default* aman pada `prisma.company.create` untuk mencegah kegagalan *constraint validation* basis data.
+  2. **Enhanced Step 2 Router Setup Form & Contextual Guidance (`src/app/setup/page.tsx`)**:
+     - Menambahkan *Contextual Guidance Banner* interaktif di Step 2 yang menjelaskan secara transparan alur kerja koneksi VPN (VPS sebagai VPN Server, MikroTik sebagai Client dengan IP Tunnel `10.254.1.2`, serta skrip otomatisasi Winbox Terminal).
+     - Menambahkan kolom input eksplisit untuk **Port API MikroTik** (`8728` default) dan **Port Winbox MikroTik** (`8291` default).
+     - Memperbarui *helper text* dynamic pada input IP Address sesuai metode yang dipilih (IP Target VPN Tunnel vs Direct IP Publik/LAN).
+     - Memperbarui `handleSaveCompany` agar mengurai `data.error` dari respon API secara detail saat terjadi kesalahan.
+
+- **Files**:
+  - Modified: `src/app/api/company/route.ts`
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.75] — 2026-09-25
 
 ### Absolute Light Mode First Initialization (`src/app/admin/login/page.tsx`, `src/app/setup/page.tsx`, `src/hooks/useTheme.ts`)
