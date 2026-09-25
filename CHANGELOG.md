@@ -4,6 +4,21 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.66] — 2026-09-25
+
+### Fix Foreign Key Constraint Violation pada Seeding Pengaturan SKU (`prisma/seeds/sku-dictionary.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Penambahan sub-kategori `HDW` (Kamera CCTV) dan `CBL` (Kabel Extender) pada `SKU_SUBCATEGORIES` sebelumnya gagal di-upsert karena kode kategori `HDW` dan `CBL` belum dideklarasikan di `SKU_CATEGORIES`.
+  2. Menyebabkan `PrismaClientKnownRequestError` (`P2003`: Foreign key constraint violated on the fields: (`categoryCode`)).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. Menambahkan deklarasi kode kategori `HDW` (`Perangkat Keras Utama (HDW)`) dan `CBL` (`Kabel FTTH & Network (CBL)`) ke dalam array `SKU_CATEGORIES` di `prisma/seeds/sku-dictionary.ts`.
+  2. Proses seeding `seedSkuDictionary()` kini berjalan 100% lancar tanpa error foreign key constraint.
+
+- **Files**:
+  - Modified: `prisma/seeds/sku-dictionary.ts`
+
 ## [2.40.65] — 2026-09-25
 
 ### Penambahan Master Item Adaptor 12V 1.5A & Perangkat CCTV serta Multi-Tujuan Mutasi Stok Keluar (Stock Out Purpose)

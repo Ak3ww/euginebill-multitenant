@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.65
+- **Version**: 2.40.66
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,11 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.66: Fix Foreign Key Constraint in SKU Dictionary Seeding)
+
+- **Hard Invariant: Complete SKU Category & Sub-Category Declaration (`prisma/seeds/sku-dictionary.ts`)**:
+  - `SKU_CATEGORIES` wajib mendeklarasikan seluruh kode kategori utama yang digunakan di `SKU_SUBCATEGORIES` (termasuk `HDW` dan `CBL`) untuk mencegah `PrismaClientKnownRequestError` (`P2003` foreign key constraint violation) saat seeding `/admin/inventory/sku-settings`.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.65: Power Adaptor 12V 1.5A, CCTV Items & Multi-Purpose Stock Out)
 

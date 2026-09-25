@@ -2,16 +2,18 @@ import { PrismaClient } from '@prisma/client';
 
 export const SKU_CATEGORIES = [
   { code: 'HW',  label: 'Hardware Utama (HW)', sortOrder: 1 },
-  { code: 'CPE', label: 'Customer Equipment (CPE)', sortOrder: 2 },
-  { code: 'PAS', label: 'Perangkat Pasif FTTH (PAS)', sortOrder: 3 },
-  { code: 'CAB', label: 'Kabel & Dropcore (CAB)', sortOrder: 4 },
-  { code: 'CON', label: 'Bahan Habis Pakai / Consumable (CON)', sortOrder: 5 },
-  { code: 'CNS', label: 'Bahan Habis Pakai / Consumable (CNS)', sortOrder: 6 },
-  { code: 'MKT', label: 'Materi Marketing (MKT)', sortOrder: 7 },
-  { code: 'PWR', label: 'Power Equipment (PWR)', sortOrder: 8 },
-  { code: 'TLS', label: 'Tools / Alat Kerja (TLS)', sortOrder: 9 },
-  { code: 'ACC', label: 'Accessories & Aksesoris (ACC)', sortOrder: 10 },
-  { code: 'SUP', label: 'Office Supplies / ATK (SUP)', sortOrder: 11 },
+  { code: 'HDW', label: 'Perangkat Keras Utama (HDW)', sortOrder: 2 },
+  { code: 'CPE', label: 'Customer Equipment (CPE)', sortOrder: 3 },
+  { code: 'PAS', label: 'Perangkat Pasif FTTH (PAS)', sortOrder: 4 },
+  { code: 'CAB', label: 'Kabel & Dropcore (CAB)', sortOrder: 5 },
+  { code: 'CBL', label: 'Kabel FTTH & Network (CBL)', sortOrder: 6 },
+  { code: 'CON', label: 'Bahan Habis Pakai / Consumable (CON)', sortOrder: 7 },
+  { code: 'CNS', label: 'Bahan Habis Pakai / Consumable (CNS)', sortOrder: 8 },
+  { code: 'MKT', label: 'Materi Marketing (MKT)', sortOrder: 9 },
+  { code: 'PWR', label: 'Power Equipment (PWR)', sortOrder: 10 },
+  { code: 'TLS', label: 'Tools / Alat Kerja (TLS)', sortOrder: 11 },
+  { code: 'ACC', label: 'Accessories & Aksesoris (ACC)', sortOrder: 12 },
+  { code: 'SUP', label: 'Office Supplies / ATK (SUP)', sortOrder: 13 },
 ];
 
 export const SKU_SUBCATEGORIES = [
