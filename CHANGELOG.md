@@ -4,6 +4,30 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.77] — 2026-09-25
+
+### Setup Wizard Step 2 & Step 3 Parity with Native Admin Modals (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pengguna memberikan umpan balik bahwa field-field pada Step 2 (Koneksi Router MikroTik & VPN Client) dan Step 3 (Konfigurasi Paket PPPoE) di Setup Wizard (`/setup`) terlalu disederhanakan dan tidak memiliki keselarasan (*parity*) dengan modal asli pada admin portal (`/admin/network/routers` & `/admin/pppoe/profiles`).
+  2. Pengguna membutuhkan alur wizard terpandu (*guided step-by-step*) yang menyajikan **100% kelengkapan kolom form asli** (seperti Auto-Assign IP VPN, AllowedIPs Subnet, WWW Port, Mode Autentikasi Pelanggan, Harga HPP, Prorate per hari, PPN 11%, Masa Aktif, dan Shared User) agar pengguna tidak merasa bingung atau kehilangan arah.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Step 2 Full Native Parity Overhaul (`src/app/setup/page.tsx`)**:
+     - Menyediakan pilihan Server VPN & Protokol yang identik dengan modal admin (`[VPS Native] WireGuard Server`, `L2TP/IPSec`, `Direct IP API`).
+     - Menyediakan centang `[x] Auto-Assign IP VPN Client` yang secara otomatis mengalokasikan IP VPN Tunnel tanpa memaksa pengguna mengetik IP manual.
+     - Menambahkan kolom `IP Lokal / Subnet di Balik NAS (AllowedIPs) (opsional)` (cth: `192.168.88.0/24`) untuk menjangkau subnet ONT di balik MikroTik.
+     - Menambahkan rincian Port Layanan MikroTik lengkap (**Winbox Port: 8291**, **API Port: 8728**, **WWW Port: 80**).
+     - Menambahkan penentuan **Mode Autentikasi Pelanggan** (`Local MikroTik API` vs `FreeRADIUS Server Mode`) serta kredensial API & RADIUS Secret.
+  2. **Step 3 Full Native Parity Overhaul (`src/app/setup/page.tsx`)**:
+     - Menyajikan pilihan mode (`Buat Profil Baru` vs `Pilih Profil MikroTik yang Ada`).
+     - Menambahkan kolom **Nama Group PPP Profile MikroTik**, pilihan satuan kecepatan (**Mbps / Kbps**), kalkulator Kbps otomatis, serta alokasi IP MikroTik (**Remote Address / IP Pool** dan **Local Address / IP Gateway**).
+     - Menambahkan kolom keuangan lengkap: **Harga Modal / HPP**, **Harga Jual Bulanan**, **Harga Prorate per Hari**, dan **Centang PPN 11%**.
+     - Menambahkan pilihan **Masa Aktif & Satuan (Bulan / Hari)**, **Deskripsi Paket**, serta toggle **Shared User (Multi-device per akun)**.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.76] — 2026-09-25
 
 ### Setup Wizard Router API & Port Configuration Enhancement & Company Setup Unauthenticated Fix (`src/app/api/company/route.ts`, `src/app/setup/page.tsx`)

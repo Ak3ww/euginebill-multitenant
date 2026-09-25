@@ -175,11 +175,15 @@ export default function UnifiedSetupWizardPage() {
   const [routerForm, setRouterForm] = useState({
     name: 'MikroTik-Utama',
     ipAddress: '10.254.1.2',
+    autoAssignIp: true,
+    allowedIps: '',
     port: '8728',
     winboxPort: '8291',
+    wwwPort: '80',
     username: 'euginebill_api',
     password: 'EB@ApiSecret2026',
     secret: 'secret123',
+    authMode: 'local',
   });
   const [generatedScript, setGeneratedScript] = useState<string>('');
   const [copiedScript, setCopiedScript] = useState(false);
@@ -192,12 +196,21 @@ export default function UnifiedSetupWizardPage() {
   // Step 3: PPPoE Profile State
   const [profileForm, setProfileForm] = useState({
     name: 'Home 20 Mbps',
+    groupName: 'Home 20 Mbps',
     downloadSpeed: '20',
     uploadSpeed: '20',
+    speedUnit: 'Mbps' as 'Mbps' | 'Kbps',
     price: '200000',
-    groupName: 'default',
+    hpp: '100000',
+    proratePricePerDay: '6666',
+    ppnActive: false,
+    validityValue: '1',
+    validityUnit: 'MONTHS' as 'MONTHS' | 'DAYS',
+    description: 'Paket Internet Rumah Uncapped Unlimited 20 Mbps',
     ipPoolName: '',
     localAddress: '',
+    sharedUser: true,
+    isActive: true,
     creationMode: 'new' as 'new' | 'existing',
     selectedMikrotikProfile: '',
   });
@@ -504,7 +517,10 @@ export default function UnifiedSetupWizardPage() {
           password: routerForm.password,
           port: parseInt(routerForm.port) || 8728,
           winboxPort: parseInt(routerForm.winboxPort) || 8291,
+          wwwPort: parseInt(routerForm.wwwPort) || 80,
           secret: routerForm.secret || 'secret123',
+          authMode: routerForm.authMode || 'local',
+          allowedIps: routerForm.allowedIps || undefined,
         }),
       });
 
@@ -556,19 +572,35 @@ export default function UnifiedSetupWizardPage() {
   const handleSaveProfile = async () => {
     setIsSavingProfile(true);
     try {
+      const dlSpeed = profileForm.speedUnit === 'Kbps' ? Math.ceil(parseInt(profileForm.downloadSpeed) / 1000) || 1 : parseInt(profileForm.downloadSpeed) || 20;
+      const ulSpeed = profileForm.speedUnit === 'Kbps' ? Math.ceil(parseInt(profileForm.uploadSpeed) / 1000) || 1 : parseInt(profileForm.uploadSpeed) || 20;
+
       const res = await fetch('/api/pppoe/profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: profileForm.name,
-          groupName: profileForm.groupName || 'default',
+          groupName: profileForm.groupName || profileForm.name,
           price: parseInt(profileForm.price) || 200000,
-          downloadSpeed: parseInt(profileForm.downloadSpeed) || 20,
-          uploadSpeed: parseInt(profileForm.uploadSpeed) || 20,
+          downloadSpeed: dlSpeed,
+          uploadSpeed: ulSpeed,
+          ipPoolName: profileForm.ipPoolName || null,
+          localAddress: profileForm.localAddress || null,
+          hpp: parseInt(profileForm.hpp) || 0,
+          proratePricePerDay: parseInt(profileForm.proratePricePerDay) || 0,
+          ppnActive: profileForm.ppnActive,
+          validityValue: parseInt(profileForm.validityValue) || 1,
+          validityUnit: profileForm.validityUnit || 'MONTHS',
+          sharedUser: profileForm.sharedUser,
+          description: profileForm.description || '',
+          lastRouterId: savedRouterId || undefined,
         }),
       });
 
-      if (!res.ok) throw new Error('Gagal membuat paket PPPoE');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Gagal membuat paket PPPoE');
+      }
       const data = await res.json();
       setCreatedProfile(data.profile || data);
       markStepCompleted(3);
@@ -1031,7 +1063,7 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 2: KONEKSI MIKROTIK ROUTER */}
+            {/* STEP 2: KONEKSI MIKROTIK ROUTER & VPN CLIENT */}
             {currentStep === 2 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
@@ -1041,7 +1073,7 @@ export default function UnifiedSetupWizardPage() {
                         <Server className="w-5 h-5" />
                       </div>
                       <div>
-                        <CardTitle>Koneksi Router MikroTik</CardTitle>
+                        <CardTitle>Koneksi Router MikroTik & Client VPN</CardTitle>
                         <CardDescription>
                           Hubungkan VPS Billing EugineBill dengan router MikroTik via API / VPN Tunnel WireGuard.
                         </CardDescription>
@@ -1058,7 +1090,7 @@ export default function UnifiedSetupWizardPage() {
                 <CardContent className="space-y-6">
                   {/* Connection Method Toggle */}
                   <div className="space-y-2">
-                    <Label>Pilih Metode Koneksi VPN / API</Label>
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Server VPN & Protokol *</Label>
                     <div className="grid grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
                       <button
                         type="button"
@@ -1069,7 +1101,7 @@ export default function UnifiedSetupWizardPage() {
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        WireGuard VPN (Rekomendasi)
+                        [VPS Native] WireGuard Server (Rekomendasi Utama)
                       </button>
                       <button
                         type="button"
@@ -1080,7 +1112,7 @@ export default function UnifiedSetupWizardPage() {
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        L2TP Client VPN
+                        L2TP / IPSec Client VPN
                       </button>
                       <button
                         type="button"
@@ -1091,7 +1123,7 @@ export default function UnifiedSetupWizardPage() {
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        Direct IP API
+                        Direct IP API (Tanpa VPN)
                       </button>
                     </div>
                   </div>
@@ -1108,45 +1140,183 @@ export default function UnifiedSetupWizardPage() {
                     </div>
                     {connectionMethod === 'direct' ? (
                       <p className="text-muted-foreground leading-relaxed">
-                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 jaringan lokal LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung.
+                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 lokasi LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung.
                       </p>
                     ) : (
                       <p className="text-muted-foreground leading-relaxed">
-                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> di bawah (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk berkomunikasi langsung dengan MikroTik menembus NAT ISP. Cukup <strong className="text-foreground">Salin Skrip</strong> di bawah lalu <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
+                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> di bawah (default: <code className="font-mono text-primary">10.254.1.2</code>) digunakan VPS untuk meremote MikroTik menembus NAT ISP. Cukup <strong className="text-foreground">Salin Skrip</strong> di bawah lalu <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
                       </p>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="routerName">Nama Identitas Router *</Label>
+                      <Label htmlFor="routerName">Nama Client / Identitas Router *</Label>
                       <Input
                         id="routerName"
                         value={routerForm.name}
                         onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                        placeholder="MikroTik-Utama"
+                        placeholder="cth: MIKROTIK SITE CIBINONG"
                       />
-                      <p className="text-[11px] text-muted-foreground">Label pengenal router di dashboard billing.</p>
+                      <p className="text-[11px] text-muted-foreground">Nama pengenal router di dashboard billing.</p>
                     </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="routerIp">
-                        {connectionMethod === 'direct' ? 'IP Address MikroTik (Publik / LAN) *' : 'IP Target Tunnel VPN Client *'}
-                      </Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="routerIp">
+                          {connectionMethod === 'direct' ? 'Alamat IP (Untuk API) *' : 'IP VPN Client (opsional — untuk VPN)'}
+                        </Label>
+                        {connectionMethod !== 'direct' && (
+                          <label className="flex items-center gap-1.5 text-[11px] font-medium text-primary cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={routerForm.autoAssignIp}
+                              onChange={(e) =>
+                                setRouterForm({
+                                  ...routerForm,
+                                  autoAssignIp: e.target.checked,
+                                  ipAddress: e.target.checked ? '10.254.1.2' : '',
+                                })
+                              }
+                              className="rounded border-border"
+                            />
+                            <span>Auto-Assign IP</span>
+                          </label>
+                        )}
+                      </div>
                       <Input
                         id="routerIp"
-                        value={routerForm.ipAddress}
+                        disabled={connectionMethod !== 'direct' && routerForm.autoAssignIp}
+                        value={
+                          connectionMethod !== 'direct' && routerForm.autoAssignIp
+                            ? '10.254.1.2 (Otomatis dialokasikan VPS)'
+                            : routerForm.ipAddress
+                        }
                         onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
-                        placeholder="10.254.1.2"
+                        placeholder="cth: 10.254.1.2 (kosong = otomatis)"
                       />
                       <p className="text-[11px] text-muted-foreground">
                         {connectionMethod === 'direct'
-                          ? 'IP Publik Static atau IP LAN lokal MikroTik (contoh: 192.168.88.1).'
-                          : 'IP Tunnel VPN Client yang dialokasikan di VPS (contoh: 10.254.1.2).'}
+                          ? 'Alamat IP LAN / Publik Static untuk meremote Winbox/API port (contoh: 192.168.88.1).'
+                          : 'Kosongkan atau centang Auto-Assign agar sistem mengalokasikan IP VPN secara otomatis.'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* AllowedIPs Subnet Option for VPN */}
+                  {connectionMethod !== 'direct' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="allowedIps">IP Lokal / Subnet di Balik NAS (AllowedIPs) (opsional)</Label>
+                      <Input
+                        id="allowedIps"
+                        value={routerForm.allowedIps}
+                        onChange={(e) => setRouterForm({ ...routerForm, allowedIps: e.target.value })}
+                        placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Pisahkan dengan koma. IP/subnet ini akan ditambahkan ke AllowedIPs peer di VPS agar VPS bisa menjangkau jaringan lokal / remote ONT di balik MikroTik.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Ports Section */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      Port Layanan MikroTik (Target Port MikroTik)
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="winboxPort">Winbox Port *</Label>
+                        <Input
+                          id="winboxPort"
+                          type="number"
+                          value={routerForm.winboxPort}
+                          onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
+                          placeholder="8291"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Default: 8291</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="routerPort">API Port *</Label>
+                        <Input
+                          id="routerPort"
+                          type="number"
+                          value={routerForm.port}
+                          onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
+                          placeholder="8728"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Default: 8728</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="wwwPort">WWW Port (Remote Web ONT)</Label>
+                        <Input
+                          id="wwwPort"
+                          type="number"
+                          value={routerForm.wwwPort}
+                          onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
+                          placeholder="80"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Default: 80</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Auth Mode Section */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      Mode Autentikasi Pelanggan *
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                          routerForm.authMode === 'local'
+                            ? 'border-primary bg-primary/5 text-foreground font-medium'
+                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="authMode"
+                          value="local"
+                          checked={routerForm.authMode === 'local'}
+                          onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
+                          className="mt-1"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
+                          <p className="text-muted-foreground text-[11px]">
+                            Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
+                          </p>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                          routerForm.authMode === 'radius'
+                            ? 'border-primary bg-primary/5 text-foreground font-medium'
+                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="authMode"
+                          value="radius"
+                          checked={routerForm.authMode === 'radius'}
+                          onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
+                          className="mt-1"
+                        />
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
+                          <p className="text-muted-foreground text-[11px]">
+                            Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Credentials Section */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                     <div className="space-y-2">
                       <Label htmlFor="routerUsername">Username API MikroTik *</Label>
                       <Input
@@ -1166,37 +1336,21 @@ export default function UnifiedSetupWizardPage() {
                         placeholder="Password API"
                       />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="routerPort">Port API MikroTik *</Label>
+                      <Label htmlFor="routerSecret">RADIUS Secret *</Label>
                       <Input
-                        id="routerPort"
-                        type="number"
-                        value={routerForm.port}
-                        onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
-                        placeholder="8728"
+                        id="routerSecret"
+                        value={routerForm.secret}
+                        onChange={(e) => setRouterForm({ ...routerForm, secret: e.target.value })}
+                        placeholder="secret123"
                       />
-                      <p className="text-[11px] text-muted-foreground">Default: 8728. Port service API yang dibuka di MikroTik.</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="winboxPort">Port Winbox MikroTik</Label>
-                      <Input
-                        id="winboxPort"
-                        type="number"
-                        value={routerForm.winboxPort}
-                        onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
-                        placeholder="8291"
-                      />
-                      <p className="text-[11px] text-muted-foreground">Default: 8291. Port manajemen Winbox untuk remote proxy.</p>
                     </div>
                   </div>
 
                   {/* RouterOS Script Box */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS</Label>
+                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS Terminal</Label>
                       <Button
                         type="button"
                         variant="outline"
@@ -1255,66 +1409,293 @@ export default function UnifiedSetupWizardPage() {
               </Card>
             )}
 
-            {/* STEP 3: PAKET PPPOE */}
+            {/* STEP 3: KONFIGURASI PAKET PPPOE */}
             {currentStep === 3 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Package className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <CardTitle>Konfigurasi Paket PPPoE</CardTitle>
-                      <CardDescription>
-                        Atur tarif bulanan, batas kecepatan (Bandwidth Rate Limit), dan IP Pool untuk paket internet pelanggan.
-                      </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Tambah Paket PPPoE</CardTitle>
+                        <CardDescription>
+                          Buat paket internet baru untuk pelanggan PPPoE dengan pengaturan kecepatan, IP pool, dan skema tarif.
+                        </CardDescription>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="profName">Nama Paket Internet *</Label>
-                      <Input
-                        id="profName"
-                        value={profileForm.name}
-                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value, groupName: e.target.value })}
-                        placeholder="Home 20 Mbps"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profPrice">Tarif Bulanan (Rp) *</Label>
-                      <Input
-                        id="profPrice"
-                        type="number"
-                        value={profileForm.price}
-                        onChange={(e) => setProfileForm({ ...profileForm, price: e.target.value })}
-                        placeholder="200000"
-                      />
+                  {/* Mode Selector */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Opsi Buat Paket</Label>
+                    <div className="grid grid-cols-2 gap-2 bg-muted p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setProfileForm({ ...profileForm, creationMode: 'new' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          profileForm.creationMode === 'new'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Buat Profil Baru
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileForm({ ...profileForm, creationMode: 'existing' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          profileForm.creationMode === 'existing'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Pilih Profil MikroTik yang Ada
+                      </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-foreground text-xs leading-relaxed">
+                    <strong className="text-primary font-bold">Catatan Sinkronisasi MikroTik:</strong> Pengaturan dasar (nama, kecepatan, dan IP pool) disinkronkan ke MikroTik. Pengaturan lanjutan seperti antrean CAKE / FQ-CoDel, Parent Queue, dan mangle dapat dikonfigurasi langsung di Winbox MikroTik tanpa terhapus saat sinkronisasi.
+                  </div>
+
+                  {/* Section 1: Basic & Bandwidth */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      1. Nama & Kecepatan Bandwidth
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="profName">Nama Paket *</Label>
+                        <Input
+                          id="profName"
+                          value={profileForm.name}
+                          onChange={(e) =>
+                            setProfileForm({ ...profileForm, name: e.target.value, groupName: e.target.value })
+                          }
+                          placeholder="cth: Paket 10 Mbps"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="profGroup">Nama Group (PPP Profile MikroTik) *</Label>
+                        <Input
+                          id="profGroup"
+                          value={profileForm.groupName}
+                          onChange={(e) => setProfileForm({ ...profileForm, groupName: e.target.value })}
+                          placeholder="Default mengikuti nama paket"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Otomatis dipakai sebagai nama PPP Profile di MikroTik.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="speedUnit">Satuan Kecepatan *</Label>
+                        <select
+                          id="speedUnit"
+                          value={profileForm.speedUnit}
+                          onChange={(e) => setProfileForm({ ...profileForm, speedUnit: e.target.value as any })}
+                          className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none"
+                        >
+                          <option value="Mbps">Mbps (Megabit per detik)</option>
+                          <option value="Kbps">Kbps (Kilobit per detik)</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="profDownload">Download ({profileForm.speedUnit}) *</Label>
+                        <Input
+                          id="profDownload"
+                          type="number"
+                          value={profileForm.downloadSpeed}
+                          onChange={(e) => setProfileForm({ ...profileForm, downloadSpeed: e.target.value })}
+                          placeholder="20"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          = {parseInt(profileForm.downloadSpeed || '0') * (profileForm.speedUnit === 'Mbps' ? 1024 : 1)} Kbps
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="profUpload">Upload ({profileForm.speedUnit}) *</Label>
+                        <Input
+                          id="profUpload"
+                          type="number"
+                          value={profileForm.uploadSpeed}
+                          onChange={(e) => setProfileForm({ ...profileForm, uploadSpeed: e.target.value })}
+                          placeholder="20"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          = {parseInt(profileForm.uploadSpeed || '0') * (profileForm.speedUnit === 'Mbps' ? 1024 : 1)} Kbps
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: IP Address Allocation */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      2. Pengaturan Alokasi IP MikroTik
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ipPool">Remote Address (IP Pool MikroTik)</Label>
+                        {routerResources.pools.length > 0 ? (
+                          <select
+                            id="ipPool"
+                            value={profileForm.ipPoolName}
+                            onChange={(e) => setProfileForm({ ...profileForm, ipPoolName: e.target.value })}
+                            className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none"
+                          >
+                            <option value="">Pilih IP Pool dari MikroTik...</option>
+                            {routerResources.pools.map((pool) => (
+                              <option key={pool.name} value={pool.name}>
+                                {pool.name} ({pool.ranges})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            id="ipPool"
+                            value={profileForm.ipPoolName}
+                            onChange={(e) => setProfileForm({ ...profileForm, ipPoolName: e.target.value })}
+                            placeholder="cth: dhcp_pool1 atau pool-pppoe"
+                          />
+                        )}
+                        <p className="text-[11px] text-muted-foreground">
+                          Pool alamat IP MikroTik untuk alokasi IP dinamis pelanggan saat login.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="localAddress">Local Address (IP Gateway)</Label>
+                        <Input
+                          id="localAddress"
+                          value={profileForm.localAddress}
+                          onChange={(e) => setProfileForm({ ...profileForm, localAddress: e.target.value })}
+                          placeholder="cth: 10.10.10.1 (opsional)"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          IP address interface router yang menjadi gateway PPP pelanggan.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Pricing & Billing */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      3. Tarif, Harga Modal & Masa Aktif
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="profHpp">Harga Modal / HPP (IDR)</Label>
+                        <Input
+                          id="profHpp"
+                          type="number"
+                          value={profileForm.hpp}
+                          onChange={(e) => setProfileForm({ ...profileForm, hpp: e.target.value })}
+                          placeholder="100000"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Biaya pokok / harga beli dari provider upstream.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="profPrice">Harga Jual Bulanan (IDR) *</Label>
+                        <Input
+                          id="profPrice"
+                          type="number"
+                          value={profileForm.price}
+                          onChange={(e) => setProfileForm({ ...profileForm, price: e.target.value })}
+                          placeholder="200000"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Tarif tagihan bulanan pelanggan.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="profProrate">Harga Prorate per Hari (IDR)</Label>
+                        <Input
+                          id="profProrate"
+                          type="number"
+                          value={profileForm.proratePricePerDay}
+                          onChange={(e) => setProfileForm({ ...profileForm, proratePricePerDay: e.target.value })}
+                          placeholder="6666"
+                        />
+                        <p className="text-[11px] text-muted-foreground">Kelipatan 1000 (contoh: 5000 = Rp 5.000/hari)</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                      <div className="space-y-2">
+                        <Label htmlFor="validityValue">Masa Aktif *</Label>
+                        <Input
+                          id="validityValue"
+                          type="number"
+                          value={profileForm.validityValue}
+                          onChange={(e) => setProfileForm({ ...profileForm, validityValue: e.target.value })}
+                          placeholder="1"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="validityUnit">Satuan Masa Aktif *</Label>
+                        <select
+                          id="validityUnit"
+                          value={profileForm.validityUnit}
+                          onChange={(e) => setProfileForm({ ...profileForm, validityUnit: e.target.value as any })}
+                          className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs text-foreground focus:outline-none"
+                        >
+                          <option value="MONTHS">Bulan</option>
+                          <option value="DAYS">Hari</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center space-x-2 pt-6">
+                        <input
+                          type="checkbox"
+                          id="ppnActive"
+                          checked={profileForm.ppnActive}
+                          onChange={(e) => setProfileForm({ ...profileForm, ppnActive: e.target.checked })}
+                          className="rounded border-border"
+                        />
+                        <Label htmlFor="ppnActive" className="text-xs font-normal cursor-pointer">
+                          PPN aktif (Pajak Pertambahan Nilai 11%)
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 4: Extra Options */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
+                      4. Pengaturan Tambahan Paket
+                    </h4>
+
                     <div className="space-y-2">
-                      <Label htmlFor="profDownload">Kecepatan Download (Mbps) *</Label>
+                      <Label htmlFor="profDesc">Deskripsi Paket</Label>
                       <Input
-                        id="profDownload"
-                        type="number"
-                        value={profileForm.downloadSpeed}
-                        onChange={(e) => setProfileForm({ ...profileForm, downloadSpeed: e.target.value })}
-                        placeholder="20"
+                        id="profDesc"
+                        value={profileForm.description}
+                        onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })}
+                        placeholder="cth: Paket Internet Rumah Uncapped Unlimited"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="profUpload">Kecepatan Upload (Mbps) *</Label>
-                      <Input
-                        id="profUpload"
-                        type="number"
-                        value={profileForm.uploadSpeed}
-                        onChange={(e) => setProfileForm({ ...profileForm, uploadSpeed: e.target.value })}
-                        placeholder="20"
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="sharedUser"
+                        checked={profileForm.sharedUser}
+                        onChange={(e) => setProfileForm({ ...profileForm, sharedUser: e.target.checked })}
+                        className="rounded border-border"
                       />
+                      <Label htmlFor="sharedUser" className="text-xs font-normal cursor-pointer">
+                        Shared User (boleh multi-device per akun; jika dimatikan MikroTik enforce 1 device)
+                      </Label>
                     </div>
                   </div>
                 </CardContent>
@@ -1325,7 +1706,7 @@ export default function UnifiedSetupWizardPage() {
                   </Button>
                   <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
                     {isSavingProfile ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                    <span>Simpan Paket & Lanjut</span>
+                    <span>Simpan Paket & Lanjut Ke Pelanggan</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </CardFooter>

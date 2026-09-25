@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.76
+- **Version**: 2.40.77
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,13 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.77: Setup Wizard Step 2 & Step 3 Full Parity with Native Admin Modals)
+
+- **Hard Invariant: 100% Native Modal Parity in Setup Wizard (`src/app/setup/page.tsx`)**:
+  - Seluruh form masukan pada Setup Wizard Step 2 (Koneksi Router & VPN Client) dan Step 3 (Konfigurasi Paket PPPoE) WAJIB memiliki kelengkapan kolom yang 100% identik dengan modal asli pada Admin Portal (`/admin/network/routers` & `/admin/pppoe/profiles`).
+  - **Step 2**: Menjadikan pilihan Server VPN & Protocol (`[VPS Native] WireGuard Server`, `L2TP/IPSec`, `Direct IP API`), centang `Auto-Assign IP VPN Client`, `AllowedIPs Subnet` (`192.168.88.0/24`), `Winbox Port` (`8291`), `API Port` (`8728`), `WWW Port` (`80`), `Mode Autentikasi Pelanggan` (`Local MikroTik API` vs `FreeRADIUS`), Username API, Password API, dan RADIUS Secret tampil secara terstruktur.
+  - **Step 3**: Menyajikan mode profil (`Buat Baru` vs `Profil MikroTik`), **Nama Group PPP Profile**, unit kecepatan (**Mbps/Kbps**), **Remote Address (IP Pool)**, **Local Address (IP Gateway)**, **Harga Modal / HPP**, **Harga Jual**, **Harga Prorate per Hari**, **PPN 11%**, **Masa Aktif (Bulan/Hari)**, **Deskripsi Paket**, dan **Shared User (Multi-device)**.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.76: Setup Wizard Router API & Port Configuration & First-Time Company Setup Fix)
 
