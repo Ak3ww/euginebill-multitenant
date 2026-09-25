@@ -4,6 +4,48 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.64] — 2026-09-25
+
+### Populate Pengaturan SKU (`/admin/inventory/sku-settings`) & Integrasi Pintar Perangkat Pasif Terpasang di Jaringan (ODP, ODC, Splitter)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman Pengaturan SKU (`/admin/inventory/sku-settings`) membutuhkan data awal terisi penuh (*populated*) dari kamus Kategori & Sub-Kategori SKU berstandar.
+  2. Integrasi pintar untuk mendeteksi perangkat pasif FTTH (Box ODP, Box ODC, Splitter Optik 1:2, 1:4, 1:8, 1:16) yang sudah terpasang di jaringan live dari Master Data ODP (`networkODP`) dan ODC (`networkODC`).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Populate Kamus SKU Settings (`prisma/seeds/sku-dictionary.ts`, `scripts/reseed-clean-inventory.ts`)**:
+     - Menambahkan fungsi `seedSkuDictionary()` yang secara otomatis mengisi 11 Kategori SKU (`HW`, `CPE`, `PAS`, `CAB`, `CON`, `CNS`, `MKT`, `PWR`, `TLS`, `ACC`, `SUP`) dan sub-kategorinya di tabel `skuCategoryCode` dan `skuSubCategoryCode`.
+     - Halaman `/admin/inventory/sku-settings` kini langsung terisi penuh tanpa data kosong.
+  2. **Live Deployed Metric FTTH (`src/app/api/inventory/items/route.ts`, `src/app/admin/inventory/items/page.tsx`)**:
+     - Menghitung live metric unit terpasang di jaringan untuk Box ODP, Box ODC, Splitter Optik (1:2, 1:4, 1:8, 1:16), dan Modem Pelanggan (`IN_USE`).
+     - Tampilan halaman Barang Inventori kini menampilkan badge biru **`Terpasang: X unit`** bersandingan dengan **`Stok Gudang`**.
+
+- **Files**:
+  - Modified: `prisma/seeds/sku-dictionary.ts`
+  - Modified: `src/app/api/inventory/items/route.ts`
+  - Modified: `src/app/admin/inventory/items/page.tsx`
+  - Modified: `scripts/reseed-clean-inventory.ts`
+
+## [2.40.63] — 2026-09-25
+
+### Sinkronisasi Real-Time Stok CPE Modem Gudang <> Unit Aset Pelanggan & Pembersihan Riwayat Mutasi Stok
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Memastikan stok barang modem CPE (`currentStock`) pada katalog item vendor (`EMG-CPE-ONT-ZTE`, `EMG-CPE-ONT-HUAWEI`, dll.) terhubung 100% secara real-time dengan status unit aset (`inventoryAsset`) dan modem pelanggan di OLT.
+  2. Saat modem terpasang di pelanggan (`IN_USE`), stok gudang berkurang. Saat modem dicabut/dismantle (`AVAILABLE` / `USED_GOOD`), stok gudang bertambah otomatis.
+  3. Membersihkan riwayat mutasi stok lama (`inventoryMovement`) agar log transaksi barang staf gudang dimulai dari lembaran baru (clean sheet).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Rekalkulasi Real-Time Stok CPE Gudang (`src/server/services/olt-inventory-sync.service.ts`)**:
+     - Menambahkan fungsi helper `recalculateCpeItemStock()` yang secara otomatis menghitung ulang `currentStock` seluruh barang CPE berdasarkan jumlah unit fisik di gudang yang berstatus `AVAILABLE`.
+     - Fungsi ini dipanggil otomatis pada akhir alur `syncOnuToInventory()` dan `dismantleCustomerDevice()`.
+  2. **Pembersihan Riwayat Mutasi Stok (`scripts/reseed-clean-inventory.ts`)**:
+     - Menambahkan langkah pembersihan otomatis `prisma.inventoryMovement.deleteMany({})` pada script reseed agar seluruh catatan riwayat mutasi stok lama dibersihkan.
+
+- **Files**:
+  - Modified: `src/server/services/olt-inventory-sync.service.ts`
+  - Modified: `scripts/reseed-clean-inventory.ts`
+
 ## [2.40.62] — 2026-09-25
 
 ### Penyederhanaan Master Item Modem CPE Berbasis Vendor Murni (Tanpa Equipment ID)

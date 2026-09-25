@@ -1015,6 +1015,13 @@ export default function InventoryItemsPage() {
                           {item.currentStock}
                         </div>
                         <div className="text-[10px] text-muted-foreground">Min: {item.minimumStock}</div>
+                        {(item as any).deployedCount > 0 && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium rounded bg-blue-500/10 text-blue-600 border border-blue-500/30" title="Jumlah unit terpasang aktif di jaringan OLT / ODP / ODC">
+                              Terpasang: {(item as any).deployedCount}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-foreground">{item.unit}</td>
                       <td className="px-3 py-2.5 text-xs text-foreground">

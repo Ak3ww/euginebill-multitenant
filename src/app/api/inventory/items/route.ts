@@ -73,16 +73,66 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // Calculate stock status
-    const itemsWithStatus = items.map((item) => ({
-      ...item,
-      stockStatus:
-        item.currentStock === 0
-          ? 'out_of_stock'
-          : item.currentStock <= item.minimumStock
-          ? 'low_stock'
-          : 'in_stock',
-    }));
+    // Fetch live network deployment metrics (ODP, ODC, Splitter, and IN_USE Modems)
+    const [totalOdp, totalOdc, odpsByRatio, inUseAssetsGroup] = await Promise.all([
+      prisma.networkODP.count().catch(() => 0),
+      prisma.networkODC.count().catch(() => 0),
+      prisma.networkODP.groupBy({
+        by: ['splitterRatio', 'portCount'],
+        _count: { id: true },
+      }).catch(() => []),
+      prisma.inventoryAsset.groupBy({
+        by: ['itemId'],
+        where: { status: 'IN_USE' },
+        _count: { id: true },
+      }).catch(() => []),
+    ]);
+
+    const inUseAssetMap = new Map<string, number>();
+    for (const group of inUseAssetsGroup) {
+      if (group.itemId) inUseAssetMap.set(group.itemId, group._count.id);
+    }
+
+    let splitter18 = 0;
+    let splitter116 = 0;
+    let splitter14 = 0;
+    let splitter12 = 0;
+
+    for (const group of odpsByRatio) {
+      const ratio = group.splitterRatio || '';
+      const port = group.portCount || 8;
+      const count = group._count.id;
+
+      if (ratio.includes('1:8') || port === 8) splitter18 += count;
+      else if (ratio.includes('1:16') || port === 16) splitter116 += count;
+      else if (ratio.includes('1:4') || port === 4) splitter14 += count;
+      else if (ratio.includes('1:2') || port === 2) splitter12 += count;
+      else splitter18 += count;
+    }
+
+    // Calculate stock status and deployed count
+    const itemsWithStatus = items.map((item) => {
+      let deployedCount = inUseAssetMap.get(item.id) || 0;
+
+      // Smart FTTH network mapping for passive equipment
+      if (item.sku === 'PAS-BOX-ODP') deployedCount = totalOdp;
+      else if (item.sku === 'PAS-BOX-ODC') deployedCount = totalOdc;
+      else if (item.sku === 'PAS-SPLITTER-1-8') deployedCount = splitter18;
+      else if (item.sku === 'PAS-SPLITTER-1-16') deployedCount = splitter116;
+      else if (item.sku === 'PAS-SPLITTER-1-4') deployedCount = splitter14;
+      else if (item.sku === 'PAS-SPLITTER-1-2') deployedCount = splitter12;
+
+      return {
+        ...item,
+        deployedCount,
+        stockStatus:
+          item.currentStock === 0
+            ? 'out_of_stock'
+            : item.currentStock <= item.minimumStock
+            ? 'low_stock'
+            : 'in_stock',
+      };
+    });
 
     return NextResponse.json(itemsWithStatus);
   } catch (error) {

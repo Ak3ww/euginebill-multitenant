@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.62
+- **Version**: 2.40.64
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,14 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.62: Simplified Pure Vendor CPE Master Items Without Equipment IDs)
+### Recent Patch Log (September 25, 2026 — v2.40.64: Populate SKU Settings & Live FTTH Deployed Equipment Metrics)
+
+- **Hard Invariant: Populated SKU Settings Standard (`prisma/seeds/sku-dictionary.ts`)**:
+  - Tabel `skuCategoryCode` dan `skuSubCategoryCode` terisi 100% penuh untuk 11 Kategori Master (HW, CPE, PAS, CAB, CON, CNS, MKT, PWR, TLS, ACC, SUP) dan seluruh sub-kategorinya. Halaman `/admin/inventory/sku-settings` tidak lagi menampilkan tabel kosong.
+
+- **Hard Invariant: Live FTTH Deployed Equipment Integration (`src/app/api/inventory/items/route.ts`, `src/app/admin/inventory/items/page.tsx`)**:
+  - Sistem secara otomatis menghitung `deployedCount` (Terpasang di Jaringan) secara real-time dari Master Data ODP (`networkODP`), ODC (`networkODC`), Splitter Optik (1:2, 1:4, 1:8, 1:16), dan Modem Pelanggan (`IN_USE`).
+  - Tampilan barang inventori memisahkan badge **`Stok Gudang`** (stok fisik di gudang) dengan badge biru **`Terpasang: X unit`** (jumlah unit aktif terpasang di jaringan).
 
 - **Hard Invariant: Pure Vendor CPE Master Item Standard (`scripts/reseed-clean-inventory.ts`, `src/app/api/admin/inventory/seed-defaults/route.ts`)**:
   - Master Item modem CPE disederhanakan murni berdasarkan nama vendor tanpa menggunakan kode equipment ID spesifik:

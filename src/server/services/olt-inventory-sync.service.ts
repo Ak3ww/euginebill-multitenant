@@ -32,12 +32,23 @@ export interface SyncResult {
 }
 
 /**
- * Ensure default ONT master catalog item exists in inventory
+ * Ensure default ONT master catalog item exists in inventory for a specific vendor
  */
 export async function getOrCreateDefaultOntItem(vendor?: string): Promise<{ id: string; sku: string }> {
+  const vUpper = (vendor || '').toUpperCase().trim();
+  let skuCandidate = 'EMG-CPE-ONT-GENERIC';
+
+  if (vUpper.includes('ZTE')) skuCandidate = 'EMG-CPE-ONT-ZTE';
+  else if (vUpper.includes('HUA') || vUpper.includes('HW')) skuCandidate = 'EMG-CPE-ONT-HUAWEI';
+  else if (vUpper.includes('SKY') || vUpper.includes('SK')) skuCandidate = 'EMG-CPE-ONT-SKYWORTH';
+  else if (vUpper.includes('FIB') || vUpper.includes('FB')) skuCandidate = 'EMG-CPE-ONT-FIBERHOME';
+  else if (vUpper.includes('HSG')) skuCandidate = 'EMG-CPE-ONT-HSGQ';
+  else if (vUpper.includes('VSOL') || vUpper.includes('VSL')) skuCandidate = 'EMG-CPE-ONT-VSOL';
+
   const existingItem = await prisma.inventoryItem.findFirst({
     where: {
       OR: [
+        { sku: skuCandidate },
         { sku: 'EMG-CPE-ONT-GENERIC' },
         { categoryCode: 'CPE', subCategory: 'ONT' },
       ],
@@ -49,20 +60,42 @@ export async function getOrCreateDefaultOntItem(vendor?: string): Promise<{ id: 
 
   const newItem = await prisma.inventoryItem.create({
     data: {
-      sku: 'EMG-CPE-ONT-GENERIC',
-      name: 'Modem ONT Pelanggan (Generic)',
+      sku: skuCandidate,
+      name: `Modem ONT ${vendor || 'Generic'}`,
       categoryCode: 'CPE',
       subCategory: 'ONT',
-      unit: 'pcs',
+      unit: 'unit',
       isSerialized: true,
       currentStock: 0,
       isActive: true,
-      description: 'Master katalog unit modem ONT pelanggan terdeteksi dari OLT',
+      description: `Master katalog unit modem ONT ${vendor || 'Generic'} terdeteksi dari OLT`,
     },
     select: { id: true, sku: true },
   });
 
   return newItem;
+}
+
+/**
+ * Recalculates currentStock for all CPE modem items based on AVAILABLE warehouse assets
+ */
+export async function recalculateCpeItemStock(): Promise<void> {
+  try {
+    const cpeItems = await prisma.inventoryItem.findMany({
+      where: { categoryCode: 'CPE', isActive: true },
+      include: { assets: { select: { status: true } } },
+    });
+
+    for (const item of cpeItems) {
+      const warehouseStock = item.assets.filter((a) => a.status === 'AVAILABLE').length;
+      await prisma.inventoryItem.update({
+        where: { id: item.id },
+        data: { currentStock: warehouseStock },
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[recalculateCpeItemStock] Error recalculating CPE stock:', err);
+  }
 }
 
 /**
@@ -283,6 +316,8 @@ export async function syncOnuToInventory(input: SyncOnuInput): Promise<SyncResul
     }
   }
 
+  recalculateCpeItemStock().catch(() => {});
+
   return {
     assetId,
     serialNumber: cleanSn,
@@ -352,6 +387,8 @@ export async function dismantleCustomerDevice(
   await prisma.odpCustomerAssignment.deleteMany({
     where: { customerId },
   }).catch(() => {});
+
+  recalculateCpeItemStock().catch(() => {});
 
   return { dismantledCount };
 }

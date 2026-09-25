@@ -5,6 +5,21 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('=== SEEDING & PERAPIHAN INVENTORI EUGINEBILL (SIMPLE VENDOR CPE) ===\n');
 
+  // 0. Clean up stock movement history (inventoryMovement)
+  console.log('0. Membersihkan riwayat mutasi stok (inventoryMovement)...');
+  const deletedMovements = await prisma.inventoryMovement.deleteMany({});
+  console.log(`  ✓ ${deletedMovements.count} catatan riwayat mutasi stok lama dibersihkan.`);
+
+  // 0b. Seed SKU Settings Dictionary (skuCategoryCode & skuSubCategoryCode)
+  console.log('\n0b. Seeding Pengaturan SKU (/admin/inventory/sku-settings)...');
+  try {
+    const { seedSkuDictionary } = await import('../prisma/seeds/sku-dictionary');
+    const { categoriesCount, subCategoriesCount } = await seedSkuDictionary(prisma);
+    console.log(`  ✓ ${categoriesCount} Kategori & ${subCategoriesCount} Sub-Kategori SKU terisi di /admin/inventory/sku-settings.`);
+  } catch (skuErr) {
+    console.warn('  ⚠️ Gagal seeding SKU dictionary:', skuErr);
+  }
+
   // 1. Master Categories
   const CATEGORIES = [
     { code: 'CNS', name: 'Bahan Habis Pakai (Consumable)', description: 'Isolasi, kabel ties, sleeve protector, paku klem, baterai, patch cord, adapter FO, label modem' },
@@ -19,7 +34,7 @@ async function main() {
 
   const catMap = new Map<string, string>(); // code -> id
 
-  console.log('1. Memperbarui Kategori Master Inventori...');
+  console.log('\n1. Memperbarui Kategori Master Inventori...');
   for (const cat of CATEGORIES) {
     const upserted = await prisma.inventoryCategory.upsert({
       where: { name: cat.name },
@@ -185,7 +200,7 @@ async function main() {
   }
   console.log(`  ✓ ${relinkedCount} modem assets terhubung ke master item vendor.`);
 
-  // 4. Migrasi / gabung / bersihkan item CPE lama yang menggunakan equipment ID spesifik (seperti F670L)
+  // 4. Bersihkan item CPE lama yang menggunakan equipment ID spesifik
   console.log('\n4. Membersihkan item duplikat / spesifik model usang...');
   const unusedItems = await prisma.inventoryItem.findMany({
     where: {

@@ -1,54 +1,66 @@
 import { PrismaClient } from '@prisma/client';
 
 export const SKU_CATEGORIES = [
-  { code: 'HW',  label: 'Hardware Utama', sortOrder: 1 },
-  { code: 'CPE', label: 'Customer Equipment', sortOrder: 2 },
-  { code: 'PAS', label: 'Passive Equipment', sortOrder: 3 },
-  { code: 'CAB', label: 'Cables', sortOrder: 4 },
-  { code: 'CON', label: 'Consumables', sortOrder: 5 },
-  { code: 'MKT', label: 'Marketing Material', sortOrder: 6 },
-  { code: 'PWR', label: 'Power Equipment', sortOrder: 7 },
-  { code: 'TLS', label: 'Tools / Alat Kerja', sortOrder: 8 },
-  { code: 'ACC', label: 'Accessories', sortOrder: 9 },
-  { code: 'SUP', label: 'Office Supplies', sortOrder: 10 },
+  { code: 'HW',  label: 'Hardware Utama (HW)', sortOrder: 1 },
+  { code: 'CPE', label: 'Customer Equipment (CPE)', sortOrder: 2 },
+  { code: 'PAS', label: 'Perangkat Pasif FTTH (PAS)', sortOrder: 3 },
+  { code: 'CAB', label: 'Kabel & Dropcore (CAB)', sortOrder: 4 },
+  { code: 'CON', label: 'Bahan Habis Pakai / Consumable (CON)', sortOrder: 5 },
+  { code: 'CNS', label: 'Bahan Habis Pakai / Consumable (CNS)', sortOrder: 6 },
+  { code: 'MKT', label: 'Materi Marketing (MKT)', sortOrder: 7 },
+  { code: 'PWR', label: 'Power Equipment (PWR)', sortOrder: 8 },
+  { code: 'TLS', label: 'Tools / Alat Kerja (TLS)', sortOrder: 9 },
+  { code: 'ACC', label: 'Accessories & Aksesoris (ACC)', sortOrder: 10 },
+  { code: 'SUP', label: 'Office Supplies / ATK (SUP)', sortOrder: 11 },
 ];
 
 export const SKU_SUBCATEGORIES = [
   // HW - Hardware Utama
-  { categoryCode: 'HW',  code: 'OLT', label: 'Optical Line Terminal', requiresBrand: true },
+  { categoryCode: 'HW',  code: 'OLT', label: 'Optical Line Terminal (OLT)', requiresBrand: true },
   { categoryCode: 'HW',  code: 'ROU', label: 'Router Core / Mikrotik', requiresBrand: true },
   { categoryCode: 'HW',  code: 'SWI', label: 'Switch / Hub',          requiresBrand: true },
   { categoryCode: 'HW',  code: 'SRV', label: 'Server / Mini PC',      requiresBrand: true },
+  { categoryCode: 'HW',  code: 'PRN', label: 'Printer Kantor',        requiresBrand: true },
 
   // CPE - Customer Equipment
-  { categoryCode: 'CPE', code: 'ONT', label: 'Modem / ONT / ONU',     requiresBrand: true },
-  { categoryCode: 'CPE', code: 'STB', label: 'Set Top Box',           requiresBrand: true },
+  { categoryCode: 'CPE', code: 'ONT', label: 'Modem ONT / ONU (ZTE, Huawei, Skyworth, FiberHome, HSGQ, VSOL)', requiresBrand: true },
+  { categoryCode: 'CPE', code: 'STB', label: 'Set Top Box (STB)',     requiresBrand: true },
   { categoryCode: 'CPE', code: 'RTR', label: 'Home Router / Extender', requiresBrand: true },
 
   // PAS - Passive Equipment
-  { categoryCode: 'PAS', code: 'ODP', label: 'Optical Distribution Point', requiresBrand: false },
-  { categoryCode: 'PAS', code: 'ODC', label: 'Optical Distribution Cabinet', requiresBrand: false },
-  { categoryCode: 'PAS', code: 'SPL', label: 'Splitter Optik (PLC/FBT)', requiresBrand: false },
-  { categoryCode: 'PAS', code: 'CLS', label: 'Joint Closure',         requiresBrand: false },
+  { categoryCode: 'PAS', code: 'ODP', label: 'Box ODP (Optical Distribution Point)', requiresBrand: false },
+  { categoryCode: 'PAS', code: 'ODC', label: 'Box ODC (Optical Distribution Cabinet)', requiresBrand: false },
+  { categoryCode: 'PAS', code: 'SPL', label: 'Splitter Optik (1:2, 1:4, 1:8, 1:16)', requiresBrand: false },
+  { categoryCode: 'PAS', code: 'CLS', label: 'Join Closure',         requiresBrand: false },
   { categoryCode: 'PAS', code: 'RST', label: 'Roset Fiber',           requiresBrand: false },
 
   // CAB - Cables
-  { categoryCode: 'CAB', code: 'DRP', label: 'Dropcore 1 Core',       requiresBrand: false },
-  { categoryCode: 'CAB', code: 'PRC', label: 'Precon Fast Connector', requiresBrand: false },
+  { categoryCode: 'CAB', code: 'DRP', label: 'Dropcore 1 Core (50m - 300m)', requiresBrand: false },
+  { categoryCode: 'CAB', code: 'PRC', label: 'Kabel Precon', requiresBrand: false },
   { categoryCode: 'CAB', code: 'UTP', label: 'UTP / LAN Cat5/Cat6',   requiresBrand: false },
   { categoryCode: 'CAB', code: 'PWR', label: 'Kabel Power / Listrik', requiresBrand: false },
 
-  // CON - Consumables
-  { categoryCode: 'CON', code: 'PTC', label: 'Patch Cord / Konektor',  requiresBrand: false },
-  { categoryCode: 'CON', code: 'FOD', label: 'Sleeve / Protection',   requiresBrand: false },
-  { categoryCode: 'CON', code: 'TAP', label: 'Isolasi / Tape',        requiresBrand: false },
-  { categoryCode: 'CON', code: 'TIE', label: 'Kabel Tis (Cable Ties)', requiresBrand: false },
+  // CON / CNS - Consumables
+  { categoryCode: 'CON', code: 'PTC', label: 'Patch Cord SC-UPC to SC-UPC',  requiresBrand: false },
+  { categoryCode: 'CON', code: 'FOD', label: 'Protection Sleeve FO (Besar & Kecil)', requiresBrand: false },
+  { categoryCode: 'CON', code: 'TAP', label: 'Isolasi Hitam',        requiresBrand: false },
+  { categoryCode: 'CON', code: 'TIE', label: 'Kabel Ties (10cm, 20cm, 30cm)', requiresBrand: false },
   { categoryCode: 'CON', code: 'KLM', label: 'Paku Klem',             requiresBrand: false },
-  { categoryCode: 'CON', code: 'PAP', label: 'Kertas HVS / Cetak',    requiresBrand: false },
-  { categoryCode: 'CON', code: 'BAT', label: 'Baterai',               requiresBrand: false },
+  { categoryCode: 'CON', code: 'BRL', label: 'Adapter / Barrel FO',  requiresBrand: false },
+  { categoryCode: 'CON', code: 'LBL', label: 'Brand Label Modem (Large & Small)', requiresBrand: false },
+  { categoryCode: 'CON', code: 'BAT', label: 'Baterai Remote AAA',    requiresBrand: false },
+
+  { categoryCode: 'CNS', code: 'PTC', label: 'Patch Cord SC-UPC to SC-UPC',  requiresBrand: false },
+  { categoryCode: 'CNS', code: 'FOD', label: 'Protection Sleeve FO (Besar & Kecil)', requiresBrand: false },
+  { categoryCode: 'CNS', code: 'TAP', label: 'Isolasi Hitam',        requiresBrand: false },
+  { categoryCode: 'CNS', code: 'TIE', label: 'Kabel Ties (10cm, 20cm, 30cm)', requiresBrand: false },
+  { categoryCode: 'CNS', code: 'KLM', label: 'Paku Klem',             requiresBrand: false },
+  { categoryCode: 'CNS', code: 'BRL', label: 'Adapter / Barrel FO',  requiresBrand: false },
+  { categoryCode: 'CNS', code: 'LBL', label: 'Brand Label Modem (Large & Small)', requiresBrand: false },
+  { categoryCode: 'CNS', code: 'BAT', label: 'Baterai Remote AAA',    requiresBrand: false },
 
   // MKT - Marketing Material
-  { categoryCode: 'MKT', code: 'BRC', label: 'Brosur / Flyer PSB',    requiresBrand: false },
+  { categoryCode: 'MKT', code: 'BRC', label: 'Brosur A5 Art Paper 150', requiresBrand: false },
   { categoryCode: 'MKT', code: 'STK', label: 'Stiker / Label ODP',    requiresBrand: false },
   { categoryCode: 'MKT', code: 'BNR', label: 'Banner / Spanduk',      requiresBrand: false },
 
@@ -59,11 +71,15 @@ export const SKU_SUBCATEGORIES = [
 
   // TLS - Tools / Alat Kerja
   { categoryCode: 'TLS', code: 'FUS', label: 'Fusion Splicer',        requiresBrand: true },
-  { categoryCode: 'TLS', code: 'OPM', label: 'Optical Power Meter',   requiresBrand: true },
-  { categoryCode: 'TLS', code: 'VFL', label: 'Visual Fault Locator (Laser)', requiresBrand: true },
-  { categoryCode: 'TLS', code: 'CLV', label: 'Fiber Cleaver Blade',   requiresBrand: true },
-  { categoryCode: 'TLS', code: 'STP', label: 'Fiber Stripper Tang',   requiresBrand: false },
-  { categoryCode: 'TLS', code: 'CRF', label: 'Crimping Tool RJ45',    requiresBrand: false },
+  { categoryCode: 'TLS', code: 'OPM', label: 'Optical Power Meter (OPM)', requiresBrand: true },
+  { categoryCode: 'TLS', code: 'OTD', label: 'Optical Time Domain Reflectometer (OTDR)', requiresBrand: true },
+  { categoryCode: 'TLS', code: 'HLS', label: 'Handheld Light Source (HLS)', requiresBrand: true },
+  { categoryCode: 'TLS', code: 'VFL', label: 'Fiber Optic Visual Fault Locator (Laser)', requiresBrand: true },
+  { categoryCode: 'TLS', code: 'CLV', label: 'Fiber Cleaver',         requiresBrand: true },
+  { categoryCode: 'TLS', code: 'STP', label: 'Fiber Stripper & Drop Cable Stripper', requiresBrand: false },
+  { categoryCode: 'TLS', code: 'LDR', label: 'Tangga Teleskopik',    requiresBrand: false },
+  { categoryCode: 'TLS', code: 'TLP', label: 'Label Printer Portable', requiresBrand: true },
+  { categoryCode: 'TLS', code: 'TLH', label: 'Palu & Obeng (Kembang/Min)', requiresBrand: false },
 
   // ACC - Accessories
   { categoryCode: 'ACC', code: 'FSH', label: 'Fishbone / Clamp Buaya', requiresBrand: false },
@@ -71,7 +87,9 @@ export const SKU_SUBCATEGORIES = [
   { categoryCode: 'ACC', code: 'SPR', label: 'Spiral Wrapping Band',  requiresBrand: false },
 
   // SUP - Office Supplies
-  { categoryCode: 'SUP', code: 'ATK', label: 'Alat Tulis Kantor',     requiresBrand: false },
+  { categoryCode: 'SUP', code: 'PAP', label: 'Kertas HVS A4',         requiresBrand: false },
+  { categoryCode: 'SUP', code: 'ATK', label: 'Pulpen, Pensil & Sticky Note', requiresBrand: false },
+  { categoryCode: 'SUP', code: 'STP', label: 'Paper Staples & Stamp Stempel', requiresBrand: false },
   { categoryCode: 'SUP', code: 'ENV', label: 'Amplop Surat Tagihan',  requiresBrand: false },
 ];
 
