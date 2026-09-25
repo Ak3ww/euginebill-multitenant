@@ -383,17 +383,15 @@ async function main() {
       console.log(`  Selesai: ${onts.length} ONT di-upsert. Total di DB: ${total} (online: ${online}, offline: ${offline})`);
     }
 
-    // Clean orphaned oltOnuStatus records whose oltId is null or not in current olts list
+    // Clean orphaned oltOnuStatus records whose oltId is not in current olts list
     const activeOltIds = olts.map(o => o.id);
     const orphanedDbOnus = await prisma.oltOnuStatus.findMany({
       where: {
-        OR: [
-          { oltId: { notIn: activeOltIds } },
-          { oltId: null as any },
-        ],
+        oltId: { notIn: activeOltIds },
       },
       select: { id: true },
     });
+
     if (orphanedDbOnus.length > 0 && !isDryRun) {
       await prisma.oltOnuStatus.deleteMany({
         where: { id: { in: orphanedDbOnus.map(o => o.id) } },
