@@ -108,7 +108,7 @@ export default function UnifiedSetupWizardPage() {
     companyAddress: '',
     companyPhone: '',
     companyEmail: '',
-    baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
+    baseUrl: '',
     timezone: 'Asia/Jakarta',
     adminUsername: 'admin',
     adminName: '',
@@ -134,10 +134,22 @@ export default function UnifiedSetupWizardPage() {
     name: 'PT Eugine Solusi Internet',
     phone: '081234567890',
     adminPhone: '081234567890',
-    baseUrl: typeof window !== 'undefined' ? window.location.origin : 'https://billing.isp.net',
+    baseUrl: 'https://billing.isp.net',
     address: 'Jl. Protokol Telekomunikasi No. 88, Jakarta',
     email: 'admin@isp.net',
   });
+
+  // Set window origin safely post-mount to prevent SSR hydration mismatch
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const origin = window.location.origin;
+      setInitFormData((prev) => ({ ...prev, baseUrl: prev.baseUrl || origin }));
+      setCompanyForm((prev) => ({
+        ...prev,
+        baseUrl: prev.baseUrl === 'https://billing.isp.net' ? origin : prev.baseUrl,
+      }));
+    }
+  }, []);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companySaved, setCompanySaved] = useState(false);
 

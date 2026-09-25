@@ -4,6 +4,25 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.69] — 2026-09-25
+
+### Fix React SSR Hydration Mismatch pada Setup Wizard & Dynamic Brand Logo Fallback (`src/app/setup/page.tsx`, `src/app/customer/login/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman Setup Wizard (`/setup`) mengalami error *React SSR Hydration Mismatch* pada inisialisasi state `baseUrl` (`typeof window !== 'undefined'`), yang memicu unmount komponen dan menayangkan layar error boundary ("Pembaruan Sistem Terdeteksi").
+  2. Logo & nama ISP pada header portal pelanggan perlu dipastikan murni dinamis menyesuaikan data `company` hasil konfigurasi Setup Wizard / Setting Admin tanpa nilai hardcoded static.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Fix SSR Hydration Mismatch (`src/app/setup/page.tsx`)**:
+     - Menginisialisasi state `baseUrl` secara konsisten pada SSR, dan memperbaruinya melalui `useEffect` pasca *client-side mount*. Halaman `/setup` kini ter-render murni tanpa hydration mismatch.
+  2. **Dynamic ISP Brand & Logo Component (`src/app/customer/login/page.tsx`, `src/app/customer/CustomerClientLayout.tsx`)**:
+     - Mengubah fallback logo & nama ISP menjadi komponen avatar brand dinamis berbasis data nama `company` di database (bukan teks statis/hardcoded).
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/customer/login/page.tsx`
+  - Modified: `src/app/customer/CustomerClientLayout.tsx`
+
 ## [2.40.68] — 2026-09-25
 
 ### Fix PWA Service Worker Chunk Caching & Automatic Cache Purge pada Global Error Boundary (`public/sw.js`, `src/app/global-error.tsx`)

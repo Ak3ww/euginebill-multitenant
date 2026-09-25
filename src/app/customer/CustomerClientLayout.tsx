@@ -513,24 +513,26 @@ function CustomerLayoutInner({ children }: { children: React.ReactNode }) {
         {/* ── Mobile Top App Bar ── */}
         <header className="md:hidden w-full sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-200/80 flex justify-between items-center px-4 h-16 z-50 shadow-2xs">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center p-1 overflow-hidden shrink-0">
-              <img 
-                src={resolvedLogo} 
-                alt={companyName || 'Eugine Media'} 
-                className="h-full w-full object-contain"
-                onError={(e) => { 
-                  const target = e.target as HTMLImageElement;
-                  if (target.src.endsWith('/logo.png')) {
+            {companyLogo ? (
+              <div className="h-8 w-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                <img 
+                  src={companyLogo} 
+                  alt={companyName || 'Portal Pelanggan'} 
+                  className="h-full w-full object-contain"
+                  onError={(e) => { 
+                    const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
-                  } else {
-                    target.src = '/logo.png';
-                  }
-                }}
-              />
-            </div>
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-8 w-8 rounded-lg bg-[#002c60] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                {companyName ? companyName.charAt(0).toUpperCase() : 'P'}
+              </div>
+            )}
             <div>
               <h1 className="text-xs font-bold text-slate-900 tracking-tight leading-none">
-                {companyName || 'Eugine Media'}
+                {companyName || 'Portal Pelanggan'}
               </h1>
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

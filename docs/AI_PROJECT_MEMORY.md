@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.68
+- **Version**: 2.40.69
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,13 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 25, 2026 — v2.40.69: Setup Wizard Hydration Mismatch Fix & Dynamic Branding)
+
+- **Hard Invariant: React SSR Hydration Mismatch Safety (`src/app/setup/page.tsx`)**:
+  - State `baseUrl` pada `src/app/setup/page.tsx` wajib diinisialisasi secara statis pada SSR dan disinkronkan melalui `useEffect` pasca-mount agar tidak memicu React Hydration Mismatch.
+- **Hard Invariant: Dynamic ISP Branding & Logo Fallback (`src/app/customer/login/page.tsx`, `src/app/customer/CustomerClientLayout.tsx`)**:
+  - Logo dan Nama ISP di seluruh portal wajib menggunakan komponen dinamis berdasarkan data `company` di database tanpa mengandalkan string statis/hardcoded.
 
 ### Recent Patch Log (September 25, 2026 — v2.40.68: Fix PWA SW Chunk Caching & Global Error Auto Purge)
 

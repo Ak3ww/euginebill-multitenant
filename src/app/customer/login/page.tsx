@@ -281,15 +281,24 @@ export default function CustomerLoginPage() {
           {/* Brand Header */}
           <div className="text-center mb-6">
             <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-white shadow-sm border border-slate-200/80 mb-3.5">
-              <img
-                src={companyLogo || '/logo.png'}
-                alt={companyName || 'Portal Pelanggan'}
-                className="h-14 sm:h-16 w-auto max-w-[220px] object-contain"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
+              {companyLogo ? (
+                <img
+                  src={companyLogo}
+                  alt={companyName || 'Portal Pelanggan'}
+                  className="h-14 sm:h-16 w-auto max-w-[220px] object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="flex items-center gap-2.5 px-3 py-1">
+                  <div className="w-9 h-9 rounded-xl bg-[#002c60] text-white flex items-center justify-center font-bold text-lg">
+                    {companyName ? companyName.charAt(0).toUpperCase() : 'P'}
+                  </div>
+                  <span className="font-bold text-lg text-slate-900">{companyName || 'Portal Pelanggan'}</span>
+                </div>
+              )}
             </div>
 
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
