@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.73
+- **Version**: 2.40.74
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 25, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -20,7 +20,10 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
-### Recent Patch Log (September 25, 2026 — v2.40.73: Strict Standard Shadcn UI Specification Compliance)
+### Recent Patch Log (September 25, 2026 — v2.40.74: Dedicated Unified Setup Wizard Layout)
+
+- **Hard Invariant: Dedicated 2-Column Unified Setup Layout (`src/app/setup/page.tsx`)**:
+  - Halaman `/setup` WAJIB menggunakan 1 struktur tata letak 2-kolom terpadu yang konsisten dari Step 0 hingga Step 6 (Header Topbar + Sidebar Stepper di Kiri + Form Card di Kanan) selaras dengan standar UI `/admin` Light Mode. DILARANG memisah tampilan Step 0 menjadi halaman yang berbeda gaya dari Step 1-6.
 
 - **Hard Invariant: Standard Shadcn UI Primitives Standard (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`)**:
   - Komponen `Input`, `Card`, dan `Button` WAJIB mengimplementasikan spesifikasi murni Shadcn UI berbasis Tailwind CSS tokens (`bg-background`, `bg-card`, `text-card-foreground`, `border-border`, `bg-primary`, `text-primary-foreground`). DILARANG KERAS menggunakan cyberpunk cyan glow atau override warna inline statis.

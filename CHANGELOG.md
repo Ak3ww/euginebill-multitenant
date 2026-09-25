@@ -4,6 +4,26 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.74] — 2026-09-25
+
+### Dedicated Unified Setup Wizard Layout & Admin Light Mode First Synchronization (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman `/setup` sebelumnya memiliki 2 tampilan terpisah dengan tata letak yang berbeda (Step 0 terpisah dalam kartu tengah melayang, sedangkan Step 1-6 menggunakan layout topbar terpisah), yang membuat pengguna merasa desain tidak konsisten (*inconsistent design*).
+  2. Alur setup memerlukan 1 desain terpadu (*1 dedicated page setup, 1 style*) yang mematuhi standar UI `/admin` (Light Mode First, hairline borders `border-border`, `bg-card` putih bersih, Lucide React icons, dan 2-kolom stepper layout).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Unified 2-Column Onboarding Layout (`src/app/setup/page.tsx`)**:
+     - Membangun ulang seluruh halaman `/setup` menjadi 1 tata letak terpadu yang konsisten dari Step 0 hingga Step 6.
+     - **Header Bar**: Memuat logo brand `EB`, judul "EugineBill RADIUS Setup Wizard", badge versi `v2.40.74`, dan tombol navigasi ke Dashboard Admin.
+     - **Kolom Kiri (Stepper Sidebar)**: Menampilkan 7 daftar langkah terstruktur secara vertikal dengan nomor langkah, ikon Lucide, deskripsi ringkas, badge status (`Selesai`, `Aktif`), dan *progress bar* persentase penyelesaian.
+     - **Kolom Kanan (Active Step Form Card)**: Menampilkan kartu form interaktif Shadcn UI yang konsisten dengan `<CardHeader>`, `<CardContent>`, `<CardFooter>`, input terstruktur ber-kontras tinggi, dan navigasi tombol aksi.
+  2. **Light Mode First Enforcement**:
+     - Memastikan `document.documentElement.classList.remove('dark')` dieksekusi secara otomatis saat komponen di-mount sehingga Setup Wizard selalu tampil dalam antarmuka Light SaaS yang profesional dan bersih.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+
 ## [2.40.73] — 2026-09-25
 
 ### Strict Standard Shadcn UI Specification Compliance (`src/components/ui/input.tsx`, `src/components/ui/card.tsx`, `src/components/ui/button.tsx`, `src/app/setup/page.tsx`)

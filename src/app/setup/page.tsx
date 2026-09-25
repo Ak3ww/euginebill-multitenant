@@ -41,6 +41,9 @@ import {
   LogIn,
   User,
   Mail,
+  MapPin,
+  Activity,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,7 +69,6 @@ interface TestConnectionResult {
   fixScript?: string;
 }
 
-
 interface CreatedProfile {
   id: string;
   name: string;
@@ -84,11 +86,12 @@ interface CreatedUser {
   invoiceNumber?: string;
 }
 
-const WIZARD_STEPS = [
-  { id: 1, title: 'Profil ISP', icon: Building2, desc: 'Identitas & Kontak' },
-  { id: 2, title: 'Koneksi MikroTik', icon: Server, desc: 'API & Firewall' },
-  { id: 3, title: 'Paket PPPoE', icon: Package, desc: 'Kecepatan & Tarif' },
-  { id: 4, title: 'Pelanggan Trial', icon: Users, desc: 'Akun & Secret' },
+const ALL_STEPS = [
+  { id: 0, title: 'Inisialisasi Sistem', icon: ShieldCheck, desc: 'Akun Superadmin & ISP' },
+  { id: 1, title: 'Profil & Kontak ISP', icon: Building2, desc: 'Identitas & Alamat' },
+  { id: 2, title: 'Koneksi MikroTik', icon: Server, desc: 'API Router & VPN' },
+  { id: 3, title: 'Paket PPPoE', icon: Package, desc: 'Tarif & Kecepatan' },
+  { id: 4, title: 'Pelanggan Trial', icon: Users, desc: 'Akun Tes PPPoE' },
   { id: 5, title: 'Bot WhatsApp', icon: Smartphone, desc: 'Notifikasi Otomatis' },
   { id: 6, title: 'Payment Gateway', icon: CreditCard, desc: 'Pembayaran Online' },
 ];
@@ -98,6 +101,14 @@ export default function UnifiedSetupWizardPage() {
   const sessionContext = useSession();
   const session = sessionContext?.data;
   const sessionStatus = sessionContext?.status || 'unauthenticated';
+
+  // Force Light Mode by Default for Admin & Setup
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, []);
 
   // Initialization check state
   const [checkingInit, setCheckingInit] = useState(true);
@@ -123,8 +134,8 @@ export default function UnifiedSetupWizardPage() {
     fixedBillingDate: '20',
   });
 
-  // Post-Initialization Wizard State (Steps 1 - 7)
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  // Post-Initialization Wizard State (Steps 0 - 6)
+  const [currentStep, setCurrentStep] = useState<number>(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [hasExistingData, setHasExistingData] = useState<boolean>(false);
@@ -143,7 +154,7 @@ export default function UnifiedSetupWizardPage() {
     email: 'admin@isp.net',
   });
 
-  // Set window origin safely post-mount to prevent SSR hydration mismatch
+  // Set window origin safely post-mount
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location?.origin) {
       const origin = window.location.origin;
@@ -154,6 +165,7 @@ export default function UnifiedSetupWizardPage() {
       }));
     }
   }, []);
+
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companySaved, setCompanySaved] = useState(false);
 
@@ -219,7 +231,10 @@ export default function UnifiedSetupWizardPage() {
       try {
         const res = await fetch('/api/setup');
         const data = await res.json();
-        setIsInitialized(Boolean(data.isInitialized));
+        const init = Boolean(data.isInitialized);
+        setIsInitialized(init);
+        setCurrentStep(init ? 1 : 0);
+        if (init) setCompletedSteps((prev) => [...prev, 0]);
       } catch (err) {
         console.error('Failed checking setup status:', err);
       } finally {
@@ -259,6 +274,7 @@ export default function UnifiedSetupWizardPage() {
               email: cData.email || prev.email,
             }));
             setCompanySaved(true);
+            setCompletedSteps((prev) => [...prev, 1]);
           }
         }
 
@@ -276,6 +292,7 @@ export default function UnifiedSetupWizardPage() {
               port: String(routers[0].port || routers[0].apiPort || 8728),
             }));
             setRouterSaved(true);
+            setCompletedSteps((prev) => [...prev, 2]);
           }
         }
 
@@ -291,6 +308,7 @@ export default function UnifiedSetupWizardPage() {
             setWaProviders(wData);
             const active = wData.some((p: any) => p.isActive);
             setWaConnected(active);
+            if (active) setCompletedSteps((prev) => [...prev, 5]);
           }
         }
 
@@ -363,20 +381,10 @@ export default function UnifiedSetupWizardPage() {
     setGeneratedScript(script);
   }, [connectionMethod, routerForm]);
 
-  // Stepper handlers
   const markStepCompleted = (stepNumber: number) => {
     if (!completedSteps.includes(stepNumber)) {
       setCompletedSteps((prev) => [...prev, stepNumber]);
     }
-  };
-
-  const handleNext = () => {
-    markStepCompleted(currentStep);
-    setCurrentStep((prev) => Math.min(prev + 1, 7));
-  };
-
-  const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
   // First-Run Initial System Setup Handler (Step 0)
@@ -397,7 +405,7 @@ export default function UnifiedSetupWizardPage() {
         throw new Error(data.error || 'Gagal melakukan inisialisasi.');
       }
 
-      // Automatically sign in superadmin credential so the session is active
+      // Automatically sign in superadmin credential
       const authRes = await signIn('credentials', {
         redirect: false,
         username: initFormData.adminUsername,
@@ -405,13 +413,12 @@ export default function UnifiedSetupWizardPage() {
       });
 
       if (authRes?.error) {
-        // Fallback: If auto sign-in fails, redirect to admin login
         router.push('/admin/login?setup=success&callbackUrl=/setup');
         return;
       }
 
-      // Update state and transition continuously to Step 1 in the wizard
       setIsInitialized(true);
+      markStepCompleted(0);
       setCurrentStep(1);
     } catch (err: any) {
       setInitError(err.message || 'Terjadi kesalahan sistem.');
@@ -470,7 +477,6 @@ export default function UnifiedSetupWizardPage() {
         }
         await handleSaveRouter();
       }
-
     } catch (err: any) {
       setTestResult({
         success: false,
@@ -516,7 +522,7 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 3: Fetch Router Resources when entering step 3
+  // Step 3: Fetch Router Resources
   useEffect(() => {
     if (currentStep === 3 && savedRouterId) {
       const fetchResources = async () => {
@@ -531,7 +537,7 @@ export default function UnifiedSetupWizardPage() {
               addresses: Array.isArray(data.addresses) ? data.addresses : [],
             });
             if (data.pools?.length > 0 && !profileForm.ipPoolName) {
-              setProfileForm(prev => ({ ...prev, ipPoolName: data.pools[0].name }));
+              setProfileForm((prev) => ({ ...prev, ipPoolName: data.pools[0].name }));
             }
           }
         } catch (e) {
@@ -543,47 +549,6 @@ export default function UnifiedSetupWizardPage() {
       fetchResources();
     }
   }, [currentStep, savedRouterId]);
-
-  const handleSelectMikrotikProfileSetup = (profileName: string) => {
-    if (!profileName) {
-      setProfileForm(prev => ({ ...prev, selectedMikrotikProfile: '' }));
-      return;
-    }
-
-    const mkProfile = routerResources.profiles.find(p => p.name === profileName);
-    if (!mkProfile) {
-      setProfileForm(prev => ({ ...prev, selectedMikrotikProfile: profileName }));
-      return;
-    }
-
-    setProfileForm(prev => {
-      let dl = profileForm.downloadSpeed;
-      let ul = profileForm.uploadSpeed;
-      if (mkProfile.rateLimit) {
-        const speedPart = mkProfile.rateLimit.split(/\s+/)[0];
-        const parts = speedPart.split('/');
-        if (parts.length >= 2) {
-          let parsedDl = parseInt(parts[0].replace(/[^0-9]/g, '')) || 0;
-          let parsedUl = parseInt(parts[1].replace(/[^0-9]/g, '')) || 0;
-          if (parts[0].toLowerCase().includes('k')) parsedDl = Math.ceil(parsedDl / 1000);
-          if (parts[1].toLowerCase().includes('k')) parsedUl = Math.ceil(parsedUl / 1000);
-          if (parsedDl > 0) dl = String(parsedDl);
-          if (parsedUl > 0) ul = String(parsedUl);
-        }
-      }
-
-      return {
-        ...prev,
-        selectedMikrotikProfile: profileName,
-        name: mkProfile.name,
-        groupName: mkProfile.name,
-        downloadSpeed: dl,
-        uploadSpeed: ul,
-        ipPoolName: mkProfile.remoteAddress && mkProfile.remoteAddress !== 'none' && mkProfile.remoteAddress !== '0.0.0.0' ? mkProfile.remoteAddress : prev.ipPoolName,
-        localAddress: mkProfile.localAddress && mkProfile.localAddress !== 'none' && mkProfile.localAddress !== '0.0.0.0' ? mkProfile.localAddress : prev.localAddress,
-      };
-    });
-  };
 
   // Step 3: Save PPPoE Profile
   const handleSaveProfile = async () => {
@@ -598,58 +563,23 @@ export default function UnifiedSetupWizardPage() {
           price: parseInt(profileForm.price) || 200000,
           downloadSpeed: parseInt(profileForm.downloadSpeed) || 20,
           uploadSpeed: parseInt(profileForm.uploadSpeed) || 20,
-          ipPoolName: profileForm.ipPoolName || undefined,
-          localAddress: profileForm.localAddress || undefined,
-          lastRouterId: savedRouterId || undefined,
-          validityValue: 1,
-          validityUnit: 'MONTHS',
-          sharedUser: true,
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Gagal menyimpan profil paket PPPoE');
-      }
-
-      const created = await res.json();
-      const profileObj = created.profile || created;
-      setCreatedProfile(profileObj);
-
-      // Auto-sync newly created profile to MikroTik if router is connected
-      if (savedRouterId && profileObj?.id) {
-        try {
-          await fetch('/api/pppoe/profiles/sync-mikrotik', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: profileObj.id,
-              routerIds: [savedRouterId],
-              ipPoolName: profileForm.ipPoolName || undefined,
-              localAddress: profileForm.localAddress || undefined,
-            }),
-          });
-        } catch (syncErr) {
-          console.warn('[SetupStep3] Auto-sync warning:', syncErr);
-        }
-      }
-
+      if (!res.ok) throw new Error('Gagal membuat paket PPPoE');
+      const data = await res.json();
+      setCreatedProfile(data.profile || data);
       markStepCompleted(3);
       setCurrentStep(4);
     } catch (err: any) {
-      alert(err.message || 'Terjadi kesalahan saat membuat paket');
+      alert(err.message || 'Gagal menyimpan paket');
     } finally {
       setIsSavingProfile(false);
     }
   };
 
-  // Step 4: Save Trial Customer
+  // Step 4: Save Customer
   const handleSaveCustomer = async () => {
-    if (!createdProfile?.id) {
-      alert('Silakan simpan paket layanan di Step 3 terlebih dahulu.');
-      return;
-    }
-
     setIsSavingCustomer(true);
     try {
       const res = await fetch('/api/pppoe/users', {
@@ -660,25 +590,14 @@ export default function UnifiedSetupWizardPage() {
           phone: customerForm.phone,
           username: customerForm.username,
           password: customerForm.password,
-          profileId: createdProfile.id,
+          profileName: createdProfile?.name || profileForm.name,
           routerId: savedRouterId || undefined,
-          firstInvoice: 'prorate',
         }),
       });
 
+      if (!res.ok) throw new Error('Gagal membuat akun pelanggan');
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Gagal mendaftarkan pelanggan percobaan');
-      }
-
-      setCreatedCustomer({
-        id: data.user?.id || data.id,
-        username: customerForm.username,
-        name: customerForm.name,
-        phone: customerForm.phone,
-        invoiceNumber: data.invoice?.invoiceNumber || data.invoiceNumber || 'INV-PRORATE-001',
-      });
-
+      setCreatedCustomer(data.user || data);
       markStepCompleted(4);
       setCurrentStep(5);
     } catch (err: any) {
@@ -688,1572 +607,851 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
-  // Step 5: Refresh WhatsApp Status
-  const handleRefreshWhatsApp = async () => {
+  // Step 5: WhatsApp providers check
+  const handleCheckWa = async () => {
     setWaLoading(true);
     try {
       const res = await fetch('/api/whatsapp/providers');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+      if (Array.isArray(data)) {
         setWaProviders(data);
         const active = data.some((p: any) => p.isActive);
         setWaConnected(active);
+        if (active) markStepCompleted(5);
       }
-    } catch (err) {
-      console.error('Failed refreshing WhatsApp status:', err);
+    } catch (e) {
+      console.error('Failed loading WA providers:', e);
     } finally {
       setWaLoading(false);
     }
   };
 
-  // Finish Wizard
-  const handleFinishWizard = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('euginebill_wizard_completed', 'true');
-    }
-    router.push('/admin');
-  };
-
-  const handleCopyScript = async () => {
-    const ok = await copyToClipboard(generatedScript);
-    if (ok) {
-      setCopiedScript(true);
-      setTimeout(() => setCopiedScript(false), 2500);
-    }
-  };
-
-  // 1. Loading initialization check
+  // Global Loading State
   if (checkingInit) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-9 h-9 animate-spin text-sky-600" />
-        <p className="text-sm font-medium text-slate-600">Memeriksa status sistem EugineBill...</p>
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Memeriksa status konfigurasi EugineBill...</p>
       </div>
     );
   }
 
-  // 2. CASE: SYSTEM NOT INITIALIZED (First-run Superadmin & ISP setup)
-  if (!isInitialized) {
-    return (
-      <div className="min-h-screen bg-muted/40 text-foreground flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-xl space-y-6">
-          <Card className="border-border shadow-xs">
-            <CardHeader className="text-center space-y-2">
-              <div className="mx-auto w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-1">
-                <Server className="w-6 h-6" />
-              </div>
-              <CardTitle className="text-2xl font-bold">Inisialisasi Sistem EugineBill</CardTitle>
-              <CardDescription>
-                Selamat datang! Lengkapi 3 form awal berikut untuk mengonfigurasi akun Superadmin dan profil usaha ISP Anda.
-              </CardDescription>
+  // Calculate overall progress percentage
+  const displaySteps = isInitialized ? ALL_STEPS.filter((s) => s.id > 0) : ALL_STEPS;
+  const totalCount = displaySteps.length;
+  const doneCount = completedSteps.length;
+  const progressPercent = Math.round((doneCount / totalCount) * 100);
 
-              <div className="grid grid-cols-3 gap-1 bg-muted p-1 rounded-xl mt-4">
-                <button
-                  type="button"
-                  onClick={() => setInitStep(1)}
-                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    initStep === 1
-                      ? 'bg-background text-foreground shadow-xs font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Building2 className="w-4 h-4 text-primary" />
-                  <span>Profil ISP</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInitStep(2)}
-                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    initStep === 2
-                      ? 'bg-background text-foreground shadow-xs font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <UserCheck className="w-4 h-4 text-primary" />
-                  <span>Akun Admin</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInitStep(3)}
-                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                    initStep === 3
-                      ? 'bg-background text-foreground shadow-xs font-semibold'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4 text-primary" />
-                  <span>Billing Default</span>
-                </button>
-              </div>
-            </CardHeader>
+  return (
+    <div className="min-h-screen bg-slate-50/80 text-foreground pb-16">
+      {/* ── TOPBAR HEADER — Unifying Design with /admin ── */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-border shadow-xs px-4 sm:px-8 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shadow-xs">
+            EB
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold tracking-tight text-foreground">EugineBill RADIUS</h1>
+              <Badge variant="outline" className="text-[10px] uppercase font-mono px-1.5 py-0">
+                v2.40.74
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              Dedicated Onboarding & Service Setup Wizard
+            </p>
+          </div>
+        </div>
 
-            <CardContent>
-              {initError && (
-                <div className="mb-6 p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-center gap-3">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{initError}</span>
+        <div className="flex items-center gap-3">
+          <Badge variant="secondary" className="text-xs gap-1.5 hidden md:inline-flex">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Light SaaS Standard
+          </Badge>
+          {sessionStatus === 'authenticated' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/admin')}
+              className="text-xs gap-2"
+            >
+              <LayoutDashboard className="w-4 h-4 text-primary" />
+              <span>Dashboard Admin</span>
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {/* ── MAIN CONTENT (2-COLUMN CONTAINER) ── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+        {/* Soft Notification Banner if system has operational data */}
+        {hasExistingData && (
+          <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/80 text-blue-950 flex items-start gap-3 shadow-xs">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="flex-1 text-xs sm:text-sm">
+              <span className="font-bold">Sistem Operasional Aktif:</span> Ditemukan {existingStats.routerCount}{' '}
+              Router & {existingStats.userCount} Pelanggan PPPoE aktif. Wizard ini tetap dapat digunakan untuk mengecek
+              koneksi atau menambah konfigurasi baru.
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* ── LEFT COLUMN: STEP NAVIGATION SIDEBAR (4 cols) ── */}
+          <div className="lg:col-span-4 space-y-4">
+            <Card className="border-border shadow-xs bg-card">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-bold">Langkah Setup</CardTitle>
+                  <span className="text-xs font-semibold text-primary">{progressPercent}% Selesai</span>
                 </div>
-              )}
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </CardHeader>
 
-              <form onSubmit={handleInitialSubmit} className="space-y-6">
-                {/* STEP 1: Company Details */}
-                {initStep === 1 && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="companyName">Nama ISP / Brand Usaha *</Label>
-                      <Input
-                        id="companyName"
-                        required
-                        value={initFormData.companyName}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyName: e.target.value })}
-                        placeholder="Contoh: PT Solusi Cepat Net"
-                      />
+              <CardContent className="p-3 space-y-1">
+                {displaySteps.map((step) => {
+                  const Icon = step.icon;
+                  const isCurrent = currentStep === step.id;
+                  const isDone = completedSteps.includes(step.id);
+
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => {
+                        // Allow step click if initialized or step 0
+                        if (isInitialized || step.id === 0) {
+                          setCurrentStep(step.id);
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-primary/10 text-primary font-semibold ring-1 ring-primary/30'
+                          : isDone
+                          ? 'hover:bg-muted text-foreground'
+                          : 'opacity-60 hover:opacity-90 text-muted-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 font-bold ${
+                            isDone
+                              ? 'bg-emerald-500 text-white'
+                              : isCurrent
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground border border-border'
+                          }`}
+                        >
+                          {isDone ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold truncate">{step.title}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">{step.desc}</div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isDone ? (
+                          <Badge variant="outline" className="text-[10px] border-emerald-300 bg-emerald-50 text-emerald-700">
+                            Selesai
+                          </Badge>
+                        ) : isCurrent ? (
+                          <Badge variant="default" className="text-[10px]">
+                            Aktif
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card className="border-border shadow-xs bg-muted/30 p-4 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <HelpCircle className="w-4 h-4 text-primary" /> Bantuan Setup Fast-Track
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Seluruh langkah di atas dirancang otomatis. Jika Anda ingin melewati wizard ini, Anda dapat langsung menuju ke Dashboard Admin.
+              </p>
+            </Card>
+          </div>
+
+          {/* ── RIGHT COLUMN: ACTIVE STEP CONTENT CARD (8 cols) ── */}
+          <div className="lg:col-span-8">
+            {/* STEP 0: Inisialisasi Superadmin & ISP (System Uninitialized) */}
+            {currentStep === 0 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5" />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="companyPhone">No. WhatsApp Admin / CS *</Label>
-                      <Input
-                        id="companyPhone"
-                        required
-                        value={initFormData.companyPhone}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyPhone: e.target.value })}
-                        placeholder="0812xxxxxxxx"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="baseUrl">Base URL / Domain Billing</Label>
-                      <Input
-                        id="baseUrl"
-                        value={initFormData.baseUrl}
-                        onChange={(e) => setInitFormData({ ...initFormData, baseUrl: e.target.value })}
-                        placeholder="https://billing.isp.net"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="companyAddress">Alamat Kantor</Label>
-                      <Input
-                        id="companyAddress"
-                        value={initFormData.companyAddress}
-                        onChange={(e) => setInitFormData({ ...initFormData, companyAddress: e.target.value })}
-                        placeholder="Jl. Telekomunikasi No. 88"
-                      />
-                    </div>
-                    <div className="pt-2 flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          if (!initFormData.companyName.trim()) {
-                            setInitError('Nama ISP wajib diisi');
-                            return;
-                          }
-                          setInitError(null);
-                          setInitStep(2);
-                        }}
-                      >
-                        Lanjut ke Akun Admin <ArrowRight className="w-4 h-4" />
-                      </Button>
+                    <div>
+                      <CardTitle>Inisialisasi Akses Superadmin & Profile ISP</CardTitle>
+                      <CardDescription>
+                        Lengkapi akun login pertama Anda dan nama usaha ISP untuk membuka akses database.
+                      </CardDescription>
                     </div>
                   </div>
-                )}
+                </CardHeader>
 
-                {/* STEP 2: Superadmin Account */}
-                {initStep === 2 && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="adminName">Nama Lengkap Superadmin *</Label>
-                      <Input
-                        id="adminName"
-                        required
-                        value={initFormData.adminName}
-                        onChange={(e) => setInitFormData({ ...initFormData, adminName: e.target.value })}
-                        placeholder="Nama Administrator"
-                      />
+                <CardContent className="space-y-6">
+                  {initError && (
+                    <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-center gap-3">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{initError}</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="adminUsername">Username Login *</Label>
-                        <Input
-                          id="adminUsername"
-                          required
-                          value={initFormData.adminUsername}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminUsername: e.target.value })}
-                          placeholder="admin"
-                          className="font-mono"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="adminEmail">Email Admin *</Label>
-                        <Input
-                          id="adminEmail"
-                          required
-                          type="email"
-                          value={initFormData.adminEmail}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminEmail: e.target.value })}
-                          placeholder="admin@isp.net"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="adminPassword">Password Baru *</Label>
-                        <Input
-                          id="adminPassword"
-                          required
-                          type="password"
-                          value={initFormData.adminPassword}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminPassword: e.target.value })}
-                          placeholder="Minimal 6 karakter"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="adminPasswordConfirm">Konfirmasi Password *</Label>
-                        <Input
-                          id="adminPasswordConfirm"
-                          required
-                          type="password"
-                          value={initFormData.adminPasswordConfirm}
-                          onChange={(e) => setInitFormData({ ...initFormData, adminPasswordConfirm: e.target.value })}
-                          placeholder="Ulangi password"
-                        />
-                      </div>
-                    </div>
-                    <div className="pt-2 flex justify-between">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setInitStep(1)}
-                      >
-                        Kembali
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          if (!initFormData.adminName || !initFormData.adminUsername || !initFormData.adminPassword) {
-                            setInitError('Seluruh form akun admin wajib diisi.');
-                            return;
-                          }
-                          if (initFormData.adminPassword !== initFormData.adminPasswordConfirm) {
-                            setInitError('Konfirmasi password tidak cocok.');
-                            return;
-                          }
-                          setInitError(null);
-                          setInitStep(3);
-                        }}
-                      >
-                        Lanjut ke Billing Default <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* STEP 3: Billing Defaults */}
-                {initStep === 3 && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="customerIdPrefix">Prefix ID Pelanggan</Label>
-                        <Input
-                          id="customerIdPrefix"
-                          value={initFormData.customerIdPrefix}
-                          onChange={(e) => setInitFormData({ ...initFormData, customerIdPrefix: e.target.value })}
-                          placeholder="EB-"
-                          className="font-mono"
-                        />
+                  <form onSubmit={handleInitialSubmit} className="space-y-6">
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
+                        1. Profil Perusahaan ISP
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="initCompanyName">Nama ISP / Perusahaan *</Label>
+                          <Input
+                            id="initCompanyName"
+                            required
+                            value={initFormData.companyName}
+                            onChange={(e) => setInitFormData({ ...initFormData, companyName: e.target.value })}
+                            placeholder="Contoh: PT Solusi Cepat Net"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="initCompanyPhone">No. WhatsApp Admin / CS *</Label>
+                          <Input
+                            id="initCompanyPhone"
+                            required
+                            value={initFormData.companyPhone}
+                            onChange={(e) => setInitFormData({ ...initFormData, companyPhone: e.target.value })}
+                            placeholder="0812xxxxxxxx"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fixedBillingDate">Tanggal Tagihan Bulanan (1-28)</Label>
-                        <Input
-                          id="fixedBillingDate"
-                          type="number"
-                          value={initFormData.fixedBillingDate}
-                          onChange={(e) => setInitFormData({ ...initFormData, fixedBillingDate: e.target.value })}
-                          placeholder="20"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="initBaseUrl">Base URL / Domain Billing</Label>
+                          <Input
+                            id="initBaseUrl"
+                            value={initFormData.baseUrl}
+                            onChange={(e) => setInitFormData({ ...initFormData, baseUrl: e.target.value })}
+                            placeholder="https://billing.isp.net"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="initCompanyAddress">Alamat Kantor</Label>
+                          <Input
+                            id="initCompanyAddress"
+                            value={initFormData.companyAddress}
+                            onChange={(e) => setInitFormData({ ...initFormData, companyAddress: e.target.value })}
+                            placeholder="Jl. Telekomunikasi No. 88"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="p-4 rounded-lg border border-border bg-muted/40 text-muted-foreground text-xs flex items-center gap-3">
-                      <Info className="w-4 h-4 text-primary shrink-0" />
-                      <span>Data ini akan menginisialisasi database dan mengunci akses publik ke form awal.</span>
+
+                    <div className="space-y-4 pt-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-2">
+                        2. Akun Login Superadmin
+                      </h4>
+                      <div className="space-y-2">
+                        <Label htmlFor="initAdminName">Nama Lengkap Superadmin *</Label>
+                        <Input
+                          id="initAdminName"
+                          required
+                          value={initFormData.adminName}
+                          onChange={(e) => setInitFormData({ ...initFormData, adminName: e.target.value })}
+                          placeholder="Nama Administrator"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="initAdminUsername">Username Login *</Label>
+                          <Input
+                            id="initAdminUsername"
+                            required
+                            value={initFormData.adminUsername}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminUsername: e.target.value })}
+                            placeholder="admin"
+                            className="font-mono"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="initAdminEmail">Email Admin *</Label>
+                          <Input
+                            id="initAdminEmail"
+                            required
+                            type="email"
+                            value={initFormData.adminEmail}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminEmail: e.target.value })}
+                            placeholder="admin@isp.net"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="initAdminPassword">Password *</Label>
+                          <Input
+                            id="initAdminPassword"
+                            required
+                            type="password"
+                            value={initFormData.adminPassword}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminPassword: e.target.value })}
+                            placeholder="Minimal 6 karakter"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="initAdminPasswordConfirm">Konfirmasi Password *</Label>
+                          <Input
+                            id="initAdminPasswordConfirm"
+                            required
+                            type="password"
+                            value={initFormData.adminPasswordConfirm}
+                            onChange={(e) => setInitFormData({ ...initFormData, adminPasswordConfirm: e.target.value })}
+                            placeholder="Ulangi password"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="pt-2 flex justify-between">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setInitStep(2)}
-                      >
-                        Kembali
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={initSubmitting}
-                        variant="success"
-                      >
+
+                    <div className="pt-4 flex justify-end">
+                      <Button type="submit" disabled={initSubmitting} variant="success" size="lg">
                         {initSubmitting ? (
                           <RefreshCw className="w-4 h-4 animate-spin" />
                         ) : (
                           <Check className="w-4 h-4" />
                         )}
-                        Simpan & Inisialisasi Sistem
+                        <span>Simpan & Inisialisasi Sistem</span>
                       </Button>
                     </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* STEP 1: PROFIL & KONTAK ISP */}
+            {currentStep === 1 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Profil & Kontak Usaha ISP</CardTitle>
+                        <CardDescription>
+                          Identitas resmi perusahaan yang tercetak pada invoice dan kwitansi pembayaran pelanggan.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {companySaved && (
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" /> Tersimpan
+                      </Badge>
+                    )}
                   </div>
-                )}
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+                </CardHeader>
 
-  // 3. CASE: SYSTEM INITIALIZED BUT USER NOT LOGGED IN
-  if (sessionStatus === 'loading') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-9 h-9 animate-spin text-sky-600" />
-        <p className="text-sm font-medium text-slate-600">Memeriksa autentikasi admin...</p>
-      </div>
-    );
-  }
-
-  if (sessionStatus === 'unauthenticated') {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md text-center px-4">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-sky-100 text-sky-700 mb-4">
-            <Lock className="w-7 h-7" />
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            Sistem Telah Terinisialisasi
-          </h2>
-          <p className="mt-2 text-xs sm:text-sm text-slate-600">
-            Silakan login dengan akun Administrator Anda untuk mengakses Wizard Setup Jaringan & Layanan.
-          </p>
-          <div className="mt-6">
-            <Button
-              onClick={() => router.push('/admin/login?callbackUrl=/setup')}
-              className="h-10 text-xs sm:text-sm px-6 gap-2 bg-sky-600 hover:bg-sky-700 text-white font-medium"
-            >
-              <LogIn className="w-4 h-4" /> Masuk ke Akun Admin
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 4. CASE: AUTHENTICATED ADMIN ACCESSING ONBOARDING WIZARD
-  return (
-    <div className="min-h-screen bg-slate-50/60 pb-16 pt-6">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
-        {/* Soft Notification Banner for Existing Operational Systems */}
-        {hasExistingData && (
-          <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/80 text-sky-950 flex items-start gap-3 shadow-xs">
-            <Info className="w-5 h-5 text-sky-600 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-semibold text-sm text-sky-900">Sistem Operasional Telah Aktif</h4>
-              <p className="text-xs text-sky-700 mt-0.5 leading-relaxed">
-                Sistem Anda telah memiliki data operasional aktif ({existingStats.routerCount} Router,{' '}
-                {existingStats.userCount} Pelanggan PPPoE). Anda tetap dapat menggunakan wizard ini untuk mengecek
-                konektivitas, menambah router baru, atau merapikan skrip RouterOS.
-              </p>
-            </div>
-            <Link href="/admin">
-              <Button variant="outline" size="sm" className="text-xs h-8 border-sky-300 bg-white hover:bg-sky-100/50">
-                Ke Dashboard Admin
-              </Button>
-            </Link>
-          </div>
-        )}
-
-        {/* Header Title Card */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-border shadow-xs">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-sky-300 bg-sky-50 text-sky-700 font-semibold px-2.5 py-0.5 text-[11px]">
-                SETUP WIZARD
-              </Badge>
-              <span className="text-xs text-muted-foreground">EugineBill Engine v2.4</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Panduan Konfigurasi Awal ISP</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl">
-              Siapkan koneksi MikroTik, tarif paket, secret trial, dan bot WhatsApp Anda hanya dalam 6 langkah terpadu.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (confirm('Lewati wizard dan langsung ke dashboard admin?')) {
-                  if (typeof window !== 'undefined') {
-                    localStorage.setItem('euginebill_wizard_completed', 'true');
-                  }
-                  router.push('/admin');
-                }
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Lewati Wizard
-            </Button>
-          </div>
-        </div>
-
-        {/* Interactive Stepper Navigation Header */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-border shadow-xs overflow-x-auto">
-          <div className="flex items-center justify-between min-w-[620px]">
-            {WIZARD_STEPS.map((step, index) => {
-              const IconComponent = step.icon;
-              const isCurrent = currentStep === step.id;
-              const isCompleted = completedSteps.includes(step.id);
-
-              return (
-                <React.Fragment key={step.id}>
-                  <button
-                    onClick={() => setCurrentStep(step.id)}
-                    className={`flex items-center gap-3 text-left p-2 rounded-xl transition-all ${
-                      isCurrent
-                        ? 'bg-sky-50/80 text-sky-900 ring-1 ring-sky-300'
-                        : isCompleted
-                        ? 'hover:bg-slate-100 text-foreground'
-                        : 'opacity-60 hover:opacity-90'
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-xs shrink-0 transition-colors ${
-                        isCompleted
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : isCurrent
-                          ? 'bg-sky-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-500 border border-slate-200'
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <IconComponent className="w-4 h-4" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold leading-none">{step.title}</div>
-                      <div className="text-[10px] text-muted-foreground mt-1">{step.desc}</div>
-                    </div>
-                  </button>
-
-                  {index < WIZARD_STEPS.length - 1 && (
-                    <div className="h-[2px] flex-1 bg-slate-200 mx-2 relative min-w-[20px]">
-                      <div
-                        className="h-full bg-emerald-500 transition-all duration-300"
-                        style={{ width: isCompleted ? '100%' : '0%' }}
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="step1Name">Nama Perusahaan / Brand ISP *</Label>
+                      <Input
+                        id="step1Name"
+                        value={companyForm.name}
+                        onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+                        placeholder="Contoh: Eugine Solusi Net"
                       />
                     </div>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* STEP CONTENT BODY */}
-
-        {/* STEP 1: PROFIL ISP */}
-        {currentStep === 1 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <Building2 className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 1: Identitas & Profil ISP</CardTitle>
-                    <CardDescription className="text-xs">
-                      Atur nama usaha, kontak resmi CS, dan alamat yang akan tercetak pada tagihan invoice pelanggan.
-                    </CardDescription>
-                  </div>
-                </div>
-                {companySaved && (
-                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-xs gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Tersimpan
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="companyName" className="text-xs font-medium">
-                    Nama ISP / Perusahaan *
-                  </Label>
-                  <Input
-                    id="companyName"
-                    value={companyForm.name}
-                    onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
-                    placeholder="Contoh: Eugine Solusi Net"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Ditampilkan di header invoice & portal pelanggan.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="adminPhone" className="text-xs font-medium">
-                    No. WhatsApp CS / Billing *
-                  </Label>
-                  <Input
-                    id="adminPhone"
-                    value={companyForm.adminPhone}
-                    onChange={(e) => setCompanyForm({ ...companyForm, adminPhone: e.target.value, phone: e.target.value })}
-                    placeholder="0812xxxxxxxx"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Nomor pusat bantuan ketika pelanggan konfirmasi transfer.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="baseUrl" className="text-xs font-medium">
-                    Base URL / Domain Billing *
-                  </Label>
-                  <Input
-                    id="baseUrl"
-                    value={companyForm.baseUrl}
-                    onChange={(e) => setCompanyForm({ ...companyForm, baseUrl: e.target.value })}
-                    placeholder="https://billing.isp.net"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Digunakan untuk link tagihan pada notifikasi WhatsApp.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-xs font-medium">
-                    Email Kontak Resmi
-                  </Label>
-                  <Input
-                    id="email"
-                    value={companyForm.email}
-                    onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
-                    placeholder="admin@isp.net"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Email operasional untuk pengiriman notifikasi sistem.</p>
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="address" className="text-xs font-medium">
-                    Alamat Lengkap Kantor
-                  </Label>
-                  <Input
-                    id="address"
-                    value={companyForm.address}
-                    onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
-                    placeholder="Jl. Telekomunikasi No. 123, Kota..."
-                    className="h-9 text-sm"
-                  />
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Pastikan data di atas sudah benar sebelum melangkah.</span>
-              <Button onClick={handleSaveCompany} disabled={isSavingCompany} className="h-9 text-xs px-5 gap-2 bg-sky-600 hover:bg-sky-700 text-white">
-                {isSavingCompany ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <ArrowRight className="w-3.5 h-3.5" />
-                )}
-                Simpan & Lanjut ke MikroTik
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* STEP 2: KONEKSI MIKROTIK */}
-        {currentStep === 2 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <Server className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 2: Hubungkan MikroTik ke Billing</CardTitle>
-                    <CardDescription className="text-xs">
-                      Pilih metode koneksi VPN atau Direct IP, salin skrip firewall RouterOS, lalu uji live connection.
-                    </CardDescription>
-                  </div>
-                </div>
-                {routerSaved && (
-                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-xs gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Terhubung & Tersimpan
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              {/* Method Selection Tabs */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Metode Jalur Terowongan / Koneksi:
-                </Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div
-                    onClick={() => setConnectionMethod('wireguard')}
-                    className={`cursor-pointer border rounded-xl p-3.5 transition-all flex flex-col justify-between ${
-                      connectionMethod === 'wireguard'
-                        ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-500/20 shadow-xs'
-                        : 'border-border hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                          <Radio className="w-3.5 h-3.5 text-sky-600" /> WireGuard VPN
-                        </span>
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[9px] px-1 py-0">
-                          Rekomendasi
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Terowongan aman modern, latency rendah, stabil untuk RouterOS v7+.
-                      </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="step1Phone">No. WhatsApp CS / Billing *</Label>
+                      <Input
+                        id="step1Phone"
+                        value={companyForm.adminPhone}
+                        onChange={(e) => setCompanyForm({ ...companyForm, adminPhone: e.target.value, phone: e.target.value })}
+                        placeholder="0812xxxxxxxx"
+                      />
                     </div>
                   </div>
 
-                  <div
-                    onClick={() => setConnectionMethod('l2tp')}
-                    className={`cursor-pointer border rounded-xl p-3.5 transition-all flex flex-col justify-between ${
-                      connectionMethod === 'l2tp'
-                        ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-500/20 shadow-xs'
-                        : 'border-border hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                          <Shield className="w-3.5 h-3.5 text-sky-600" /> L2TP VPN
-                        </span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0">
-                          Standar
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Kompatibel untuk semua versi MikroTik (RouterOS v6 & v7).
-                      </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="step1Email">Email Resmi Perusahaan</Label>
+                      <Input
+                        id="step1Email"
+                        type="email"
+                        value={companyForm.email}
+                        onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                        placeholder="support@isp.net"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="step1Url">Base URL / Domain Billing</Label>
+                      <Input
+                        id="step1Url"
+                        value={companyForm.baseUrl}
+                        onChange={(e) => setCompanyForm({ ...companyForm, baseUrl: e.target.value })}
+                        placeholder="https://billing.isp.net"
+                      />
                     </div>
                   </div>
 
-                  <div
-                    onClick={() => setConnectionMethod('direct')}
-                    className={`cursor-pointer border rounded-xl p-3.5 transition-all flex flex-col justify-between ${
-                      connectionMethod === 'direct'
-                        ? 'border-sky-500 bg-sky-50/60 ring-2 ring-sky-500/20 shadow-xs'
-                        : 'border-border hover:bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                          <Globe className="w-3.5 h-3.5 text-sky-600" /> Direct IP / DDNS
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Jika VPS dan MikroTik berada di LAN yang sama atau menggunakan IP Publik.
-                      </p>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="step1Address">Alamat Lengkap Kantor</Label>
+                    <Input
+                      id="step1Address"
+                      value={companyForm.address}
+                      onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
+                      placeholder="Jl. Protokol Telekomunikasi No. 88, Jakarta"
+                    />
                   </div>
-                </div>
-              </div>
+                </CardContent>
 
-              {/* Form Router Parameters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-slate-50/70 p-4 rounded-xl border border-border">
-                <div className="space-y-1">
-                  <Label htmlFor="routerName" className="text-xs font-medium">
-                    Nama Router
-                  </Label>
-                  <Input
-                    id="routerName"
-                    value={routerForm.name}
-                    onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                    placeholder="MikroTik-Utama"
-                    className="h-8 text-xs bg-white"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="ipAddress" className="text-xs font-medium">
-                    Host IP / IP Terowongan *
-                  </Label>
-                  <Input
-                    id="ipAddress"
-                    value={routerForm.ipAddress}
-                    onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
-                    placeholder="10.254.1.2"
-                    className="h-8 text-xs bg-white font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="apiPort" className="text-xs font-medium">
-                    Port API MikroTik *
-                  </Label>
-                  <Input
-                    id="apiPort"
-                    value={routerForm.port}
-                    onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
-                    placeholder="8728"
-                    className="h-8 text-xs bg-white font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="winboxPort" className="text-xs font-medium">
-                    Port Winbox
-                  </Label>
-                  <Input
-                    id="winboxPort"
-                    value={routerForm.winboxPort}
-                    onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
-                    placeholder="8291"
-                    className="h-8 text-xs bg-white font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="apiUser" className="text-xs font-medium">
-                    API Username
-                  </Label>
-                  <Input
-                    id="apiUser"
-                    value={routerForm.username}
-                    onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
-                    placeholder="euginebill_api"
-                    className="h-8 text-xs bg-white font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="apiPass" className="text-xs font-medium">
-                    API Password
-                  </Label>
-                  <Input
-                    id="apiPass"
-                    type="text"
-                    value={routerForm.password}
-                    onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
-                    placeholder="Password API"
-                    className="h-8 text-xs bg-white font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Generated RouterOS Script Box */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Terminal className="w-4 h-4 text-slate-700" />
-                    <Label className="text-xs font-semibold">Skrip Konfigurasi MikroTik (Siap Dijalankan di Terminal):</Label>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyScript}
-                    className="h-7 text-xs px-2.5 gap-1.5 border-border bg-white hover:bg-slate-50"
-                  >
-                    {copiedScript ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-700 font-medium">Tersalin ke Clipboard!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span>Salin Skrip</span>
-                      </>
-                    )}
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(0)} disabled={!isInitialized}>
+                    Kembali
                   </Button>
-                </div>
+                  <Button onClick={handleSaveCompany} disabled={isSavingCompany}>
+                    {isSavingCompany ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Simpan & Lanjut Ke MikroTik</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
 
-                <div className="relative">
-                  <pre className="p-3.5 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto max-h-56 leading-relaxed border border-slate-800">
-                    {generatedScript}
-                  </pre>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Buka <strong>Winbox &gt; Terminal</strong>, lalu klik kanan &gt; Paste skrip di atas. Skrip otomatis
-                  membuat user API dan mengizinkan firewall input port {routerForm.port || '8728'} di baris paling atas.
-                </p>
-              </div>
+            {/* STEP 2: KONEKSI MIKROTIK ROUTER */}
+            {currentStep === 2 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Server className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Koneksi Router MikroTik</CardTitle>
+                        <CardDescription>
+                          Hubungkan VPS Billing EugineBill dengan router MikroTik via API / VPN Tunnel WireGuard.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {routerSaved && (
+                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" /> Terhubung
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
 
-              {/* Test Connection Live Box */}
-              <div className="p-4 rounded-xl border border-border bg-slate-50/80 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5 text-sky-600" /> Uji Konektivitas Billing ke MikroTik
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      Pastikan MikroTik dapat dijangkau oleh VPS EugineBill sebelum lanjut ke langkah berikutnya.
+                <CardContent className="space-y-6">
+                  {/* Connection Method Toggle */}
+                  <div className="space-y-2">
+                    <Label>Pilih Metode Koneksi VPN / API</Label>
+                    <div className="grid grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setConnectionMethod('wireguard')}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          connectionMethod === 'wireguard'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        WireGuard VPN (Rekomendasi)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConnectionMethod('l2tp')}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          connectionMethod === 'l2tp'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        L2TP Client VPN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConnectionMethod('direct')}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          connectionMethod === 'direct'
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Direct IP API
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerName">Nama Router *</Label>
+                      <Input
+                        id="routerName"
+                        value={routerForm.name}
+                        onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
+                        placeholder="MikroTik-Utama"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerIp">IP Address / VPN Client IP *</Label>
+                      <Input
+                        id="routerIp"
+                        value={routerForm.ipAddress}
+                        onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
+                        placeholder="10.254.1.2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="routerUsername">Username API MikroTik *</Label>
+                      <Input
+                        id="routerUsername"
+                        value={routerForm.username}
+                        onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
+                        placeholder="euginebill_api"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="routerPassword">Password API MikroTik *</Label>
+                      <Input
+                        id="routerPassword"
+                        type="password"
+                        value={routerForm.password}
+                        onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
+                        placeholder="Password API"
+                      />
+                    </div>
+                  </div>
+
+                  {/* RouterOS Script Box */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-bold text-foreground">Skrip Konfigurasi Otomatis RouterOS</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          copyToClipboard(generatedScript);
+                          setCopiedScript(true);
+                          setTimeout(() => setCopiedScript(false), 2000);
+                        }}
+                        className="text-xs gap-1.5 h-8"
+                      >
+                        {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedScript ? 'Tersalin!' : 'Salin Skrip'}</span>
+                      </Button>
+                    </div>
+                    <textarea
+                      readOnly
+                      rows={6}
+                      value={generatedScript}
+                      className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Test Result Box */}
+                  {testResult && (
+                    <div
+                      className={`p-4 rounded-lg border text-xs leading-relaxed ${
+                        testResult.success
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                          : 'border-destructive/30 bg-destructive/10 text-destructive'
+                      }`}
+                    >
+                      <div className="font-bold mb-1">
+                        {testResult.success ? 'Koneksi Berhasil!' : 'Koneksi Gagal'}
+                      </div>
+                      <p>{testResult.message}</p>
+                    </div>
+                  )}
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                    Kembali
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={handleTestRouter} disabled={isTestingRouter}>
+                      {isTestingRouter ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4 text-primary" />}
+                      <span>Uji Koneksi API</span>
+                    </Button>
+                    <Button onClick={handleSaveRouter} disabled={isSavingRouter}>
+                      <span>Lanjut ke Paket PPPoE</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 3: PAKET PPPOE */}
+            {currentStep === 3 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Package className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Konfigurasi Paket PPPoE</CardTitle>
+                      <CardDescription>
+                        Atur tarif bulanan, batas kecepatan (Bandwidth Rate Limit), dan IP Pool untuk paket internet pelanggan.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="profName">Nama Paket Internet *</Label>
+                      <Input
+                        id="profName"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value, groupName: e.target.value })}
+                        placeholder="Home 20 Mbps"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profPrice">Tarif Bulanan (Rp) *</Label>
+                      <Input
+                        id="profPrice"
+                        type="number"
+                        value={profileForm.price}
+                        onChange={(e) => setProfileForm({ ...profileForm, price: e.target.value })}
+                        placeholder="200000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="profDownload">Kecepatan Download (Mbps) *</Label>
+                      <Input
+                        id="profDownload"
+                        type="number"
+                        value={profileForm.downloadSpeed}
+                        onChange={(e) => setProfileForm({ ...profileForm, downloadSpeed: e.target.value })}
+                        placeholder="20"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="profUpload">Kecepatan Upload (Mbps) *</Label>
+                      <Input
+                        id="profUpload"
+                        type="number"
+                        value={profileForm.uploadSpeed}
+                        onChange={(e) => setProfileForm({ ...profileForm, uploadSpeed: e.target.value })}
+                        placeholder="20"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+                    {isSavingProfile ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Simpan Paket & Lanjut</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 4: PELANGGAN TRIAL */}
+            {currentStep === 4 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Akun Pelanggan Trial</CardTitle>
+                      <CardDescription>
+                        Buat satu akun pelanggan percobaan untuk memverifikasi autentikasi dial PPPoE dari router.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="custName">Nama Pelanggan *</Label>
+                      <Input
+                        id="custName"
+                        value={customerForm.name}
+                        onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
+                        placeholder="Pelanggan Percobaan"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="custPhone">No. WhatsApp Pelanggan *</Label>
+                      <Input
+                        id="custPhone"
+                        value={customerForm.phone}
+                        onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                        placeholder="0812xxxxxxxx"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="custUser">Username PPPoE *</Label>
+                      <Input
+                        id="custUser"
+                        value={customerForm.username}
+                        onChange={(e) => setCustomerForm({ ...customerForm, username: e.target.value })}
+                        placeholder="trial01"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="custPass">Password / Secret PPPoE *</Label>
+                      <Input
+                        id="custPass"
+                        type="password"
+                        value={customerForm.password}
+                        onChange={(e) => setCustomerForm({ ...customerForm, password: e.target.value })}
+                        placeholder="secret@user123"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(3)}>
+                    Kembali
+                  </Button>
+                  <Button onClick={handleSaveCustomer} disabled={isSavingCustomer}>
+                    {isSavingCustomer ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                    <span>Buat Akun & Lanjut ke WhatsApp</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {/* STEP 5: BOT WHATSAPP */}
+            {currentStep === 5 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <CardTitle>Notifikasi WhatsApp Bot</CardTitle>
+                      <CardDescription>
+                        Kirim otomatis tagihan bulanan, kwitansi pembayaran, dan notifikasi isolir via WhatsApp Baileys.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-bold text-foreground">Status Bot WhatsApp Server</div>
+                      <Badge variant={waConnected ? 'default' : 'outline'} className="gap-1">
+                        <span className={`w-2 h-2 rounded-full ${waConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        {waConnected ? 'Terhubung (Ready)' : 'Belum Terhubung'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Layanan WhatsApp Baileys berjalan di PM2 (`EugineBill-wa`). Anda dapat menghubungkan QR Code nomor WhatsApp CS di menu Pengaturan WhatsApp Admin.
                     </p>
                   </div>
-                  <Button
-                    onClick={handleTestRouter}
-                    disabled={isTestingRouter}
-                    size="sm"
-                    className="h-8 text-xs gap-1.5 bg-sky-600 hover:bg-sky-700 text-white"
-                  >
-                    {isTestingRouter ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Menguji Koneksi...
-                      </>
-                    ) : (
-                      <>
-                        <Server className="w-3.5 h-3.5" /> Test Koneksi MikroTik
-                      </>
-                    )}
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(4)}>
+                    Kembali
                   </Button>
-                </div>
-
-                {testResult && (
-                  <div
-                    className={`p-3 rounded-lg border text-xs flex items-start gap-2.5 ${
-                      testResult.success
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                        : 'border-rose-200 bg-rose-50 text-rose-900'
-                    }`}
-                  >
-                    {testResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    )}
-                    <div className="flex-1 space-y-1">
-                      <div className="font-semibold">
-                        {testResult.success ? 'Koneksi Berhasil! MikroTik Siap Digunakan.' : 'Koneksi Gagal'}
-                      </div>
-                      <p className="text-[11px] leading-relaxed opacity-90">{testResult.message}</p>
-                      {!testResult.success && testResult.diagnosis === 'firewall_block' && (
-                        <div className="p-2 mt-1 rounded bg-white/80 border border-rose-200 text-[11px] text-rose-800 space-y-1">
-                          <div>
-                            <strong>Diagnosa Firewall:</strong> Port API terblokir. Pastikan rule firewall filter accept
-                            di baris teratas (place-before=0) sudah dieksekusi di MikroTik.
-                          </div>
-                          {testResult.fixScript && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                await copyToClipboard(testResult.fixScript!);
-                                alert('Perintah fix firewall disalin! Silakan tempel di terminal MikroTik.');
-                              }}
-                              className="h-6 text-[10px] px-2 gap-1 border-rose-300 text-rose-700 bg-white hover:bg-rose-50"
-                            >
-                              <Copy className="w-3 h-3" /> Salin Skrip Perbaikan Firewall
-                            </Button>
-                          )}
-                        </div>
-                      )}
-
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={handleBack} className="h-9 text-xs gap-1.5">
-                <ArrowLeft className="w-3.5 h-3.5" /> Kembali
-              </Button>
-              <div className="flex items-center gap-2">
-                {!routerSaved && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveRouter}
-                    disabled={isSavingRouter}
-                    className="h-9 text-xs"
-                  >
-                    Simpan Tanpa Test
-                  </Button>
-                )}
-                <Button onClick={handleNext} className="h-9 text-xs gap-1.5 px-5 bg-sky-600 hover:bg-sky-700 text-white">
-                  Lanjut ke Paket PPPoE <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* STEP 3: PAKET LAYANAN PPPOE */}
-        {currentStep === 3 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <Package className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 3: Buat Paket Layanan PPPoE Perdana</CardTitle>
-                    <CardDescription className="text-xs">
-                      Tentukan nama paket, alokasi bandwidth download/upload, dan tarif berlangganan bulanan.
-                    </CardDescription>
-                  </div>
-                </div>
-                {createdProfile && (
-                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-xs gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Paket Dibuat
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              {/* Status Router MikroTik */}
-              {savedRouterId && (
-                <div className="p-3 bg-sky-50/70 border border-sky-200/80 rounded-lg flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs text-sky-950 font-medium">
-                    <Server className="w-4 h-4 text-sky-600 shrink-0" />
-                    <span>Router: <strong className="font-semibold">{routerForm.name}</strong> ({routerForm.ipAddress})</span>
-                  </div>
-                  {loadingResources ? (
-                    <span className="text-[11px] text-sky-700 flex items-center gap-1.5">
-                      <RefreshCw className="w-3 h-3 animate-spin" /> Membaca profil MikroTik...
-                    </span>
-                  ) : (
-                    <Badge variant="outline" className="border-sky-300 bg-white text-sky-700 text-[10px] gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-sky-600" />
-                      {routerResources.profiles.length} Profil &bull; {routerResources.pools.length} IP Pool
-                    </Badge>
-                  )}
-                </div>
-              )}
-
-              {/* Mode Pemilihan Profil MikroTik */}
-              {routerResources.profiles.length > 0 && (
-                <div className="flex items-center gap-4 py-1">
-                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-foreground">
-                    <input
-                      type="radio"
-                      name="setupCreationMode"
-                      checked={profileForm.creationMode === 'existing'}
-                      onChange={() => setProfileForm(prev => ({ ...prev, creationMode: 'existing' }))}
-                      className="text-sky-600 focus:ring-sky-500"
-                    />
-                    <span>Pilih dari Profil MikroTik Eksisting</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-foreground">
-                    <input
-                      type="radio"
-                      name="setupCreationMode"
-                      checked={profileForm.creationMode === 'new'}
-                      onChange={() => setProfileForm(prev => ({ ...prev, creationMode: 'new' }))}
-                      className="text-sky-600 focus:ring-sky-500"
-                    />
-                    <span>Buat Paket Baru</span>
-                  </label>
-                </div>
-              )}
-
-              {profileForm.creationMode === 'existing' && routerResources.profiles.length > 0 && (
-                <div className="p-3 rounded-lg border border-sky-200 bg-sky-50/50 space-y-1.5">
-                  <Label htmlFor="setupProfileSelect" className="text-xs font-semibold text-sky-950">
-                    Pilih PPP Profile dari MikroTik
-                  </Label>
-                  <select
-                    id="setupProfileSelect"
-                    value={profileForm.selectedMikrotikProfile}
-                    onChange={(e) => handleSelectMikrotikProfileSetup(e.target.value)}
-                    className="w-full h-9 px-3 py-1.5 text-xs rounded-md border border-border bg-white text-foreground focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
-                  >
-                    <option value="">-- Pilih Profil MikroTik --</option>
-                    {routerResources.profiles.map(p => (
-                      <option key={p.name} value={p.name}>
-                        {p.name} {p.rateLimit ? `(${p.rateLimit})` : ''} {p.remoteAddress ? `[Pool: ${p.remoteAddress}]` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-sky-700">
-                    Memilih profil MikroTik akan otomatis mengisi nama paket, nama profil, alokasi bandwidth, dan IP pool.
-                  </p>
-                </div>
-              )}
-
-              {/* Callout Info Arsitektur MikroTik */}
-              <div className="flex items-start gap-2.5 p-3 rounded-lg border border-sky-200 bg-sky-50 text-sky-900 text-xs">
-                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
-                <p className="leading-relaxed">
-                  Pengaturan dasar (nama, kecepatan, dan IP pool) disinkronkan ke MikroTik. Pengaturan lanjutan seperti antrean CAKE / FQ-CoDel, Parent Queue, dan mangle dapat dikonfigurasi langsung di Winbox MikroTik tanpa terhapus saat sinkronisasi.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="pkgName" className="text-xs font-medium">
-                    Nama Paket Layanan *
-                  </Label>
-                  <Input
-                    id="pkgName"
-                    value={profileForm.name}
-                    onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                    placeholder="Contoh: Home 20 Mbps"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Label paket yang tertera pada katalog dan invoice.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="groupName" className="text-xs font-medium">
-                    PPP Profile MikroTik *
-                  </Label>
-                  <Input
-                    id="groupName"
-                    value={profileForm.groupName}
-                    onChange={(e) => setProfileForm({ ...profileForm, groupName: e.target.value })}
-                    placeholder="default"
-                    className="h-9 text-sm font-mono"
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Nama PPP profile di MikroTik (gunakan <code>default</code> jika belum membuat khusus).
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="dlSpeed" className="text-xs font-medium">
-                    Download Speed (Mbps) *
-                  </Label>
-                  <Input
-                    id="dlSpeed"
-                    type="number"
-                    value={profileForm.downloadSpeed}
-                    onChange={(e) => setProfileForm({ ...profileForm, downloadSpeed: e.target.value })}
-                    placeholder="20"
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="ulSpeed" className="text-xs font-medium">
-                    Upload Speed (Mbps) *
-                  </Label>
-                  <Input
-                    id="ulSpeed"
-                    type="number"
-                    value={profileForm.uploadSpeed}
-                    onChange={(e) => setProfileForm({ ...profileForm, uploadSpeed: e.target.value })}
-                    placeholder="20"
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="pkgPool" className="text-xs font-medium">
-                    Remote Address / IP Pool
-                  </Label>
-                  <Input
-                    id="pkgPool"
-                    list="setup-pool-datalist"
-                    value={profileForm.ipPoolName}
-                    onChange={(e) => setProfileForm({ ...profileForm, ipPoolName: e.target.value })}
-                    placeholder={routerResources.pools.length > 0 ? "Pilih atau ketik pool..." : "Contoh: pppoe-pool"}
-                    className="h-9 text-sm font-mono"
-                  />
-                  <datalist id="setup-pool-datalist">
-                    {routerResources.pools.map(p => (
-                      <option key={p.name} value={p.name}>
-                        {p.name} ({p.ranges})
-                      </option>
-                    ))}
-                  </datalist>
-                  <p className="text-[11px] text-muted-foreground">Pool alamat IP MikroTik untuk alokasi IP pelanggan.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="pkgLocal" className="text-xs font-medium">
-                    Local Address (IP Gateway)
-                  </Label>
-                  <Input
-                    id="pkgLocal"
-                    list="setup-address-datalist"
-                    value={profileForm.localAddress}
-                    onChange={(e) => setProfileForm({ ...profileForm, localAddress: e.target.value })}
-                    placeholder="Contoh: 10.10.10.1 (opsional)"
-                    className="h-9 text-sm font-mono"
-                  />
-                  <datalist id="setup-address-datalist">
-                    {routerResources.addresses.map(a => (
-                      <option key={a.ip} value={a.ip}>
-                        {a.ip} ({a.interface})
-                      </option>
-                    ))}
-                  </datalist>
-                  <p className="text-[11px] text-muted-foreground">IP interface router yang menjadi gateway PPP.</p>
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="price" className="text-xs font-medium">
-                    Tarif Bulanan (Rp) *
-                  </Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={profileForm.price}
-                    onChange={(e) => setProfileForm({ ...profileForm, price: e.target.value })}
-                    placeholder="200000"
-                    className="h-9 text-sm font-semibold"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Nominal tagihan bulanan pelanggan untuk paket ini.</p>
-                </div>
-              </div>
-
-              {createdProfile && (
-                <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <span className="font-semibold">{createdProfile.name}</span> berhasil dibuat (
-                      {createdProfile.downloadSpeed}M/{createdProfile.uploadSpeed}M - Rp{' '}
-                      {createdProfile.price.toLocaleString('id-ID')}).
-                    </div>
+                    <Button variant="secondary" onClick={handleCheckWa} disabled={waLoading}>
+                      {waLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4 text-primary" />}
+                      <span>Cek Status WA</span>
+                    </Button>
+                    <Button onClick={() => setCurrentStep(6)}>
+                      <span>Lanjut ke Payment Gateway</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-700 text-[10px]">
-                    ID: {createdProfile.id.slice(0, 8)}...
-                  </Badge>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={handleBack} className="h-9 text-xs gap-1.5">
-                <ArrowLeft className="w-3.5 h-3.5" /> Kembali
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleSaveProfile}
-                  disabled={isSavingProfile}
-                  className="h-9 text-xs gap-2 bg-sky-600 hover:bg-sky-700 text-white"
-                >
-                  {isSavingProfile ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                  Simpan Paket & Lanjut
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        )}
+                </CardFooter>
+              </Card>
+            )}
 
-        {/* STEP 4: PELANGGAN TRIAL */}
-        {currentStep === 4 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 4: Daftarkan Pelanggan Percobaan (Trial)</CardTitle>
-                    <CardDescription className="text-xs">
-                      Sistem akan membuat PPPoE Secret di MikroTik dan menerbitkan tagihan invoice perdana secara otomatis.
-                    </CardDescription>
-                  </div>
-                </div>
-                {createdCustomer && (
-                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-xs gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Terdaftar
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="custName" className="text-xs font-medium">
-                    Nama Pelanggan *
-                  </Label>
-                  <Input
-                    id="custName"
-                    value={customerForm.name}
-                    onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
-                    placeholder="Pelanggan Percobaan"
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="custPhone" className="text-xs font-medium">
-                    Nomor WhatsApp Pelanggan *
-                  </Label>
-                  <Input
-                    id="custPhone"
-                    value={customerForm.phone}
-                    onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-                    placeholder="0812xxxxxxxx"
-                    className="h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Nomor tujuan notifikasi rincian tagihan via WhatsApp.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="pppoeUser" className="text-xs font-medium">
-                    PPPoE Username *
-                  </Label>
-                  <Input
-                    id="pppoeUser"
-                    value={customerForm.username}
-                    onChange={(e) => setCustomerForm({ ...customerForm, username: e.target.value })}
-                    placeholder="trial01"
-                    className="h-9 text-sm font-mono"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Username secret yang disinkronisasikan ke MikroTik.</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="pppoePass" className="text-xs font-medium">
-                    PPPoE Password *
-                  </Label>
-                  <Input
-                    id="pppoePass"
-                    type="text"
-                    value={customerForm.password}
-                    onChange={(e) => setCustomerForm({ ...customerForm, password: e.target.value })}
-                    placeholder="123456"
-                    className="h-9 text-sm font-mono"
-                  />
-                  <p className="text-[11px] text-muted-foreground">Password koneksi dial PPPoE ONT/modem pelanggan.</p>
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-medium">Paket Layanan Terpilih:</Label>
-                  <div className="p-3 rounded-lg border border-border bg-slate-50 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <Package className="w-4 h-4 text-sky-600" />
-                      <span className="font-semibold">{createdProfile?.name || profileForm.name}</span>
-                      <span className="text-muted-foreground">
-                        ({profileForm.downloadSpeed}M/{profileForm.uploadSpeed}M)
-                      </span>
-                    </div>
-                    <span className="font-semibold text-foreground">
-                      Rp {parseInt(profileForm.price || '0').toLocaleString('id-ID')}/bln
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {createdCustomer && (
-                <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs space-y-1.5">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    Akun Pelanggan Percobaan Berhasil Didaftarkan!
-                  </div>
-                  <div className="text-[11px] text-emerald-800 grid grid-cols-2 gap-2 mt-1">
-                    <div>
-                      Username: <strong>{createdCustomer.username}</strong>
+            {/* STEP 6: PAYMENT GATEWAY */}
+            {currentStep === 6 && (
+              <Card className="border-border shadow-xs bg-card">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <CreditCard className="w-5 h-5" />
                     </div>
                     <div>
-                      Invoice Perdana: <strong>{createdCustomer.invoiceNumber}</strong>
+                      <CardTitle>Selesai & Payment Gateway</CardTitle>
+                      <CardDescription>
+                        Integrasi pembayaran otomatis via Midtrans, Tripay, Xendit, atau Transfer Bank Manual.
+                      </CardDescription>
                     </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={handleBack} className="h-9 text-xs gap-1.5">
-                <ArrowLeft className="w-3.5 h-3.5" /> Kembali
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleSaveCustomer}
-                  disabled={isSavingCustomer}
-                  className="h-9 text-xs gap-2 bg-sky-600 hover:bg-sky-700 text-white"
-                >
-                  {isSavingCustomer ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
-                  Daftarkan Pelanggan & Lanjut
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        )}
+                </CardHeader>
 
-        {/* STEP 5: INTEGRASI WHATSAPP BOT */}
-        {currentStep === 5 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <Smartphone className="w-4 h-4" />
+                <CardContent className="space-y-6">
+                  <div className="p-6 rounded-xl border border-emerald-200 bg-emerald-50/50 text-emerald-950 space-y-2 text-center">
+                    <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto" />
+                    <h3 className="text-lg font-bold">Konfigurasi Awal Berhasil Diberlakukan!</h3>
+                    <p className="text-xs text-emerald-800 max-w-md mx-auto leading-relaxed">
+                      Sistem billing Anda kini siap digunakan untuk mengelola jaringan, mengisolir tunggakan, dan menerbitkan tagihan.
+                    </p>
                   </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 5: Integrasi WhatsApp Bot Notifikasi</CardTitle>
-                    <CardDescription className="text-xs">
-                      Aktifkan engine Baileys internal atau gateway WhatsApp favorit untuk broadcast tagihan otomatis.
-                    </CardDescription>
-                  </div>
-                </div>
-                {waConnected ? (
-                  <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 text-xs gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Bot Terhubung
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 text-xs gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Belum Scan QR
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="p-4 rounded-xl border border-border bg-slate-50/70 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-3 h-3 rounded-full ${
-                        waConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                      }`}
-                    />
-                    <span className="font-semibold text-xs">
-                      Status WhatsApp Engine:{' '}
-                      {waConnected ? 'Tersambung & Siap Mengirim' : 'Menunggu Pemasangan (Scan QR)'}
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRefreshWhatsApp}
-                    disabled={waLoading}
-                    className="h-7 text-xs px-2.5 gap-1.5 bg-white"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${waLoading ? 'animate-spin' : ''}`} /> Cek Status
+                </CardContent>
+
+                <CardFooter className="justify-between border-t border-border pt-4">
+                  <Button variant="outline" onClick={() => setCurrentStep(5)}>
+                    Kembali
                   </Button>
-                </div>
-
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  EugineBill dilengkapi Baileys multi-device engine internal yang gratis tanpa biaya langganan bulanan.
-                  Cukup buka modul WhatsApp, scan QR code dengan aplikasi WhatsApp Admin Anda, dan bot langsung aktif
-                  mengirim rincian invoice dan peringatan jatuh tempo.
-                </p>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Link href="/admin/settings/whatsapp" target="_blank">
-                    <Button size="sm" variant="default" className="h-8 text-xs gap-1.5 bg-sky-600 hover:bg-sky-700">
-                      <ExternalLink className="w-3.5 h-3.5" /> Buka Halaman Scan QR WhatsApp
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg border border-sky-200 bg-sky-50 text-sky-900 text-xs flex items-start gap-2">
-                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
-                <div className="text-[11px] leading-relaxed">
-                  <strong>Tips:</strong> Anda juga dapat menautkan penyedia pihak ketiga seperti Fonnte, Wablas, Kirimi.id,
-                  atau Gowa kapan saja melalui menu <em>Pengaturan &gt; WhatsApp</em>.
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={handleBack} className="h-9 text-xs gap-1.5">
-                <ArrowLeft className="w-3.5 h-3.5" /> Kembali
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button onClick={handleNext} className="h-9 text-xs gap-1.5 px-5 bg-sky-600 hover:bg-sky-700 text-white">
-                  Lanjut ke Payment Gateway <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* STEP 6: PAYMENT GATEWAY (OPSIONAL) */}
-        {currentStep === 6 && (
-          <Card className="border-border shadow-xs bg-white">
-            <CardHeader className="border-b border-border/50 pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-semibold">Langkah 6: Payment Gateway Otomatis (Opsional)</CardTitle>
-                    <CardDescription className="text-xs">
-                      Dukungan QRIS Real-Time Dinamis & Bank Virtual Account untuk konfirmasi pembayaran otomatis 24/7.
-                    </CardDescription>
-                  </div>
-                </div>
-                <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-700 text-xs">
-                  Opsional
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="p-4 rounded-xl border border-border bg-slate-50/70 space-y-3">
-                <h4 className="text-xs font-semibold text-foreground">Integrasi Payment Aggregator Indonesia</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  EugineBill mendukung berbagai saluran gerbang pembayaran resmi untuk otomatisasi lunas tagihan tanpa cek
-                  mutasi manual:
-                </p>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
-                    <div className="text-xs font-bold text-foreground">Midtrans</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Snap / Core API</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
-                    <div className="text-xs font-bold text-foreground">Tripay</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">QRIS &amp; VA Murah</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
-                    <div className="text-xs font-bold text-foreground">Duitku</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">VA &amp; Gerai Retail</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
-                    <div className="text-xs font-bold text-foreground">Xendit</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Enterprise Gateway</div>
-                  </div>
-                  <div className="p-2.5 rounded-lg border border-border bg-white text-center">
-                    <div className="text-xs font-bold text-foreground">QRIN</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">QRIS Lokal ISP</div>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <Link href="/admin/payment-gateway" target="_blank">
-                    <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 bg-white">
-                      <ExternalLink className="w-3.5 h-3.5" /> Buka Pengaturan Payment Gateway
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Optional Section: Distribusi Fiber Optik */}
-              <div className="p-4 rounded-xl border border-border bg-white space-y-2">
-                <div className="flex items-center gap-2">
-                  <Cable className="w-4 h-4 text-sky-600" />
-                  <h4 className="text-xs font-semibold text-foreground">
-                    Distribusi Fiber Optik (OLT / ODC / ODP) - Opsional
-                  </h4>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Untuk billing dan internet berjalan, langkah ini bersifat opsional. Anda dapat memetakan OLT, ODC, dan
-                  ODP kapan saja setelah go-live melalui menu Jaringan.
-                </p>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Link href="/admin/network/olts" target="_blank">
-                    <Button size="sm" variant="outline" className="h-7 text-xs border-border">
-                      Manajemen OLT
-                    </Button>
-                  </Link>
-                  <Link href="/admin/network/fiber-odcs" target="_blank">
-                    <Button size="sm" variant="outline" className="h-7 text-xs border-border">
-                      Data ODC
-                    </Button>
-                  </Link>
-                  <Link href="/admin/network/fiber-odps" target="_blank">
-                    <Button size="sm" variant="outline" className="h-7 text-xs border-border">
-                      Data ODP
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="border-t border-border/50 pt-4 flex items-center justify-between">
-              <Button variant="outline" size="sm" onClick={handleBack} className="h-9 text-xs gap-1.5">
-                <ArrowLeft className="w-3.5 h-3.5" /> Kembali
-              </Button>
-              <Button onClick={handleNext} className="h-9 text-xs gap-1.5 px-5 bg-sky-600 hover:bg-sky-700 text-white">
-                Selesaikan Setup & Lihat Ringkasan <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-
-        {/* STEP 7: SELESAI & RINGKASAN GO-LIVE */}
-        {currentStep === 7 && (
-          <Card className="border-border shadow-xs overflow-hidden bg-white">
-            <div className="bg-gradient-to-r from-sky-600 to-indigo-700 p-8 text-white text-center space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mx-auto border border-white/20 shadow-md">
-                <Sparkles className="w-8 h-8 text-amber-300" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Selamat! Konfigurasi Awal Telah Rampung</h2>
-              <p className="text-xs sm:text-sm text-sky-100 max-w-xl mx-auto leading-relaxed">
-                Billing EugineBill Anda kini siap beroperasi melayani pendaftaran pelanggan, pemantauan status PPPoE, dan
-                penagihan otomatis.
-              </p>
-            </div>
-
-            <CardContent className="pt-6 space-y-6">
-              {/* Summary Checklist Cards */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Rekapitulasi Modul Terkonfigurasi:
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">Identitas & Profil ISP</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {companyForm.name} ({companyForm.adminPhone})
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">Router MikroTik</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {routerForm.name} - IP: {routerForm.ipAddress} (Port {routerForm.port})
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">Paket Layanan PPPoE</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {profileForm.name} - Rp {parseInt(profileForm.price || '0').toLocaleString('id-ID')}/bulan
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">Pelanggan Percobaan</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        User: {customerForm.username} ({customerForm.name})
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">WhatsApp Bot Notifikasi</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {waConnected ? 'Mesin Baileys Aktif' : 'Tersedia di Menu Pengaturan'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-border bg-slate-50/70 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <div className="text-xs font-semibold text-foreground">Infrastruktur & Gateway</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        Siap dipetakan (OLT / ODC / ODP & Pembayaran Otomatis)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-
-            <CardFooter className="border-t border-border/50 p-6 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
-              <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)} className="h-9 text-xs">
-                Ulangi / Review Langkah
-              </Button>
-              <Button
-                onClick={handleFinishWizard}
-                className="h-10 text-xs px-6 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
-              >
-                Buka Dashboard Admin <ArrowRight className="w-4 h-4" />
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
-      </div>
+                  <Button
+                    variant="success"
+                    size="lg"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('euginebill_wizard_completed', 'true');
+                      }
+                      router.push('/admin');
+                    }}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Masuk Ke Dashboard Admin</span>
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
