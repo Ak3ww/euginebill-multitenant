@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       {
         available: true,
         slug,
-        message: `Subdomain ${slug}.euginebill.com tersedia!`,
+        message: `Subdomain ${slug}.euginemediagroup.site tersedia!`,
       },
       { status: 200 }
     );

@@ -169,7 +169,7 @@ export default function SaaSAdminDashboardPage() {
   }, []);
 
   const handleCopySubdomain = (slug: string) => {
-    const domain = `${slug}.euginebill.com`;
+    const domain = `${slug}.euginemediagroup.site`;
     navigator.clipboard.writeText(domain);
     setCopiedSlug(slug);
     toast({
@@ -215,7 +215,7 @@ export default function SaaSAdminDashboardPage() {
 
       toast({
         title: "Tenant Berhasil Didaftarkan",
-        description: `Tenant ${data.tenant.name} (${data.tenant.slug}.euginebill.com) siap digunakan.`,
+        description: `Tenant ${data.tenant.name} (${data.tenant.slug}.euginemediagroup.site) siap digunakan.`,
       });
 
       setIsCreateOpen(false);
@@ -712,7 +712,7 @@ export default function SaaSAdminDashboardPage() {
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-blue-400 bg-blue-950/40 px-2 py-0.5 rounded border border-blue-900/40 text-[11px]">
-                              {tenant.slug}.euginebill.com
+                              {tenant.slug}.euginemediagroup.site
                             </span>
                             <button
                               onClick={() => handleCopySubdomain(tenant.slug)}
@@ -792,7 +792,7 @@ export default function SaaSAdminDashboardPage() {
                               <DropdownMenuItem
                                 onClick={() =>
                                   window.open(
-                                    `http://${tenant.slug}.euginebill.com:3000/customer`,
+                                    `http://${tenant.slug}.euginemediagroup.site:3000/customer`,
                                     "_blank"
                                   )
                                 }
@@ -932,7 +932,7 @@ export default function SaaSAdminDashboardPage() {
                   />
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">
-                  URL: {newTenantSlug || "slug"}.euginebill.com
+                  URL: {newTenantSlug || "slug"}.euginemediagroup.site
                 </span>
               </div>
             </div>
@@ -1074,7 +1074,7 @@ export default function SaaSAdminDashboardPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Subdomain:</span>
-                <span className="font-mono text-blue-400">{selectedTenant?.slug}.euginebill.com</span>
+                <span className="font-mono text-blue-400">{selectedTenant?.slug}.euginemediagroup.site</span>
               </div>
             </div>
 
@@ -1147,7 +1147,7 @@ export default function SaaSAdminDashboardPage() {
           <div className="p-3.5 rounded-lg bg-red-950/30 border border-red-800/40 text-xs text-red-300 space-y-2">
             <p>
               Apakah Anda yakin ingin menghapus tenant <strong>{selectedTenant?.name}</strong> (
-              <span className="font-mono">{selectedTenant?.slug}.euginebill.com</span>)?
+              <span className="font-mono">{selectedTenant?.slug}.euginemediagroup.site</span>)?
             </p>
             <p className="text-[11px] text-red-400 font-medium">
               Database schema <span className="font-mono">{selectedTenant?.databaseName}</span> dan seluruh riwayat langganan akan dihapus dari cluster.

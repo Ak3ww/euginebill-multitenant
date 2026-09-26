@@ -201,6 +201,12 @@ export function extractSlugFromHost(hostHeader: string): string | null {
   const ignoredHosts = new Set([
     'localhost',
     '127.0.0.1',
+    'euginemediagroup.site',
+    'www.euginemediagroup.site',
+    'saas.euginemediagroup.site',
+    'app.euginemediagroup.site',
+    'billing.euginemediagroup.site',
+    'admin.euginemediagroup.site',
     'euginebill.com',
     'billing.euginebill.com',
     'app.euginebill.com',

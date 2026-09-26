@@ -269,7 +269,7 @@ export default function SaasLandingPage() {
         const data = await res.json();
         if (data.available) {
           setSubdomainStatus('available');
-          setSubdomainMessage(`${cleanSlug}.euginebill.com tersedia!`);
+          setSubdomainMessage(`${cleanSlug}.euginemediagroup.site tersedia!`);
         } else {
           setSubdomainStatus('unavailable');
           setSubdomainMessage(data.message || 'Subdomain tidak tersedia');
@@ -517,7 +517,7 @@ export default function SaasLandingPage() {
                 <div className="w-3 h-3 rounded-full bg-rose-500/80" />
                 <div className="w-3 h-3 rounded-full bg-amber-500/80" />
                 <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <span className="ml-2 text-xs font-mono text-slate-400">admin.euginebill.com/dashboard</span>
+                <span className="ml-2 text-xs font-mono text-slate-400">admin.euginemediagroup.site/dashboard</span>
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-300">
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">
@@ -1127,7 +1127,7 @@ export default function SaasLandingPage() {
                     />
                   </div>
                   <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-xs font-mono">
-                    .euginebill.com
+                    .euginemediagroup.site
                   </span>
                 </div>
                 {subdomainMessage && (
