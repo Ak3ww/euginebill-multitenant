@@ -563,6 +563,13 @@ export default function UnifiedSetupWizardPage() {
     checkSetup();
   }, []);
 
+  // Require Admin Login if system is already initialized
+  useEffect(() => {
+    if (!checkingInit && isInitialized && sessionStatus === 'unauthenticated') {
+      router.replace('/admin/login?callbackUrl=/setup');
+    }
+  }, [checkingInit, isInitialized, sessionStatus, router]);
+
   // Fetch initial wizard data
   useEffect(() => {
     if (!isInitialized || sessionStatus !== 'authenticated') return;
@@ -1983,11 +1990,21 @@ export default function UnifiedSetupWizardPage() {
   };
 
   // Global Loading State
-  if (checkingInit) {
+  if (checkingInit || (isInitialized && sessionStatus === 'loading')) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
         <p className="text-sm font-medium text-muted-foreground">Memeriksa status konfigurasi EugineBill...</p>
+      </div>
+    );
+  }
+
+  // Redirecting to Login for Unauthenticated Users
+  if (isInitialized && sessionStatus === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-sm font-medium text-muted-foreground">Mengarahkan ke halaman login admin...</p>
       </div>
     );
   }
