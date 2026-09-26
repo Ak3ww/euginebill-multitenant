@@ -4,6 +4,35 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.86] — 2026-09-26
+
+### Setup Wizard 100% Admin Parity: Complete Step 2 VPN Client Modal Flow & Step 3 Router MikroTik Management (`src/app/setup/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **100% Paritas Fitur Admin**: Pengguna meminta alur Step 2 (VPN Client) dan Step 3 (Router MikroTik) di Setup Wizard (`src/app/setup/page.tsx`) disamakan 100% tanpa deviasi dari modul Admin (`/admin/network/vpn-client` dan `/admin/network/routers`).
+  2. **Step 2 VPN Client Flow**:
+     - Form Tambah VPN Client wajib mendukung pemilihan Server VPN (VPS Native WireGuard / L2TP / CHR External), tab protokol VPN (WireGuard, L2TP/IPSec, PPTP, SSTP), nama client, deskripsi, AllowedIPs di balik NAS, custom IP VPN, dan target port MikroTik (Winbox: 8291, API: 8728, WWW: 80).
+     - Alur otomatis: Setelah pembuatan berhasil, modal kredensial dan skrip langsung terbuka menampilkan alokasi port publik VPS (`10011`, `10012`, `10014`, dll.) dan skrip RouterOS (pilihan Mode Lengkap vs Singkat UltraVPN).
+     - Daftar VPN Client card dilengkapi kemampuan inline edit IP, toggle RADIUS server, dan tombol lihat kredensial / hapus.
+  3. **Step 3 Router MikroTik Connection**:
+     - Form Tambah/Edit Router menyediakan opsi "Hubungkan via VPN Client". Ketika VPN Client dipilih (misal: `MIKROTIK CIBINONG SITE (10.200.0.2)`), IP, port API target (misal `8520`), port Winbox target (misal `8228`), kredensial `username` & `password`, dan RADIUS secret otomatis terisi.
+     - Pintasan "Salin script port X untuk MikroTik" dan fitur Test Koneksi (API ping & status check) tersedia langsung.
+     - Kartu Router MikroTik yang tersimpan dilengkapi tombol modal RADIUS Script (ROS 6 & 7) dan modal Setup Hotspot Gateway & VLAN (dengan opsi Terapkan Otomatis via API).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Step 2 VPN Modals & State Parity (`src/app/setup/page.tsx`)**:
+     - Mengimplementasikan `showAddVpnModal` dan `showCredentialsModal` lengkap dengan pemetaan port publik dan routeros script generator.
+     - Menambahkan handler `handleToggleRadiusServer`, `handleEditIpSave`, `viewCredentials`, dan `handleDeleteVpnClient`.
+  2. **Step 3 Router Management & Interactive Modals (`src/app/setup/page.tsx`)**:
+     - Mengimplementasikan sinkronisasi otomatis VPN Client ke form router melalui `handleVpnClientChange`.
+     - Mengintegrasikan modal `showRouterModal`, `showRadiusScriptModal`, dan `showHotspotSetupModal` dengan auto-apply Hotspot direct via MikroTik API (`handleApplyHotspotDirect`).
+     - Membersihkan kode orfan dan menyelesaikan seluruh tipe TypeScript hingga `npx tsc --noEmit` lulus bersih 100%.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.85] — 2026-09-25
 
 ### Setup Wizard 100% Admin Parity: Dedicated Step 2 Client VPN & Step 3 Router MikroTik, Real VPS Host IP Injection in Scripts, Single-Token QRIN Gateway (`src/app/setup/page.tsx`)

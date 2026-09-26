@@ -30,6 +30,7 @@ import {
   ExternalLink,
   Layers,
   Lock,
+  Key,
   KeyRound,
   Info,
   Sliders,
@@ -53,6 +54,7 @@ import {
   Edit,
   QrCode,
   X,
+  Wifi,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,6 +62,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
+import { showSuccess, showError, showConfirm } from '@/lib/sweetalert';
 
 interface CompanyData {
   name: string;
@@ -76,6 +79,114 @@ interface TestConnectionResult {
   diagnosis?: string;
   usedPort?: number;
   fixScript?: string;
+  identity?: string;
+  usedTls?: boolean;
+}
+
+interface VpnClient {
+  id: string;
+  name: string;
+  vpnServerId: string;
+  vpnIp: string;
+  username: string;
+  password: string;
+  vpnType: string;
+  description?: string;
+  winboxPort?: number;
+  publicPorts?: {
+    blockStart: number;
+    services: Record<string, { public: number; target: number }>;
+  };
+  apiUsername?: string;
+  apiPassword?: string;
+  clientPublicKey?: string | null;
+  clientPrivateKey?: string | null;
+  isActive: boolean;
+  isRadiusServer: boolean;
+  createdAt: string;
+  vpnServer?: VpnServer;
+  nasSecret?: string | null;
+  resolvedUsername?: string | null;
+  resolvedPassword?: string | null;
+}
+
+interface VpnServer {
+  id: string;
+  host: string;
+  name: string;
+  subnet: string;
+  l2tpEnabled?: boolean;
+  sstpEnabled?: boolean;
+  pptpEnabled?: boolean;
+  wgPublicKey?: string | null;
+  wgPort?: number | null;
+  wgEnabled?: boolean;
+}
+
+interface Credentials {
+  server: string;
+  username: string;
+  password: string;
+  vpnIp: string;
+  winboxPort?: number;
+  winboxRemote?: string;
+  apiUsername?: string;
+  apiPassword?: string;
+  vpnType?: string;
+  nasSecret?: string;
+  radiusServerIp?: string;
+  ipsecPsk?: string;
+  clientPrivateKey?: string | null;
+  serverPublicKey?: string | null;
+  wgPort?: number | null;
+  serverHost?: string;
+  wgSubnet?: string;
+  wgGatewayIp?: string;
+  nasName?: string;
+  publicPorts?: any;
+  vpsPublicIp?: string;
+}
+
+interface Router {
+  id: string;
+  name: string;
+  nasname: string;
+  shortname: string;
+  type: string;
+  ipAddress: string;
+  username: string;
+  password: string;
+  port: number;
+  apiPort: number;
+  secret: string;
+  ports: number;
+  server?: string;
+  community?: string;
+  description?: string;
+  vpnClientId?: string;
+  vpnClient?: {
+    id: string;
+    name: string;
+    vpnIp: string;
+    publicPorts?: {
+      blockStart: number;
+      services: Record<string, { public: number; target: number }>;
+    };
+  };
+  authMode?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface RouterStatus {
+  online: boolean;
+  identity?: string;
+  uptime?: string;
+}
+
+function toSafeIfaceName(prefix: string, name: string): string {
+  const safe = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 12);
+  return `${prefix}-${safe || 'vpn'}`;
 }
 
 interface CreatedProfile {
@@ -186,79 +297,140 @@ export default function UnifiedSetupWizardPage() {
   const [isSavingCompany, setIsSavingCompany] = useState(false);
   const [companySaved, setCompanySaved] = useState(false);
 
-  // Step 2: Router MikroTik State
-  const [connectionMethod, setConnectionMethod] = useState<'wireguard' | 'l2tp' | 'direct'>('wireguard');
-  const [vpnClients, setVpnClients] = useState<any[]>([]);
-  const [useVpnClient, setUseVpnClient] = useState(false);
+  // ── Step 2: VPN Client Management State ──────────────────────────────
+  const [vpnClientsList, setVpnClientsList] = useState<VpnClient[]>([]);
+  const [vpnServersList, setVpnServersList] = useState<VpnServer[]>([]);
+  const [vpnLoading, setVpnLoading] = useState(false);
+  const [showAddVpnModal, setShowAddVpnModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [selectedVpnType, setSelectedVpnType] = useState<'l2tp' | 'pptp' | 'sstp' | 'wireguard'>('wireguard');
+  const [creatingVpnClient, setCreatingVpnClient] = useState(false);
+  const [editingIpClientId, setEditingIpClientId] = useState<string | null>(null);
+  const [editingIpValue, setEditingIpValue] = useState('');
+  const [editingIpLoading, setEditingIpLoading] = useState(false);
+  const [scriptMode, setScriptMode] = useState<'full' | 'quick'>('full');
   const [vpnClientSaved, setVpnClientSaved] = useState(false);
-  const [isSavingVpnClient, setIsSavingVpnClient] = useState(false);
-  const [createdVpnClient, setCreatedVpnClient] = useState<any>(null);
-  const [routerForm, setRouterForm] = useState({
-    name: 'MikroTik-Utama',
-    type: 'mikrotik',
-    ipAddress: '10.254.1.2',
-    nasname: '10.254.1.2',
-    autoAssignIp: true,
-    allowedIps: '',
-    port: '8728',
-    winboxPort: '8291',
-    wwwPort: '80',
-    username: 'api-mikrotik-admin',
-    password: 'EB@ApiSecret2026',
-    secret: 'secret123',
-    authMode: 'local',
-    vpnClientId: '',
+
+  const [vpnFormData, setVpnFormData] = useState({
+    name: '',
+    description: '',
+    vpnServerId: '',
+    vpnType: 'wireguard' as 'l2tp' | 'pptp' | 'sstp' | 'wireguard',
+    customVpnIp: '',
+    localNetworks: '',
+    targetWinboxPort: '8291',
+    targetApiPort: '8728',
+    targetWwwPort: '80',
   });
-  const [generatedScript, setGeneratedScript] = useState<string>('');
-  const [copiedScript, setCopiedScript] = useState(false);
-  const [isTestingRouter, setIsTestingRouter] = useState(false);
-  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
-  const [isSavingRouter, setIsSavingRouter] = useState(false);
+
+  const [wgServerInfo, setWgServerInfo] = useState<{
+    installed: boolean;
+    publicIp?: string;
+    publicKey?: string;
+    listenPort?: number;
+    subnet?: string;
+    poolStart?: number | string;
+    poolEnd?: number | string;
+    gatewayIp?: string;
+  } | null>(null);
+  const [wgServerInfoLoading, setWgServerInfoLoading] = useState(false);
+
+  const [l2tpServerInfo, setL2tpServerInfo] = useState<{
+    installed: boolean;
+    publicIp?: string;
+    ipsecPsk?: string;
+    subnet?: string;
+    localIp?: string;
+    poolStart?: number | string;
+    poolEnd?: number | string;
+    gateway?: string;
+  } | null>(null);
+  const [l2tpServerInfoLoading, setL2tpServerInfoLoading] = useState(false);
+
+  // ── Step 3: Router MikroTik Management State ─────────────────────────
+  const [routersList, setRoutersList] = useState<Router[]>([]);
+  const [routerStatusMap, setRouterStatusMap] = useState<Record<string, RouterStatus>>({});
+  const [loadingRouters, setLoadingRouters] = useState(false);
+  const [showRouterModal, setShowRouterModal] = useState(false);
+  const [editingRouter, setEditingRouter] = useState<Router | null>(null);
+  const [useVpnClientInRouter, setUseVpnClientInRouter] = useState(true);
+  const [testingRouterConn, setTestingRouterConn] = useState(false);
+  const [routerConnTestResult, setRouterConnTestResult] = useState<{
+    success: boolean;
+    message: string;
+    identity?: string;
+    fixScript?: string;
+    usedPort?: number;
+    usedTls?: boolean;
+  } | null>(null);
+  const [savingRouterItem, setSavingRouterItem] = useState(false);
   const [routerSaved, setRouterSaved] = useState(false);
   const [savedRouterId, setSavedRouterId] = useState<string | null>(null);
 
-  // Step 3: Isolation Settings State
+  const [routerFormData, setRouterFormData] = useState({
+    name: 'Router Utama',
+    nasname: '',
+    shortname: '',
+    type: 'mikrotik',
+    ipAddress: '',
+    username: '',
+    password: '',
+    port: '8728',
+    apiPort: '8729',
+    winboxPort: '8291',
+    secret: 'secret123',
+    ports: '1812',
+    server: '',
+    community: '',
+    description: '',
+    vpnClientId: '',
+    authMode: 'local',
+  });
+
+  const [settingUpRadiusId, setSettingUpRadiusId] = useState<string | null>(null);
+  const [settingUpHotspotId, setSettingUpHotspotId] = useState<string | null>(null);
+  const [showRadiusScriptModal, setShowRadiusScriptModal] = useState(false);
+  const [radiusScriptModalData, setRadiusScriptModalData] = useState<{
+    script: string;
+    scriptRos6?: string;
+    scriptRos7?: string;
+    config: any;
+  } | null>(null);
+  const [radiusScriptRosTab, setRadiusScriptRosTab] = useState<6 | 7>(7);
+  const [showHotspotSetupModal, setShowHotspotSetupModal] = useState(false);
+  const [hotspotModalData, setHotspotModalData] = useState<{
+    router: Router;
+    script: string;
+    scriptRos6?: string;
+    scriptRos7?: string;
+    config: any;
+  } | null>(null);
+  const [hotspotRosTab, setHotspotRosTab] = useState<6 | 7>(7);
+  const [applyingHotspot, setApplyingHotspot] = useState(false);
+  const [hotspotForm, setHotspotForm] = useState({
+    vlanId: '10',
+    parentInterface: 'bridge-LAN',
+    hotspotAddress: '10.50.10.1',
+    hotspotSubnet: '10.50.10.0/24',
+    poolRange: '10.50.10.10-10.50.10.250',
+    dnsName: 'wifi.hotspot.local',
+  });
+
+  // Step 4: Isolation Settings State
   const [isolationForm, setIsolationForm] = useState({
     isolationEnabled: true,
     isolationIpPool: '192.168.200.0/24',
     isolationServerIp: '43.173.14.236',
     isolationRateLimit: '64k/64k',
-    isolationRedirectUrl: '',
-    isolationMessage: 'Akun Anda telah diisolir karena masa berlangganan habis. Silakan lakukan pembayaran untuk mengaktifkan kembali layanan.',
     isolationAllowDns: true,
     isolationAllowPayment: true,
-    isolationNotifyWhatsapp: true,
-    isolationNotifyEmail: false,
-    gracePeriodDays: 0,
   });
+  const [isSavingIsolation, setIsSavingIsolation] = useState(false);
   const [isolationRosVersion, setIsolationRosVersion] = useState<'ros7' | 'ros6'>('ros7');
   const [isolationAuthMode, setIsolationAuthMode] = useState<'local' | 'radius'>('local');
-  const [isSavingIsolation, setIsSavingIsolation] = useState(false);
 
-  const handleVpnClientChange = (vpnClientId: string) => {
-    if (vpnClientId) {
-      const vpnClient = vpnClients.find((v) => v.id === vpnClientId);
-      if (vpnClient) {
-        const vpnApiTarget = vpnClient.publicPorts?.services?.api?.target?.toString();
-        const vpnWinboxTarget = vpnClient.publicPorts?.services?.winbox?.target?.toString();
-        setRouterForm((prev) => ({
-          ...prev,
-          vpnClientId,
-          ipAddress: vpnClient.vpnIp,
-          nasname: vpnClient.vpnIp,
-          username: vpnClient.resolvedUsername || prev.username,
-          password: vpnClient.resolvedPassword || prev.password,
-          secret: vpnClient.nasSecret || prev.secret,
-          ...(vpnApiTarget ? { port: vpnApiTarget } : {}),
-          ...(vpnWinboxTarget ? { winboxPort: vpnWinboxTarget } : {}),
-        }));
-      }
-    } else {
-      setRouterForm((prev) => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '' }));
-    }
-  };
-
-  // Step 3: PPPoE Profile State
+  // Step 5: Profile Form State
   const [profileForm, setProfileForm] = useState({
     name: 'Home 20 Mbps',
     groupName: 'Home 20 Mbps',
@@ -390,7 +562,7 @@ export default function UnifiedSetupWizardPage() {
     checkSetup();
   }, []);
 
-  // Fetch company, router, user, and wa data when authenticated
+  // Fetch initial wizard data
   useEffect(() => {
     if (!isInitialized || sessionStatus !== 'authenticated') return;
 
@@ -433,19 +605,14 @@ export default function UnifiedSetupWizardPage() {
 
         if (routersRes.status === 'fulfilled' && routersRes.value.ok) {
           const rData = await routersRes.value.json();
-          const routers = rData.routers || (Array.isArray(rData) ? rData : []);
+          const routers: Router[] = rData.routers || (Array.isArray(rData) ? rData : []);
+          setRoutersList(routers);
           rCount = routers.length;
           if (routers.length > 0) {
             setSavedRouterId(routers[0].id);
-            setRouterForm((prev) => ({
-              ...prev,
-              name: routers[0].name || prev.name,
-              ipAddress: routers[0].ipAddress || routers[0].nasname || prev.ipAddress,
-              username: routers[0].username || prev.username,
-              port: String(routers[0].port || routers[0].apiPort || 8728),
-            }));
             setRouterSaved(true);
-            newCompletedSteps.push(2);
+            newCompletedSteps.push(3);
+            checkRoutersStatus(routers.map((r) => r.id));
           }
         }
 
@@ -453,7 +620,7 @@ export default function UnifiedSetupWizardPage() {
           const pData = await profilesRes.value.json();
           const profiles = pData.profiles || (Array.isArray(pData) ? pData : []);
           if (profiles.length > 0) {
-            newCompletedSteps.push(4);
+            newCompletedSteps.push(5);
           }
         }
 
@@ -462,7 +629,7 @@ export default function UnifiedSetupWizardPage() {
           const users = uData.users || (Array.isArray(uData) ? uData : []);
           uCount = users.length;
           if (uCount > 0) {
-            newCompletedSteps.push(5);
+            newCompletedSteps.push(6);
           }
         }
 
@@ -472,7 +639,7 @@ export default function UnifiedSetupWizardPage() {
             setWaProviders(wData);
             const active = wData.some((p: any) => p.isActive);
             setWaConnected(active);
-            if (active) newCompletedSteps.push(7);
+            if (active) newCompletedSteps.push(8);
           }
         }
 
@@ -481,6 +648,10 @@ export default function UnifiedSetupWizardPage() {
         if (rCount > 0 || uCount > 0) {
           setHasExistingData(true);
         }
+
+        await loadVpnClients();
+        loadWgServerInfo();
+        loadL2tpServerInfo();
       } catch (err) {
         console.error('Failed loading wizard data:', err);
       } finally {
@@ -489,88 +660,881 @@ export default function UnifiedSetupWizardPage() {
     }
 
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized, sessionStatus]);
 
-  // Generate RouterOS script using REAL VPS IP/Host
-  useEffect(() => {
-    const port = routerForm.port || '8728';
-    const winbox = routerForm.winboxPort || '8291';
-    const www = routerForm.wwwPort || '80';
-    const u = routerForm.username || 'euginebill_api';
-    const p = routerForm.password || 'EB@ApiSecret2026';
-    const ip = routerForm.ipAddress || '10.254.1.2';
-    const nasName = routerForm.name || 'MikroTik-Router';
-    const safeLabel = nasName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 12) || 'vpn';
+  // VPN Server resolving helper
+  const resolveServer = (vpnServerId: string) => {
+    if (vpnServerId === '__vps_wg_server__' || vpnServerId === '__vps_wg__') {
+      return {
+        name: 'VPS WireGuard Server',
+        host: wgServerInfo?.publicIp || '43.173.14.236',
+        subnet: wgServerInfo?.subnet || '10.200.0.0/24',
+        wgPublicKey: wgServerInfo?.publicKey || null,
+        wgPort: wgServerInfo?.listenPort || 51820,
+        wgEnabled: true,
+        l2tpEnabled: false,
+      };
+    }
+    if (vpnServerId === '__vps_l2tp_server__' || vpnServerId === '__vps_l2tp__') {
+      return {
+        name: 'VPS L2TP Server',
+        host: l2tpServerInfo?.publicIp || '43.173.14.236',
+        subnet: l2tpServerInfo?.subnet || '10.201.0.0/24',
+        wgPublicKey: null,
+        wgPort: null,
+        wgEnabled: false,
+        l2tpEnabled: true,
+      };
+    }
+    return vpnServersList.find((s) => s.id === vpnServerId) || null;
+  };
 
-    // Resolve real VPS Host IP
-    let vpsHost = '43.173.14.236';
-    if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      vpsHost = window.location.hostname;
-    } else if (companyForm.baseUrl) {
-      try {
-        const parsedUrl = new URL(companyForm.baseUrl);
-        if (parsedUrl.hostname && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
-          vpsHost = parsedUrl.hostname;
+  const loadVpnClients = async () => {
+    setVpnLoading(true);
+    try {
+      const response = await fetch('/api/network/vpn-client');
+      const data = await response.json();
+      const list: VpnClient[] = data.clients || [];
+      setVpnClientsList(list);
+      setVpnServersList(data.vpnServers || []);
+      if (list.length > 0) {
+        setVpnClientSaved(true);
+        markStepCompleted(2);
+        if (!routerFormData.vpnClientId) {
+          const latest = list[list.length - 1];
+          handleVpnClientChange(latest.id, list);
         }
-      } catch (e) {
-        // ignore
       }
+    } catch (error) {
+      console.error('Load vpn clients error:', error);
+    } finally {
+      setVpnLoading(false);
+    }
+  };
+
+  const loadWgServerInfo = async () => {
+    if (wgServerInfo !== null) return;
+    setWgServerInfoLoading(true);
+    try {
+      const res = await fetch('/api/network/vps-wg-peer');
+      const data = await res.json();
+      if (data.installed) {
+        setWgServerInfo({
+          installed: true,
+          publicIp: data.publicIp,
+          publicKey: data.publicKey,
+          listenPort: data.listenPort,
+          subnet: data.subnet,
+          poolStart: data.poolStart,
+          poolEnd: data.poolEnd,
+          gatewayIp: data.gatewayIp,
+        });
+      } else {
+        setWgServerInfo({ installed: false });
+      }
+    } catch {
+      setWgServerInfo({ installed: false });
+    } finally {
+      setWgServerInfoLoading(false);
+    }
+  };
+
+  const loadL2tpServerInfo = async () => {
+    if (l2tpServerInfo !== null) return;
+    setL2tpServerInfoLoading(true);
+    try {
+      const res = await fetch('/api/network/vps-l2tp-info');
+      const data = await res.json();
+      setL2tpServerInfo(
+        data.installed
+          ? {
+              installed: true,
+              publicIp: data.publicIp,
+              ipsecPsk: data.ipsecPsk,
+              subnet: data.subnet,
+              localIp: data.localIp,
+              poolStart: data.poolStart,
+              poolEnd: data.poolEnd,
+              gateway: data.gateway,
+            }
+          : { installed: false }
+      );
+    } catch {
+      setL2tpServerInfo({ installed: false });
+    } finally {
+      setL2tpServerInfoLoading(false);
+    }
+  };
+
+  const handleCreateVpnClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const targetPorts = {
+      winbox: parseInt(vpnFormData.targetWinboxPort) || 8291,
+      api: parseInt(vpnFormData.targetApiPort) || 8728,
+      www: parseInt(vpnFormData.targetWwwPort) || 80,
+    };
+
+    if (vpnFormData.vpnType === 'wireguard' && vpnFormData.vpnServerId === '__vps_wg__') {
+      if (!vpnFormData.name.trim()) return;
+      const peerName = vpnFormData.name.trim();
+      const localNetworks = vpnFormData.localNetworks.trim();
+      setShowAddVpnModal(false);
+      setCreatingVpnClient(true);
+      try {
+        const res = await fetch('/api/network/vps-wg-peer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add', nasName: peerName, localNetworks: localNetworks || undefined, targetPorts }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showSuccess(`WireGuard peer "${peerName}" berhasil ditambahkan! VPN IP: ${data.vpnIp}`, 'Peer Ditambahkan');
+          const wgSubnet = data.vpnSubnet || wgServerInfo?.subnet || '10.200.0.0/24';
+          const wgGatewayIp = data.gatewayIp || wgSubnet.replace(/\.\d+\/\d+$/, '.1');
+          const vpsIp = data.vpsPublicIp || wgServerInfo?.publicIp || data.serverEndpoint?.split(':')[0] || 'VPS';
+          const winboxPublicPort = data.publicPorts?.services?.winbox?.public;
+          const winboxRemoteStr = winboxPublicPort ? `${vpsIp}:${winboxPublicPort}` : undefined;
+
+          const newCreds: Credentials = {
+            server: vpsIp,
+            serverHost: vpsIp,
+            username: peerName,
+            nasName: peerName,
+            password: '',
+            vpnIp: data.vpnIp,
+            vpnType: 'wireguard',
+            clientPrivateKey: data.clientPrivateKey || null,
+            serverPublicKey: data.serverPublicKey || wgServerInfo?.publicKey || null,
+            wgPort: data.wgPort || wgServerInfo?.listenPort || 51820,
+            wgSubnet,
+            wgGatewayIp,
+            nasSecret: data.nasSecret || undefined,
+            apiUsername: data.apiUsername || undefined,
+            apiPassword: data.apiPassword || undefined,
+            winboxRemote: winboxRemoteStr,
+            publicPorts: data.publicPorts,
+            vpsPublicIp: vpsIp,
+          };
+          setCredentials(newCreds);
+          setSelectedVpnType('wireguard');
+          setShowCredentialsModal(true);
+          setVpnFormData({
+            name: '',
+            description: '',
+            vpnServerId: '',
+            vpnType: 'wireguard',
+            customVpnIp: '',
+            localNetworks: '',
+            targetWinboxPort: '8291',
+            targetApiPort: '8728',
+            targetWwwPort: '80',
+          });
+          await loadVpnClients();
+        } else {
+          showError(data.error || 'Gagal menambahkan WireGuard peer ke VPS');
+        }
+      } catch {
+        showError('Gagal menghubungi VPS');
+      } finally {
+        setCreatingVpnClient(false);
+      }
+      return;
     }
 
-    let script = `# ========================================================\n`;
-    script += `# SKRIP SETUP MIKROTIK UNTUK EUGINEBILL\n`;
-    script += `# Metode Koneksi: ${connectionMethod.toUpperCase()}\n`;
-    script += `# Router        : ${nasName} (IP: ${ip})\n`;
-    script += `# VPS Server    : ${vpsHost}\n`;
-    script += `# Port API      : ${port} | Winbox: ${winbox} | WWW: ${www}\n`;
-    script += `# ========================================================\n\n`;
+    if (vpnFormData.vpnType === 'l2tp' && vpnFormData.vpnServerId === '__vps_l2tp__') {
+      if (!vpnFormData.name.trim()) return;
+      setCreatingVpnClient(true);
+      try {
+        const res = await fetch('/api/network/vps-l2tp-peer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add', label: vpnFormData.name.trim(), localNetworks: vpnFormData.localNetworks.trim() || undefined, targetPorts }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setShowAddVpnModal(false);
+          const ipsecPsk = data.ipsecPsk || l2tpServerInfo?.ipsecPsk || '';
+          const nasDisplayName = vpnFormData.name.trim();
+          const safeApiUser = data.apiUsername || `api-${nasDisplayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          const safeApiPass = data.apiPassword || 'EugineBillApi123!';
+          const vpsIp = data.vpsPublicIp || l2tpServerInfo?.publicIp || 'VPS';
+          const winboxPublicPort = data.publicPorts?.services?.winbox?.public;
+          const winboxRemoteStr = winboxPublicPort ? `${vpsIp}:${winboxPublicPort}` : undefined;
 
-    if (connectionMethod === 'wireguard') {
-      const ifaceName = `ebwg-${safeLabel}`;
-      script += `# --- 1. Konfigurasi WireGuard Client (Tunnel Aman VPS) ---\n`;
-      script += `:do { /interface wireguard remove [find comment~"EugineBill"] } on-error={}\n`;
-      script += `:do { /interface wireguard remove [find name="${ifaceName}"] } on-error={}\n`;
-      script += `/interface wireguard add listen-port=13231 name=${ifaceName} comment="EugineBill WireGuard"\n`;
-      script += `/ip address add address=${ip}/24 interface=${ifaceName} comment="EugineBill VPN IP"\n`;
-      script += `/interface wireguard peers add interface=${ifaceName} endpoint-address="${vpsHost}" endpoint-port=51820 allowed-address=10.200.0.0/24,${routerForm.allowedIps || '10.200.0.0/24'} persistent-keepalive=25s comment="VPS EugineBill Server"\n\n`;
-    } else if (connectionMethod === 'l2tp') {
+          const newCreds: Credentials = {
+            server: vpsIp,
+            serverHost: vpsIp,
+            username: data.username,
+            password: data.password,
+            vpnIp: data.vpnIp,
+            vpnType: 'l2tp',
+            nasName: nasDisplayName,
+            ipsecPsk,
+            apiUsername: safeApiUser,
+            apiPassword: safeApiPass,
+            nasSecret: data.nasSecret || undefined,
+            winboxRemote: winboxRemoteStr,
+            publicPorts: data.publicPorts,
+            vpsPublicIp: vpsIp,
+          };
+          setCredentials(newCreds);
+          setSelectedVpnType('l2tp');
+          setShowCredentialsModal(true);
+          showSuccess('L2TP user berhasil ditambahkan ke VPS', 'Berhasil');
+          setVpnFormData({
+            name: '',
+            description: '',
+            vpnServerId: '',
+            vpnType: 'l2tp',
+            customVpnIp: '',
+            localNetworks: '',
+            targetWinboxPort: '8291',
+            targetApiPort: '8728',
+            targetWwwPort: '80',
+          });
+          await loadVpnClients();
+        } else {
+          showError(data.error || 'Gagal menambahkan L2TP user ke VPS');
+        }
+      } catch {
+        showError('Gagal menghubungi VPS');
+      } finally {
+        setCreatingVpnClient(false);
+      }
+      return;
+    }
+
+    // External CHR / standard flow
+    setCreatingVpnClient(true);
+    try {
+      const response = await fetch('/api/network/vpn-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vpnFormData),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setCredentials(result.credentials);
+        const createdType = String(result.credentials?.vpnType || 'l2tp').toLowerCase();
+        setSelectedVpnType(createdType === 'pptp' || createdType === 'sstp' || createdType === 'wireguard' ? (createdType as any) : 'l2tp');
+        setShowCredentialsModal(true);
+        setShowAddVpnModal(false);
+        setVpnFormData({
+          name: '',
+          description: '',
+          vpnServerId: '',
+          vpnType: 'wireguard',
+          customVpnIp: '',
+          localNetworks: '',
+          targetWinboxPort: '8291',
+          targetApiPort: '8728',
+          targetWwwPort: '80',
+        });
+        await loadVpnClients();
+        showSuccess('Client VPN berhasil dibuat! Kredensial & skrip ditampilkan.', 'Berhasil');
+      } else {
+        showError(result.error || 'Gagal membuat Client VPN');
+      }
+    } catch {
+      showError('Terjadi kesalahan saat membuat client VPN');
+    } finally {
+      setCreatingVpnClient(false);
+    }
+  };
+
+  const handleDeleteVpnClient = async (id: string, name: string) => {
+    const confirmed = await showConfirm(
+      `Ini akan menghapus VPN client "${name}" dari server dan database.`,
+      'Hapus VPN Client?'
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/network/vpn-client?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        showSuccess(`VPN Client "${name}" berhasil dihapus.`);
+        loadVpnClients();
+      } else {
+        showError('Gagal menghapus VPN Client');
+      }
+    } catch {
+      showError('Terjadi kesalahan saat menghapus VPN Client');
+    }
+  };
+
+  const handleToggleRadiusServer = async (clientId: string, isRadiusServer: boolean) => {
+    try {
+      const response = await fetch('/api/network/vpn-client', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clientId, isRadiusServer }),
+      });
+      if (response.ok) {
+        showSuccess(isRadiusServer ? 'Berhasil dijadikan RADIUS server' : 'Status RADIUS server dinonaktifkan');
+        loadVpnClients();
+      } else {
+        showError('Gagal memperbarui status RADIUS');
+      }
+    } catch {
+      showError('Terjadi kesalahan sistem');
+    }
+  };
+
+  const handleEditIpSave = async (clientId: string) => {
+    if (!editingIpValue.trim()) return;
+    setEditingIpLoading(true);
+    try {
+      const res = await fetch('/api/network/vpn-client', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clientId, vpnIp: editingIpValue.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(`IP berhasil diubah ke ${data.newIp}`);
+        setEditingIpClientId(null);
+        loadVpnClients();
+      } else {
+        showError(data.error || 'Gagal mengubah IP');
+      }
+    } catch {
+      showError('Gagal menghubungi server');
+    } finally {
+      setEditingIpLoading(false);
+    }
+  };
+
+  const viewCredentials = (client: VpnClient) => {
+    const server = resolveServer(client.vpnServerId);
+    if (!server) return;
+
+    const normalizedClientType = String(client.vpnType || 'l2tp').toLowerCase();
+    const clientVpnType = (
+      normalizedClientType === 'pptp' || normalizedClientType === 'sstp' || normalizedClientType === 'wireguard'
+        ? normalizedClientType
+        : 'l2tp'
+    ) as 'l2tp' | 'pptp' | 'sstp' | 'wireguard';
+    const radiusServer = vpnClientsList.find((c) => c.isRadiusServer);
+
+    setCredentials({
+      server: server.host,
+      serverHost: server.host,
+      username: client.username,
+      password: client.password,
+      vpnIp: client.vpnIp,
+      nasName: client.name,
+      winboxPort: client.winboxPort || undefined,
+      winboxRemote: client.winboxPort ? `${server.host}:${client.winboxPort}` : undefined,
+      apiUsername: client.apiUsername || undefined,
+      apiPassword: client.apiPassword || undefined,
+      vpnType: clientVpnType,
+      nasSecret: client.nasSecret || undefined,
+      radiusServerIp: !client.isRadiusServer && radiusServer ? radiusServer.vpnIp : undefined,
+      ipsecPsk: String(client.vpnType || '').toLowerCase() === 'l2tp' ? l2tpServerInfo?.ipsecPsk || '' : undefined,
+      clientPrivateKey: client.clientPrivateKey || null,
+      serverPublicKey: server.wgPublicKey || null,
+      wgPort: server.wgPort || null,
+      publicPorts: client.publicPorts || null,
+      vpsPublicIp: server.host,
+      wgSubnet: wgServerInfo?.subnet || server.subnet || '10.200.0.0/24',
+      wgGatewayIp: wgServerInfo?.subnet
+        ? wgServerInfo.subnet.replace(/\.\d+\/\d+$/, '.1')
+        : server.subnet?.replace(/\.\d+\/\d+$/, '.1') || '10.200.0.1',
+    });
+    setSelectedVpnType(clientVpnType);
+    setShowCredentialsModal(true);
+  };
+
+  const generateMikroTikScript = () => {
+    if (!credentials) return '';
+
+    const nasDisplayName = credentials.nasName || credentials.username;
+    const safeLabel = nasDisplayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 12) || 'vpn';
+    const safeApiUsername = credentials.apiUsername || `api-${credentials.vpnIp?.replace(/\./g, '-')}`;
+    const safeApiPassword = credentials.apiPassword || 'EugineBillApi123!';
+    const vpsIp = credentials.vpsPublicIp || credentials.serverHost || credentials.server || 'VPS_IP';
+    const ports = credentials.publicPorts?.services || {};
+    const winboxPort = ports.winbox?.public || credentials.winboxPort || 10001;
+    const winboxTarget = ports.winbox?.target || 8291;
+    const apiPort = ports.api?.public || 10002;
+    const apiTarget = ports.api?.target || 8728;
+    const wwwPort = ports.www?.public || 10004;
+    const wwwTarget = ports.www?.target || 80;
+    const sshPort = ports.ssh?.public || 10006;
+    const sshTarget = ports.ssh?.target || 22;
+
+    if (selectedVpnType === 'l2tp') {
       const ifaceName = `ebl2-${safeLabel}`;
-      script += `# --- 1. Konfigurasi L2TP Client (UltraVPN Standard) ---\n`;
-      script += `:do { /interface l2tp-client remove [find comment~"EugineBill"] } on-error={}\n`;
-      script += `:do { /interface l2tp-client remove [find name="${ifaceName}"] } on-error={}\n`;
-      script += `:if ([:len [/ppp profile find name="ebvpn-remote"]] = 0) do={\n`;
-      script += `    /ppp profile add name=ebvpn-remote use-encryption=no change-tcp-mss=yes only-one=no\n`;
-      script += `}\n`;
-      script += `/interface l2tp-client add name=${ifaceName} connect-to="${vpsHost}" user="${u}" password="${p}" profile=ebvpn-remote use-ipsec=no allow=chap,mschap2 disabled=no add-default-route=no dial-on-demand=no comment="EugineBill L2TP"\n\n`;
+      if (scriptMode === 'quick') {
+        return `:do {/interface l2tp-client remove [find comment="euginebill-${credentials.username}"]} on-error={}
+:do {/interface l2tp-client remove [find name="${ifaceName}"]} on-error={}
+:do {/interface l2tp-client remove [find name="l2tp-${safeLabel}"]} on-error={}
+:if ([:len [/ppp profile find name="ebvpn-remote"]] = 0) do={/ppp profile add name=ebvpn-remote use-encryption=no change-tcp-mss=yes only-one=no}
+/interface l2tp-client add name=${ifaceName} connect-to=${credentials.server} user=${credentials.username} password="${credentials.password}" profile=ebvpn-remote use-ipsec=no allow=chap,mschap2 disabled=no add-default-route=no dial-on-demand=no comment=euginebill-${credentials.username}`.trim();
+      }
+
+      return `# ============================================================
+# MikroTik L2TP VPN Client Setup Script (UltraVPN Standard)
+# NAS Name    : ${nasDisplayName}
+# NAS VPN IP  : ${credentials.vpnIp}
+# VPN Server  : ${credentials.server}
+#
+# ────────────────────────────────────────────────────────────
+# ALOKASI REMOTE AKSES PUBLIK (Akses dari Internet / Luar):
+# Host VPS    : ${vpsIp}
+# Winbox Port : ${vpsIp}:${winboxPort} -> MikroTik:${winboxTarget}
+# WebGUI Port : http://${vpsIp}:${wwwPort} -> MikroTik:${wwwTarget}
+# API Port    : ${vpsIp}:${apiPort} -> MikroTik:${apiTarget}
+# SSH Port    : ${vpsIp}:${sshPort} -> MikroTik:${sshTarget}
+#
+# KREDENSIAL REMOTE MIKROTIK (Khusus Sistem EugineBill & Winbox):
+# API & Winbox Username: ${safeApiUsername}
+# API & Winbox Password: ${safeApiPassword}
+# ============================================================
+
+# 0. Hapus konfigurasi lama jika ada (Idempoten & Bebas Error)
+:do { /interface l2tp-client remove [find comment="euginebill-${credentials.username}"] } on-error={}
+:do { /interface l2tp-client remove [find comment~"EugineBill"] } on-error={}
+:do { /interface l2tp-client remove [find name="${ifaceName}"] } on-error={}
+:do { /interface l2tp-client remove [find name="l2tp-${safeLabel}"] } on-error={}
+:do { /interface l2tp-client remove [find name="l2tp-client-EugineBill"] } on-error={}
+:do { /user remove [find name="${safeApiUsername}"] } on-error={}
+:do { /user remove [find comment~"EugineBill"] } on-error={}
+
+# 1. Profile PPP Khusus VPN Remote (MSS Clamping & Tanpa MPPE Encryption)
+:if ([:len [/ppp profile find name="ebvpn-remote"]] = 0) do={/ppp profile add name=ebvpn-remote use-encryption=no change-tcp-mss=yes only-one=no}
+
+# 2. Setup L2TP Client (UltraVPN Standard)
+/interface l2tp-client add name=${ifaceName} connect-to=${credentials.server} user=${credentials.username} password="${credentials.password}" profile=ebvpn-remote use-ipsec=no allow=chap,mschap2 disabled=no add-default-route=no dial-on-demand=no comment="euginebill-${credentials.username}"
+
+# 3. Buat User Remote Admin (Akses Penuh: Winbox, API, WebFig, SSH)
+:do { /user remove [find name="${safeApiUsername}"] } on-error={}
+:do { /user remove [find comment~"EugineBill"] } on-error={}
+/user add name=${safeApiUsername} group=full password="${safeApiPassword}" comment="Remote Admin User EugineBill (Winbox & API)"
+
+# 4. Konfigurasi Port Layanan MikroTik Aktif & Bebas Restriksi IP (Universal ROS 6 & 7)
+:do { /ip service set winbox port=${winboxTarget} address="" disabled=no } on-error={}
+:do { /ip service set api port=${apiTarget} address="" disabled=no } on-error={}
+:do { /ip service set www port=${wwwTarget} address="" disabled=no } on-error={}
+:do { /ip service set ssh address="" disabled=no } on-error={}
+
+# 5. Izinkan Akses Masuk API & VPN di Baris Teratas Firewall Filter MikroTik
+:do { /ip firewall filter add chain=input action=accept protocol=tcp dst-port=${apiTarget},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}
+:do { /ip firewall filter add chain=input action=accept in-interface=${ifaceName} place-before=0 comment="Allow EugineBill VPN Remote Access" } on-error={}
+
+# ============================================================
+# PANDUAN PENGGUNAAN:
+# 1. Remote Winbox  : Buka Winbox -> Connect To: ${vpsIp}:${winboxPort} (Login: ${safeApiUsername} / Pass: ${safeApiPassword} atau Admin Anda)
+# 2. Remote WebFig  : Buka Browser -> http://${vpsIp}:${wwwPort}
+# 3. Pengaturan NAS di EugineBill:
+#    - Host IP : ${credentials.vpnIp} (atau ${vpsIp})
+#    - API Port: ${apiTarget} (atau ${apiPort})
+#    - Username: ${safeApiUsername}
+#    - Password: ${safeApiPassword}
+# ============================================================`.trim();
     }
 
-    script += `# --- 2. Buat Group Akses Khusus API & Winbox ---\n`;
-    script += `:do { /user group add name=api-users policy=read,write,policy,test,sensitive,api,winbox,password,local,web,ssh comment="API Access EugineBill" } on-error={}\n`;
-    script += `:do { /user group set [find name="api-users"] policy=read,write,policy,test,sensitive,api,winbox,password,local,web,ssh } on-error={}\n\n`;
+    if (selectedVpnType === 'wireguard') {
+      const ifaceName = toSafeIfaceName('wg', nasDisplayName);
+      const serverPk = credentials.serverPublicKey || '<SERVER_PUBLIC_KEY>';
+      const clientPk = credentials.clientPrivateKey || '<CLIENT_PRIVATE_KEY>';
+      const wgPort = credentials.wgPort || 51820;
+      const serverHost = credentials.serverHost || credentials.server;
+      const wgSubnet = credentials.wgSubnet || '10.200.0.0/24';
+      const wgGatewayIp = credentials.wgGatewayIp || wgSubnet.replace(/\.\d+\/\d+$/, '.1');
+      const apiSslPort = ports.apiSsl?.public || 10003;
+      const apiSslTarget = ports.apiSsl?.target || 8729;
 
-    script += `# --- 3. Buat User API MikroTik ---\n`;
-    script += `:do { /user remove [find name="${u}"] } on-error={}\n`;
-    script += `/user add name="${u}" group=api-users password="${p}" comment="API User EugineBill"\n\n`;
+      return `# ============================================================
+# MikroTik WireGuard Client Setup Script (RouterOS 7+)
+# NAS Name    : ${nasDisplayName}
+# NAS VPN IP  : ${credentials.vpnIp}
+# VPN Subnet  : ${wgSubnet}
+# VPS Gateway : ${wgGatewayIp}
+#
+# ────────────────────────────────────────────────────────────
+# ALOKASI REMOTE AKSES PUBLIK (Akses dari Internet / Luar):
+# Host VPS    : ${vpsIp}
+# Winbox Port : ${vpsIp}:${winboxPort} -> MikroTik:${winboxTarget}
+# WebGUI Port : http://${vpsIp}:${wwwPort} -> MikroTik:${wwwTarget}
+# API Port    : ${vpsIp}:${apiPort} -> MikroTik:${apiTarget}
+# API SSL Port: ${vpsIp}:${apiSslPort} -> MikroTik:${apiSslTarget}
+# SSH Port    : ${vpsIp}:${sshPort} -> MikroTik:${sshTarget}
+#
+# KREDENSIAL REMOTE MIKROTIK (Khusus Sistem EugineBill & Winbox):
+# API & Winbox Username: ${safeApiUsername}
+# API & Winbox Password: ${safeApiPassword}
+# ============================================================
 
-    script += `# --- 4. Aktifkan Service Port API & Winbox & Web ---\n`;
-    script += `:do { /ip service set api port=${port} address="" disabled=no } on-error={}\n`;
-    script += `:do { /ip service set winbox port=${winbox} address="" disabled=no } on-error={}\n`;
-    script += `:do { /ip service set www port=${www} address="" disabled=no } on-error={}\n\n`;
+# 0. Hapus setup WireGuard & User terdahulu (mencegah bentrok / sisa config)
+:do { /interface/wireguard/peers/remove [find where endpoint-address="${serverHost}" or interface~"wg-"] } on-error={}
+:do { /interface/wireguard/remove [find where name="${ifaceName}" or name~"wg-"] } on-error={}
+:do { /ip/address/remove [find where address~"${credentials.vpnIp}" or interface~"wg-"] } on-error={}
+:do { /ip/route/remove [find where comment="EugineBill-VPN" or comment~"EugineBill" or gateway~"wg-"] } on-error={}
+:do { /user/remove [find where name="${safeApiUsername}" or comment~"EugineBill"] } on-error={}
 
-    script += `# --- 5. Buka Akses Firewall Filter di Posisi Teratas ---\n`;
-    script += `:do { /ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}\n`;
-    if (connectionMethod === 'wireguard') {
-      script += `:do { /ip firewall filter add chain=input action=accept in-interface=ebwg-${safeLabel} place-before=0 comment="Allow EugineBill WG VPN" } on-error={}\n`;
-    } else if (connectionMethod === 'l2tp') {
-      script += `:do { /ip firewall filter add chain=input action=accept in-interface=ebl2-${safeLabel} place-before=0 comment="Allow EugineBill L2TP VPN" } on-error={}\n`;
+# 1. Buat WireGuard interface dengan private key NAS
+/interface/wireguard/add name=${ifaceName} private-key="${clientPk}"
+
+# 2. Tambah peer (VPS WireGuard server)
+#    allowed-address = subnet VPN agar semua host VPN dapat diakses
+/interface/wireguard/peers/add interface=${ifaceName} public-key="${serverPk}" endpoint-address="${serverHost}" endpoint-port=${wgPort} allowed-address="${wgSubnet}" persistent-keepalive=25
+
+# 3. Assign IP address NAS ke interface WireGuard
+/ip/address/remove [find where interface=${ifaceName}]
+/ip/address/add address=${credentials.vpnIp}/32 interface=${ifaceName}
+
+# 4. Route seluruh subnet VPN melalui WireGuard
+/ip/route/remove [find where comment="EugineBill-VPN"]
+/ip/route/add dst-address=${wgSubnet} gateway=${ifaceName} comment="EugineBill-VPN"
+
+# 5. Buat User Remote Admin (Akses Penuh: Winbox, API, WebFig, SSH)
+:do { /user/remove [find name="${safeApiUsername}"] } on-error={}
+/user/add name=${safeApiUsername} group=full password="${safeApiPassword}" comment="Remote Admin User EugineBill (Winbox & API)"
+
+# 6. Pastikan Port Layanan MikroTik Aktif & Bebas Restriksi IP
+:do { /ip/service/set winbox port=${winboxTarget} address="" disabled=no } on-error={}
+:do { /ip/service/set api port=${apiTarget} address="" disabled=no } on-error={}
+:do { /ip/service/set www port=${wwwTarget} address="" disabled=no } on-error={}
+:do { /ip/service/set ssh address="" disabled=no } on-error={}
+
+# 7. Izinkan Akses Masuk WireGuard & API di Baris Teratas Firewall Filter MikroTik
+:do { /ip/firewall/filter/add chain=input action=accept protocol=tcp dst-port=${apiTarget},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}
+:do { /ip/firewall/filter/add chain=input action=accept in-interface=${ifaceName} place-before=0 comment="Allow EugineBill VPN Remote Access" } on-error={}
+
+# ============================================================
+# PANDUAN PENGGUNAAN:
+# 1. Remote Winbox  : Buka Winbox -> Connect To: ${vpsIp}:${winboxPort} (Login: ${safeApiUsername} / Pass: ${safeApiPassword} atau Admin Anda)
+# 2. Remote WebFig  : Buka Browser -> http://${vpsIp}:${wwwPort}
+# 3. Pengaturan NAS di EugineBill:
+#    - Host IP : ${credentials.vpnIp} (atau ${vpsIp})
+#    - API Port: ${apiTarget} (atau ${apiPort})
+#    - Username: ${safeApiUsername}
+#    - Password: ${safeApiPassword}
+# ============================================================`.trim();
     }
 
-    script += `\n# ========================================================\n`;
-    script += `# SELESAI! Salin dan Tempel skrip ini di Terminal Winbox MikroTik Anda.\n`;
-    script += `# ========================================================`;
+    if (selectedVpnType === 'sstp') {
+      const ifaceName = toSafeIfaceName('sstp', nasDisplayName);
+      return `:do { /interface sstp-client remove [find where name="${ifaceName}" or comment~"EugineBill"] } on-error={}
+:do { /user remove [find name="${safeApiUsername}" or comment~"EugineBill"] } on-error={}
+/user add name=${safeApiUsername} group=full password="${safeApiPassword}" comment="Remote Admin User EugineBill (Winbox & API)"
+/interface sstp-client add connect-to=${credentials.server} port=992 user=${credentials.username} password=${credentials.password} disabled=no name=${ifaceName} add-default-route=no authentication=mschap2 certificate=none comment="EugineBill VPN"
+:do { /ip service set winbox port=${winboxTarget} address="" disabled=no } on-error={}
+:do { /ip service set api port=${apiTarget} address="" disabled=no } on-error={}
+:do { /ip service set www port=${wwwTarget} address="" disabled=no } on-error={}
+:do { /ip service set ssh address="" disabled=no } on-error={}
+:do { /ip firewall filter add chain=input action=accept protocol=tcp dst-port=${apiTarget},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}
+:do { /ip firewall filter add chain=input action=accept in-interface=${ifaceName} place-before=0 comment="Allow EugineBill VPN Remote Access" } on-error={}`.trim();
+    }
 
-    setGeneratedScript(script);
-  }, [connectionMethod, routerForm, companyForm.baseUrl]);
+    return `:do { /interface pptp-client remove [find where name="pptp-${safeLabel}" or comment~"EugineBill"] } on-error={}
+:do { /user remove [find name="${safeApiUsername}" or comment~"EugineBill"] } on-error={}
+/user add name=${safeApiUsername} group=full password="${safeApiPassword}" comment="Remote Admin User EugineBill (Winbox & API)"
+/interface pptp-client add connect-to=${credentials.server} user=${credentials.username} password=${credentials.password} disabled=no name="pptp-${safeLabel}" add-default-route=no comment="EugineBill VPN"
+:do { /ip service set winbox port=${winboxTarget} address="" disabled=no } on-error={}
+:do { /ip service set api port=${apiTarget} address="" disabled=no } on-error={}
+:do { /ip service set www port=${wwwTarget} address="" disabled=no } on-error={}
+:do { /ip service set ssh address="" disabled=no } on-error={}
+:do { /ip firewall filter add chain=input action=accept protocol=tcp dst-port=${apiTarget},8728 comment="Allow EugineBill VPS API" place-before=0 } on-error={}
+:do { /ip firewall filter add chain=input action=accept in-interface="pptp-${safeLabel}" place-before=0 comment="Allow EugineBill VPN Remote Access" } on-error={}`.trim();
+  };
+
+  // ── Step 3: Router Management Helpers ─────────────────────────────────
+  const loadRoutersList = async () => {
+    setLoadingRouters(true);
+    try {
+      const response = await fetch('/api/network/routers');
+      const data = await response.json();
+      const list: Router[] = data.routers || [];
+      setRoutersList(list);
+      if (list.length > 0) {
+        setRouterSaved(true);
+        markStepCompleted(3);
+        setSavedRouterId(list[0].id);
+        checkRoutersStatus(list.map((r) => r.id));
+      }
+    } catch (error) {
+      console.error('Failed to load routers:', error);
+    } finally {
+      setLoadingRouters(false);
+    }
+  };
+
+  const checkRoutersStatus = async (routerIds: string[]) => {
+    if (!routerIds.length) return;
+    try {
+      const response = await fetch('/api/network/routers/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routerIds }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRouterStatusMap(data.statusMap || {});
+      }
+    } catch (error) {
+      console.error('Check status error:', error);
+    }
+  };
+
+  const handleVpnClientChange = (vpnClientId: string, overrideList?: VpnClient[]) => {
+    const list = overrideList || vpnClientsList;
+    if (vpnClientId) {
+      const vpnClient = list.find((v) => v.id === vpnClientId);
+      if (vpnClient) {
+        const vpnApiTarget = (vpnClient as any).publicPorts?.services?.api?.target?.toString();
+        const vpnWinboxTarget = (vpnClient as any).publicPorts?.services?.winbox?.target?.toString();
+        setRouterFormData((prev) => ({
+          ...prev,
+          name: prev.name && prev.name !== 'Router Utama' ? prev.name : vpnClient.name,
+          vpnClientId,
+          ipAddress: vpnClient.vpnIp,
+          nasname: vpnClient.vpnIp,
+          username: vpnClient.resolvedUsername || vpnClient.apiUsername || prev.username || `api-${toSafeIfaceName('vpn', vpnClient.name)}`,
+          password: vpnClient.resolvedPassword || vpnClient.apiPassword || prev.password || 'EugineBillApi123!',
+          secret: vpnClient.nasSecret || prev.secret || 'secret123',
+          ...(vpnApiTarget ? { port: vpnApiTarget } : {}),
+          ...(vpnWinboxTarget ? { winboxPort: vpnWinboxTarget } : {}),
+        }));
+      }
+    } else {
+      setRouterFormData((prev) => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '' }));
+    }
+  };
+
+  const handleTestRouterConnection = async () => {
+    const isGateway = routerFormData.type === 'gateway' || routerFormData.name.toLowerCase().includes('gateway');
+
+    if (!isGateway && (!routerFormData.ipAddress || !routerFormData.username || !routerFormData.password)) {
+      showError('Harap isi Alamat IP, Username, dan Password MikroTik.');
+      return;
+    }
+
+    if (isGateway && !routerFormData.ipAddress) {
+      showError('Harap isi Alamat IP Gateway VPS.');
+      return;
+    }
+
+    setTestingRouterConn(true);
+    setRouterConnTestResult(null);
+
+    try {
+      if (isGateway) {
+        const response = await fetch('/api/network/routers/test-gateway', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ipAddress: routerFormData.ipAddress }),
+        });
+        const result = await response.json();
+        setRouterConnTestResult(result);
+        if (result.success) {
+          showSuccess(`Gateway VPS dapat dijangkau: ${result.message}`);
+        } else {
+          showError(result.message);
+        }
+        return;
+      }
+
+      if (routerFormData.vpnClientId) {
+        const pingRes = await fetch('/api/network/routers/test-gateway', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ipAddress: routerFormData.ipAddress }),
+        });
+        const pingResult = await pingRes.json();
+        if (!pingResult.success) {
+          setRouterConnTestResult({ success: false, message: `VPN tidak terhubung: ${pingResult.message}` });
+          showError(`VPN tidak terhubung ke ${routerFormData.ipAddress}`);
+          return;
+        }
+      }
+
+      const response = await fetch('/api/network/routers/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ipAddress: routerFormData.ipAddress,
+          username: routerFormData.username,
+          password: routerFormData.password,
+          port: parseInt(routerFormData.port) || 8728,
+          apiPort: parseInt(routerFormData.apiPort) || 8729,
+          vpnClientId: routerFormData.vpnClientId || undefined,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        if (result.usedPort && result.usedPort !== parseInt(routerFormData.port)) {
+          setRouterFormData((prev) => ({
+            ...prev,
+            port: result.usedPort.toString(),
+          }));
+        }
+        setRouterConnTestResult(result);
+        const portInfo = result.usedTls ? ` (port ${result.usedPort} SSL)` : ` (port ${result.usedPort})`;
+        showSuccess(`Koneksi berhasil ke router "${result.identity}"${portInfo}`);
+      } else {
+        const apiPort = parseInt(routerFormData.port) || 8728;
+        const fixScript =
+          result.fixScript ||
+          `/ip service set api port=${apiPort} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${apiPort},8728 place-before=0 comment="Allow EugineBill VPS API"`;
+
+        setRouterConnTestResult({ ...result, fixScript });
+        const diagMsg =
+          result.diagnosis === 'port_refused'
+            ? `${result.message}\n\nPort ${apiPort} ditolak (ECONNREFUSED) — pastikan /ip service api sudah enabled dan port benar.`
+            : result.diagnosis === 'auth_failed'
+            ? `${result.message}\n\nUsername/password salah — cek kredensial user API.`
+            : result.diagnosis === 'firewall_block'
+            ? `${result.message}\n\nKoneksi timeout — firewall MikroTik memblokir port ${apiPort}.`
+            : result.message;
+        showError(diagMsg);
+      }
+    } catch (error: any) {
+      showError(error.message || 'Gagal mengetes koneksi');
+      setRouterConnTestResult({ success: false, message: error.message || 'Gagal mengetes koneksi' });
+    } finally {
+      setTestingRouterConn(false);
+    }
+  };
+
+  const handleSaveRouterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingRouterItem(true);
+
+    try {
+      const url = '/api/network/routers';
+      const method = editingRouter ? 'PUT' : 'POST';
+      const body = editingRouter ? { ...routerFormData, id: editingRouter.id } : routerFormData;
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        showSuccess(editingRouter ? 'Router berhasil diperbarui!' : 'Router berhasil ditambahkan & terhubung!');
+        setShowRouterModal(false);
+        setEditingRouter(null);
+        setRouterSaved(true);
+        markStepCompleted(3);
+        const newRouterId = data.router?.id || editingRouter?.id;
+        if (newRouterId) {
+          setSavedRouterId(newRouterId);
+        }
+        await loadRoutersList();
+      } else {
+        showError(data.error || 'Gagal menyimpan router');
+      }
+    } catch (error: any) {
+      showError(error.message || 'Gagal menyimpan router');
+    } finally {
+      setSavingRouterItem(false);
+    }
+  };
+
+  const handleDeleteRouterItem = async (id: string, name: string) => {
+    const confirmed = await showConfirm(`Hapus router "${name}" dari sistem EugineBill?`, 'Hapus Router?');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/network/routers?id=${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        showSuccess('Router berhasil dihapus.');
+        loadRoutersList();
+      } else {
+        showError('Gagal menghapus router');
+      }
+    } catch {
+      showError('Gagal menghapus router');
+    }
+  };
+
+  const handleSetupRadius = async (routerId: string) => {
+    setSettingUpRadiusId(routerId);
+    try {
+      const response = await fetch(`/api/network/routers/${routerId}/setup-radius`, { method: 'POST' });
+      const result = await response.json();
+      if (response.ok) {
+        setRadiusScriptModalData({
+          script: result.script,
+          scriptRos6: result.scriptRos6,
+          scriptRos7: result.scriptRos7,
+          config: result.config,
+        });
+        setRadiusScriptRosTab(7);
+        setShowRadiusScriptModal(true);
+      } else {
+        showError(result.error + (result.details ? '\n' + result.details : ''));
+      }
+    } catch (error) {
+      console.error('Setup RADIUS error:', error);
+      showError('Gagal membuat script RADIUS');
+    } finally {
+      setSettingUpRadiusId(null);
+    }
+  };
+
+  const handleSetupHotspot = async (routerData: Router, customParams?: any) => {
+    setSettingUpHotspotId(routerData.id);
+    const payload = customParams || hotspotForm;
+    try {
+      const response = await fetch(`/api/network/routers/${routerData.id}/setup-hotspot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setHotspotModalData({
+          router: routerData,
+          script: result.script,
+          scriptRos6: result.scriptRos6,
+          scriptRos7: result.scriptRos7,
+          config: result.config,
+        });
+        setHotspotRosTab(7);
+        setShowHotspotSetupModal(true);
+      } else {
+        showError(result.error + (result.details ? '\n' + result.details : ''));
+      }
+    } catch (error) {
+      console.error('Setup Hotspot error:', error);
+      showError('Gagal generate script Hotspot');
+    } finally {
+      setSettingUpHotspotId(null);
+    }
+  };
+
+  const handleApplyHotspotDirect = async () => {
+    if (!hotspotModalData) return;
+    setApplyingHotspot(true);
+    try {
+      const response = await fetch(`/api/network/routers/${hotspotModalData.router.id}/setup-hotspot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...hotspotForm, applyToRouter: true }),
+      });
+      const result = await response.json();
+      if (result.applied) {
+        showSuccess(`Konfigurasi Hotspot berhasil diterapkan ke router ${hotspotModalData.router.name}!`);
+        setShowHotspotSetupModal(false);
+      } else {
+        showError(`Gagal menerapkan ke MikroTik: ${result.applyError || 'Koneksi API ditolak'}`);
+      }
+    } catch (error: any) {
+      showError('Gagal menerapkan konfigurasi: ' + error.message);
+    } finally {
+      setApplyingHotspot(false);
+    }
+  };
 
   const markStepCompleted = (stepNumber: number) => {
     if (!completedSteps.includes(stepNumber)) {
@@ -596,7 +1560,6 @@ export default function UnifiedSetupWizardPage() {
         throw new Error(data.error || 'Gagal melakukan inisialisasi.');
       }
 
-      // Automatically sign in superadmin credential
       const authRes = await signIn('credentials', {
         redirect: false,
         username: initFormData.adminUsername,
@@ -640,131 +1603,6 @@ export default function UnifiedSetupWizardPage() {
       alert(err.message || 'Gagal menyimpan profil');
     } finally {
       setIsSavingCompany(false);
-    }
-  };
-
-  // Step 2: Save VPN Client
-  const handleSaveVpnClient = async () => {
-    setIsSavingVpnClient(true);
-    try {
-      const res = await fetch('/api/network/vpn-clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: routerForm.name,
-          vpnProtocol: connectionMethod === 'wireguard' ? 'wireguard' : 'l2tp',
-          allowedIps: routerForm.allowedIps || undefined,
-          vpnIp: routerForm.autoAssignIp ? undefined : routerForm.ipAddress,
-          targetPorts: {
-            winbox: parseInt(routerForm.winboxPort) || 8291,
-            api: parseInt(routerForm.port) || 8728,
-            www: parseInt(routerForm.wwwPort) || 80,
-          },
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.vpnClient) {
-        setCreatedVpnClient(data.vpnClient);
-        setVpnClientSaved(true);
-        if (data.vpnClient.vpnIp) {
-          setRouterForm((prev) => ({
-            ...prev,
-            vpnClientId: data.vpnClient.id,
-            ipAddress: data.vpnClient.vpnIp,
-            nasname: data.vpnClient.vpnIp,
-            username: data.vpnClient.resolvedUsername || prev.username,
-            password: data.vpnClient.resolvedPassword || prev.password,
-            secret: data.vpnClient.nasSecret || prev.secret,
-          }));
-        }
-      } else {
-        setVpnClientSaved(true);
-      }
-      markStepCompleted(2);
-    } catch (err) {
-      console.error('Failed to save VPN Client:', err);
-      setVpnClientSaved(true);
-      markStepCompleted(2);
-    } finally {
-      setIsSavingVpnClient(false);
-    }
-  };
-
-  // Step 3: Test & Save Router
-  const handleTestRouter = async () => {
-    setIsTestingRouter(true);
-    setTestResult(null);
-
-    try {
-      const res = await fetch('/api/network/routers/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ipAddress: routerForm.ipAddress,
-          username: routerForm.username,
-          password: routerForm.password,
-          port: parseInt(routerForm.port) || 8728,
-        }),
-      });
-
-      const data: TestConnectionResult = await res.json();
-      setTestResult(data);
-
-      if (data.success) {
-        if (data.usedPort && data.usedPort !== parseInt(routerForm.port)) {
-          setRouterForm((prev) => ({ ...prev, port: String(data.usedPort) }));
-        }
-        await handleSaveRouter();
-      }
-    } catch (err: any) {
-      setTestResult({
-        success: false,
-        message: err.message || 'Koneksi ke MikroTik gagal / timeout',
-        diagnosis: 'network_error',
-      });
-    } finally {
-      setIsTestingRouter(false);
-    }
-  };
-
-  const handleSaveRouter = async () => {
-    setIsSavingRouter(true);
-    try {
-      const res = await fetch('/api/network/routers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: routerForm.name,
-          ipAddress: routerForm.ipAddress,
-          nasname: routerForm.ipAddress,
-          username: routerForm.username,
-          password: routerForm.password,
-          port: parseInt(routerForm.port) || 8728,
-          winboxPort: parseInt(routerForm.winboxPort) || 8291,
-          wwwPort: parseInt(routerForm.wwwPort) || 80,
-          secret: routerForm.secret || 'secret123',
-          authMode: routerForm.authMode || 'local',
-          allowedIps: routerForm.allowedIps || undefined,
-          vpnClientId: routerForm.vpnClientId || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.router) {
-        setSavedRouterId(data.router.id);
-        setRouterSaved(true);
-        markStepCompleted(3);
-        setCurrentStep(4);
-      } else if (res.status === 409) {
-        setRouterSaved(true);
-        markStepCompleted(3);
-        setCurrentStep(4);
-      }
-    } catch (err) {
-      console.error('Failed to save router:', err);
-    } finally {
-      setIsSavingRouter(false);
     }
   };
 
@@ -1567,428 +2405,1703 @@ export default function UnifiedSetupWizardPage() {
 
             {/* STEP 2: CLIENT VPN SETUP (WIREGUARD / L2TP / DIRECT IP) */}
             {currentStep === 2 && (
-              <Card className="border-border shadow-xs bg-card">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                        <Cable className="w-5 h-5" />
+              <div className="space-y-6">
+                <Card className="border-border shadow-xs bg-card">
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                          <Cable className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle>Client VPN Setup (MikroTik Tunnel)</CardTitle>
+                          <CardDescription>
+                            Hubungkan router MikroTik ke VPS EugineBill via WireGuard atau L2TP VPN tunnel untuk bypass NAT ISP & remote akses.
+                          </CardDescription>
+                        </div>
                       </div>
-                      <div>
-                        <CardTitle>Client VPN Setup (MikroTik Tunnel)</CardTitle>
-                        <CardDescription>
-                          Pilih protokol VPN (WireGuard / L2TP) atau Direct IP untuk menghubungkan VPS EugineBill dengan router MikroTik.
-                        </CardDescription>
-                      </div>
-                    </div>
-                    {vpnClientSaved && (
-                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
-                        <Check className="w-3 h-3 text-emerald-600" /> Client VPN Siap
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-6">
-                  {/* Connection Method Toggle */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Server VPN & Protokol *</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-muted p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => { setConnectionMethod('wireguard'); setVpnClientSaved(false); }}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          connectionMethod === 'wireguard'
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
+                      <Button
+                        onClick={() => {
+                          setVpnFormData({
+                            name: '',
+                            description: '',
+                            vpnServerId: '__vps_wg__',
+                            vpnType: 'wireguard',
+                            customVpnIp: '',
+                            localNetworks: '',
+                            targetWinboxPort: '8291',
+                            targetApiPort: '8728',
+                            targetWwwPort: '80',
+                          });
+                          setShowAddVpnModal(true);
+                        }}
+                        className="bg-[#002C60] hover:bg-[#1b437c] text-white text-xs gap-1.5 shrink-0"
                       >
-                        [VPS Native] WireGuard Server
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setConnectionMethod('l2tp'); setVpnClientSaved(false); }}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          connectionMethod === 'l2tp'
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        L2TP / IPSec Client VPN
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConnectionMethod('direct')}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          connectionMethod === 'direct'
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        Direct IP API (Tanpa VPN)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Contextual Guidance Callout */}
-                  <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-foreground space-y-1.5 text-xs">
-                    <div className="font-bold flex items-center gap-2 text-primary">
-                      <Info className="w-4 h-4 shrink-0" />
-                      <span>
-                        {connectionMethod === 'direct'
-                          ? 'Petunjuk Koneksi Direct IP API:'
-                          : `Petunjuk Alur Koneksi ${connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'} VPN Tunnel:`}
-                      </span>
-                    </div>
-                    {connectionMethod === 'direct' ? (
-                      <p className="text-muted-foreground leading-relaxed">
-                        Gunakan metode ini jika VPS Billing dan Router MikroTik Anda berada dalam 1 lokasi LAN yang sama (misal 192.168.88.1) atau Router Anda memiliki IP Publik Static yang dapat diakses langsung. Anda dapat langsung melanjutkan ke langkah konfigurasi router.
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground leading-relaxed">
-                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> digunakan VPS untuk meremote MikroTik menembus NAT ISP. Tambahkan Client VPN terlebih dahulu, lalu <strong className="text-foreground">Salin Skrip</strong> yang di-generate dan <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda!
-                      </p>
-                    )}
-                  </div>
-
-                  {connectionMethod === 'direct' ? (
-                    <div className="p-6 text-center rounded-xl border border-dashed border-border bg-muted/20 space-y-3">
-                      <Globe className="w-8 h-8 text-primary mx-auto" />
-                      <div className="space-y-1">
-                        <div className="text-sm font-bold text-foreground">Mode Direct IP API Aktif</div>
-                        <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                          Tidak diperlukan tunnel VPN. Klik tombol di bawah untuk langsung mengisi kredensial login API MikroTik Anda.
-                        </p>
-                      </div>
-                      <Button onClick={() => { markStepCompleted(2); setCurrentStep(3); }} className="bg-[#002C60] hover:bg-[#1b437c] text-white text-xs gap-1.5">
-                        <span>Lanjut ke Koneksi Router MikroTik</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah VPN Client</span>
                       </Button>
                     </div>
-                  ) : (
-                    <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
-                      <div className="text-xs font-bold uppercase tracking-wider text-primary">
-                        Form Tambah Client VPN ({connectionMethod === 'wireguard' ? 'WireGuard' : 'L2TP'})
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="vpnName">Nama Client *</Label>
-                          <Input
-                            id="vpnName"
-                            value={routerForm.name}
-                            onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                            placeholder="cth: MIKROTIK SITE CIBINONG"
-                          />
+                  </CardHeader>
+
+                  <CardContent className="space-y-6">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total Client</p>
+                          <p className="text-xl font-bold text-foreground">{vpnClientsList.length}</p>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="allowedIps">IP Lokal / Subnet di Balik NAS (AllowedIPs)</Label>
-                          <Input
-                            id="allowedIps"
-                            value={routerForm.allowedIps}
-                            onChange={(e) => setRouterForm({ ...routerForm, allowedIps: e.target.value })}
-                            placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
-                          />
-                          <p className="text-[11px] text-muted-foreground">Pisahkan dengan koma. Diperlukan untuk remote ONT di balik MikroTik.</p>
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                          <Users className="w-5 h-5" />
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="winboxPort">Target Winbox Port *</Label>
-                          <Input
-                            id="winboxPort"
-                            type="number"
-                            value={routerForm.winboxPort}
-                            onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
-                            placeholder="8291"
-                          />
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">RADIUS Server</p>
+                          <p className="text-xl font-bold text-primary">{vpnClientsList.filter((c) => c.isRadiusServer).length}</p>
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="routerPort">Target API Port *</Label>
-                          <Input
-                            id="routerPort"
-                            type="number"
-                            value={routerForm.port}
-                            onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
-                            placeholder="8728"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="wwwPort">Target WWW Port *</Label>
-                          <Input
-                            id="wwwPort"
-                            type="number"
-                            value={routerForm.wwwPort}
-                            onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
-                            placeholder="80"
-                          />
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                          <Radio className="w-5 h-5" />
                         </div>
                       </div>
 
-                      <div className="pt-2">
-                        <Button onClick={handleSaveVpnClient} disabled={isSavingVpnClient} className="w-full bg-[#002C60] hover:bg-[#1b437c] text-white gap-2">
-                          {isSavingVpnClient ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                          <span>Simpan & Buat Client VPN</span>
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Client Aktif</p>
+                          <p className="text-xl font-bold text-emerald-600">{vpnClientsList.filter((c) => c.isActive).length}</p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                          <Wifi className="w-5 h-5" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Architecture Callout */}
+                    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-primary" />
+                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                          Arsitektur VPN EugineBill & Panduan Konsentrator
+                        </h4>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        VPS EugineBill bertindak sebagai <strong className="text-foreground">VPN Server</strong>. Alokasi <strong className="text-foreground">IP Client Tunnel</strong> digunakan VPS untuk meremote MikroTik menembus NAT ISP. Tambahkan Client VPN terlebih dahulu, lalu <strong className="text-foreground">Salin Skrip</strong> yang di-generate dan <strong className="text-foreground">Paste di Terminal Winbox</strong> MikroTik Anda.
+                      </p>
+                    </div>
+
+                    {/* VPN Clients List */}
+                    {vpnLoading ? (
+                      <div className="p-10 flex flex-col items-center justify-center space-y-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        <p className="text-xs text-muted-foreground">Memuat data VPN Client...</p>
+                      </div>
+                    ) : vpnClientsList.length === 0 ? (
+                      <div className="p-8 text-center rounded-2xl border-2 border-dashed border-border bg-muted/10 space-y-4">
+                        <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                          <Cable className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1 max-w-sm mx-auto">
+                          <h4 className="text-sm font-bold text-foreground">Belum Ada VPN Client</h4>
+                          <p className="text-xs text-muted-foreground">
+                            Tambahkan client VPN untuk MikroTik Anda agar dapat terhubung dengan billing VPS EugineBill.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setVpnFormData({
+                              name: '',
+                              description: '',
+                              vpnServerId: '__vps_wg__',
+                              vpnType: 'wireguard',
+                              customVpnIp: '',
+                              localNetworks: '',
+                              targetWinboxPort: '8291',
+                              targetApiPort: '8728',
+                              targetWwwPort: '80',
+                            });
+                            setShowAddVpnModal(true);
+                          }}
+                          className="bg-[#002C60] hover:bg-[#1b437c] text-white text-xs gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Tambah Client VPN Pertama</span>
                         </Button>
                       </div>
-
-                      {vpnClientSaved && (
-                        <div className="space-y-3 pt-4 border-t border-border">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <Label className="text-xs font-bold text-foreground">Skrip Generator RouterOS MikroTik Terminal</Label>
-                              <p className="text-[11px] text-muted-foreground">Salin skrip di bawah dan tempel di terminal MikroTik Anda.</p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                copyToClipboard(generatedScript);
-                                setCopiedScript(true);
-                                setTimeout(() => setCopiedScript(false), 2000);
-                              }}
-                              className="text-xs gap-1.5 h-8"
+                    ) : (
+                      <div className="space-y-4">
+                        {vpnClientsList.map((client) => {
+                          const serverInfo = resolveServer(client.vpnServerId);
+                          return (
+                            <div
+                              key={client.id}
+                              className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all shadow-xs space-y-4"
                             >
-                              {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                              <span>{copiedScript ? 'Tersalin!' : 'Salin Skrip'}</span>
-                            </Button>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                                    <Cable className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-bold text-sm text-foreground">{client.name}</h4>
+                                      {client.isRadiusServer && (
+                                        <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                                          RADIUS Server
+                                        </Badge>
+                                      )}
+                                      <Badge variant="secondary" className="text-[10px] uppercase font-mono">
+                                        {client.vpnType || 'wireguard'}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Server: {serverInfo?.name || client.vpnServerId || 'VPS Native'}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => viewCredentials(client)}
+                                    className="text-xs gap-1.5 h-8 border-primary/30 text-primary hover:bg-primary/10"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Lihat Script & Kredensial</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteVpnClient(client.id, client.name)}
+                                    className="text-xs h-8 px-2.5"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Server VPN</span>
+                                  <span className="font-mono text-foreground font-semibold">
+                                    {serverInfo?.name || 'VPS VPN Server'}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">IP VPN</span>
+                                  {editingIpClientId === client.id ? (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <input
+                                        type="text"
+                                        value={editingIpValue}
+                                        onChange={(e) => setEditingIpValue(e.target.value)}
+                                        className="px-2 py-0.5 text-xs font-mono bg-background border border-primary rounded text-foreground w-28"
+                                        autoFocus
+                                      />
+                                      <button
+                                        onClick={() => handleEditIpSave(client.id)}
+                                        disabled={editingIpLoading}
+                                        className="p-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-300"
+                                      >
+                                        <Check className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingIpClientId(null)}
+                                        className="p-1 bg-red-50 text-red-600 rounded border border-red-300"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="font-mono text-primary font-bold">{client.vpnIp}</code>
+                                      <button
+                                        onClick={() => {
+                                          setEditingIpClientId(client.id);
+                                          setEditingIpValue(client.vpnIp);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground"
+                                        title="Ubah IP VPN"
+                                      >
+                                        <Key className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Username</span>
+                                  <span className="font-mono text-foreground font-semibold">{client.username}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Winbox Remote</span>
+                                  <span className="font-mono text-foreground">
+                                    {serverInfo?.host}:{client.winboxPort || client.publicPorts?.services?.winbox?.public || 8291}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {client.description && (
+                                <p className="text-xs text-muted-foreground">{client.description}</p>
+                              )}
+
+                              <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                                <label className="flex items-center gap-2 cursor-pointer text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={client.isRadiusServer || false}
+                                    onChange={(e) => handleToggleRadiusServer(client.id, e.target.checked)}
+                                    className="rounded border-border text-primary"
+                                  />
+                                  <span className="text-muted-foreground">Jadikan sebagai RADIUS Server</span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+
+                  <CardFooter className="justify-between border-t border-border pt-4">
+                    <Button variant="outline" onClick={() => setCurrentStep(1)}>
+                      Kembali
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        markStepCompleted(2);
+                        setCurrentStep(3);
+                      }}
+                      className="bg-[#002C60] hover:bg-[#1b437c] text-white"
+                    >
+                      <span>Lanjut ke Koneksi Router MikroTik</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+
+                {/* Modal 1: Add VPN Client Modal */}
+                {showAddVpnModal && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-card border border-border rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-5 border-b border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Cable className="w-5 h-5" />
                           </div>
-                          <textarea
-                            readOnly
-                            rows={8}
-                            value={generatedScript}
-                            className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/60 text-foreground focus:outline-none"
+                          <h3 className="font-bold text-base text-foreground">Tambah Client VPN</h3>
+                        </div>
+                        <button onClick={() => setShowAddVpnModal(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleCreateVpnClient} className="flex-1 overflow-y-auto p-5 space-y-4">
+                        <div className="space-y-1.5">
+                          <Label>Server VPN *</Label>
+                          <select
+                            value={vpnFormData.vpnServerId}
+                            onChange={(e) => setVpnFormData({ ...vpnFormData, vpnServerId: e.target.value })}
+                            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                            required
+                          >
+                            <option value="">Pilih Server VPN</option>
+                            {vpnFormData.vpnType === 'wireguard' && wgServerInfo?.installed && (
+                              <option value="__vps_wg__">
+                                [VPS Native] WireGuard Server ({wgServerInfo.publicIp || 'VPS'}:{wgServerInfo.listenPort || 51820}) — Rekomendasi Utama
+                              </option>
+                            )}
+                            {vpnFormData.vpnType === 'l2tp' && l2tpServerInfo?.installed && (
+                              <option value="__vps_l2tp__">
+                                [VPS Native] L2TP/IPsec Server ({l2tpServerInfo.publicIp || 'VPS'}) — Rekomendasi Utama
+                              </option>
+                            )}
+                            {vpnServersList
+                              .filter((server) => {
+                                if (vpnFormData.vpnType === 'wireguard') return server.wgEnabled === true;
+                                if (vpnFormData.vpnType === 'l2tp') return server.l2tpEnabled === true;
+                                if (vpnFormData.vpnType === 'sstp') return server.sstpEnabled === true;
+                                if (vpnFormData.vpnType === 'pptp') return server.pptpEnabled === true;
+                                return true;
+                              })
+                              .map((server) => (
+                                <option key={server.id} value={server.id}>
+                                  [External CHR] {server.name} ({server.host})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>VPN Protocol *</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['wireguard', 'l2tp', 'pptp', 'sstp'] as const).map((type) => (
+                              <button
+                                key={type}
+                                type="button"
+                                onClick={() => {
+                                  setVpnFormData({
+                                    ...vpnFormData,
+                                    vpnType: type,
+                                    vpnServerId: type === 'wireguard' ? '__vps_wg__' : type === 'l2tp' ? '__vps_l2tp__' : '',
+                                  });
+                                  if (type === 'wireguard') loadWgServerInfo();
+                                  if (type === 'l2tp') loadL2tpServerInfo();
+                                }}
+                                className={`px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                                  vpnFormData.vpnType === type
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-muted/40 border-border text-foreground hover:bg-muted'
+                                }`}
+                              >
+                                {type === 'l2tp' ? 'L2TP/IPSec' : type === 'wireguard' ? 'WireGuard' : type.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Nama Client *</Label>
+                          <Input
+                            value={vpnFormData.name}
+                            onChange={(e) => setVpnFormData({ ...vpnFormData, name: e.target.value })}
+                            placeholder="e.g., MIKROTIK SITE CIBINONG"
+                            required
                           />
                         </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
 
-                <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(1)}>
-                    Kembali
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      markStepCompleted(2);
-                      setCurrentStep(3);
-                    }}
-                    className="bg-[#002C60] hover:bg-[#1b437c] text-white"
-                  >
-                    <span>Lanjut ke Koneksi Router MikroTik</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
+                        <div className="space-y-1.5">
+                          <Label>Deskripsi (opsional)</Label>
+                          <Input
+                            value={vpnFormData.description}
+                            onChange={(e) => setVpnFormData({ ...vpnFormData, description: e.target.value })}
+                            placeholder="Catatan tambahan..."
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>IP Lokal / Subnet di Balik NAS (AllowedIPs) (opsional)</Label>
+                          <Input
+                            value={vpnFormData.localNetworks}
+                            onChange={(e) => setVpnFormData({ ...vpnFormData, localNetworks: e.target.value })}
+                            placeholder="cth: 192.168.21.0/24, 192.168.1.0/24"
+                            className="font-mono text-xs"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Pisahkan dengan koma. IP/subnet ini akan ditambahkan ke AllowedIPs peer di VPS agar VPS bisa menjangkau jaringan lokal / remote ONT di balik MikroTik.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>IP VPN Client (opsional — kosongkan untuk auto-assign)</Label>
+                          <Input
+                            value={vpnFormData.customVpnIp}
+                            onChange={(e) => setVpnFormData({ ...vpnFormData, customVpnIp: e.target.value })}
+                            placeholder="cth: 10.200.0.2 (kosong = otomatis)"
+                            className="font-mono text-xs"
+                          />
+                        </div>
+
+                        <div className="p-3.5 bg-muted/40 border border-border rounded-xl space-y-3">
+                          <Label className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                            Port Layanan MikroTik (Target Port MikroTik)
+                          </Label>
+                          <div className="grid grid-cols-3 gap-2.5">
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-muted-foreground font-medium block">Winbox Port</span>
+                              <Input
+                                value={vpnFormData.targetWinboxPort}
+                                onChange={(e) => setVpnFormData({ ...vpnFormData, targetWinboxPort: e.target.value })}
+                                placeholder="8291"
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-muted-foreground font-medium block">API Port</span>
+                              <Input
+                                value={vpnFormData.targetApiPort}
+                                onChange={(e) => setVpnFormData({ ...vpnFormData, targetApiPort: e.target.value })}
+                                placeholder="8728"
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[11px] text-muted-foreground font-medium block">WWW Port</span>
+                              <Input
+                                value={vpnFormData.targetWwwPort}
+                                onChange={(e) => setVpnFormData({ ...vpnFormData, targetWwwPort: e.target.value })}
+                                placeholder="80"
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Isi jika MikroTik Anda memakai port kustom (cth: Winbox 8228, API 8520). Port publik VPS akan otomatis di-forward (DNAT) ke port ini.
+                          </p>
+                        </div>
+
+                        <div className="flex gap-3 pt-3">
+                          <Button type="button" variant="outline" onClick={() => setShowAddVpnModal(false)} className="flex-1">
+                            Batal
+                          </Button>
+                          <Button type="submit" disabled={creatingVpnClient} className="flex-1 bg-[#002C60] hover:bg-[#1b437c] text-white">
+                            {creatingVpnClient ? 'Membuat...' : 'Buat Client VPN'}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal 2: Credentials & Script Modal */}
+                {showCredentialsModal && credentials && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-card border border-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-5 border-b border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Shield className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-foreground">Kredensial &amp; Script Setup VPN MikroTik</h3>
+                            <p className="text-xs text-muted-foreground">{credentials.nasName || credentials.username} ({credentials.vpnIp})</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowCredentialsModal(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-muted/40 border border-border rounded-xl text-xs">
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Server VPN</span>
+                            <span className="font-mono text-foreground font-semibold">{credentials.server}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">IP VPN Client</span>
+                            <span className="font-mono text-primary font-bold">{credentials.vpnIp}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Username</span>
+                            <span className="font-mono text-foreground font-semibold">{credentials.username}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Password</span>
+                            <span className="font-mono text-foreground font-semibold">{credentials.password || '-'}</span>
+                          </div>
+                          {credentials.apiUsername && (
+                            <div>
+                              <span className="text-muted-foreground block mb-0.5 font-medium">API &amp; Winbox User</span>
+                              <span className="font-mono text-emerald-600 font-bold">{credentials.apiUsername}</span>
+                            </div>
+                          )}
+                          {credentials.apiPassword && (
+                            <div>
+                              <span className="text-muted-foreground block mb-0.5 font-medium">API &amp; Winbox Pass</span>
+                              <span className="font-mono text-emerald-600 font-bold">{credentials.apiPassword}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Public Remote Access Ports Box */}
+                        {(() => {
+                          const vpsIp = credentials.vpsPublicIp || credentials.serverHost || credentials.server || 'VPS_IP';
+                          const ports = credentials.publicPorts?.services || {};
+                          const winboxPort = ports.winbox?.public || credentials.winboxPort || (credentials.vpnType === 'wireguard' ? 10001 : 8291);
+                          const winboxTarget = ports.winbox?.target || 8291;
+                          const apiPort = ports.api?.public || (credentials.vpnType === 'wireguard' ? 10002 : 8728);
+                          const apiTarget = ports.api?.target || 8728;
+                          const wwwPort = ports.www?.public || (credentials.vpnType === 'wireguard' ? 10004 : 80);
+                          const wwwTarget = ports.www?.target || 80;
+                          const sshPort = ports.ssh?.public || (credentials.vpnType === 'wireguard' ? 10006 : 22);
+                          const sshTarget = ports.ssh?.target || 22;
+
+                          return (
+                            <div className="p-4 bg-muted/20 border border-border rounded-xl space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                  <Globe className="w-4 h-4 text-primary" /> Alokasi Remote Akses Publik (Dari Luar / Internet)
+                                </p>
+                                <span className="text-[11px] text-muted-foreground font-mono">Host: {vpsIp}</span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                <div className="p-2.5 bg-card border border-border rounded-lg">
+                                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">Winbox Remote (&rarr; {winboxTarget})</p>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <span className="font-mono text-xs font-bold text-primary truncate">{vpsIp}:{winboxPort}</span>
+                                    <button onClick={() => copyToClipboard(`${vpsIp}:${winboxPort}`)} className="text-muted-foreground hover:text-foreground shrink-0 ml-1">
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 bg-card border border-border rounded-lg">
+                                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">WebFig / Web (&rarr; {wwwTarget})</p>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <span className="font-mono text-xs font-bold text-amber-600">Port {wwwPort}</span>
+                                    <a href={`http://${vpsIp}:${wwwPort}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline shrink-0 ml-1 font-semibold">
+                                      Buka &rarr;
+                                    </a>
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 bg-card border border-border rounded-lg">
+                                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">API Port (&rarr; {apiTarget})</p>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <span className="font-mono text-xs font-bold text-emerald-600">Port {apiPort}</span>
+                                    <button onClick={() => copyToClipboard(String(apiPort))} className="text-muted-foreground hover:text-foreground shrink-0 ml-1">
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 bg-card border border-border rounded-lg">
+                                  <p className="text-[10px] text-muted-foreground font-semibold uppercase">SSH Port (&rarr; {sshTarget})</p>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <span className="font-mono text-xs font-bold text-purple-600">Port {sshPort}</span>
+                                    <button onClick={() => copyToClipboard(`${vpsIp} -p ${sshPort}`)} className="text-muted-foreground hover:text-foreground shrink-0 ml-1">
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                              Script MikroTik Terminal ({selectedVpnType.toUpperCase()})
+                            </Label>
+                            {selectedVpnType === 'l2tp' && (
+                              <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setScriptMode('full')}
+                                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                    scriptMode === 'full' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  Lengkap (+Port & User)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setScriptMode('quick')}
+                                  className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                    scriptMode === 'quick' ? 'bg-background text-foreground font-bold shadow-xs' : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  Singkat (UltraVPN)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <pre className="w-full font-mono text-xs p-4 rounded-xl border border-border bg-muted/60 text-foreground overflow-auto max-h-72 whitespace-pre-wrap break-words">
+                            {generateMikroTikScript()}
+                          </pre>
+                        </div>
+                      </div>
+
+                      <div className="p-4 border-t border-border flex gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => copyToClipboard(generateMikroTikScript())}
+                          className="flex-1 gap-1.5"
+                        >
+                          <Copy className="w-4 h-4 text-primary" />
+                          <span>Salin Script RouterOS</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => setShowCredentialsModal(false)}
+                          className="flex-1 bg-[#002C60] hover:bg-[#1b437c] text-white"
+                        >
+                          Tutup
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* STEP 3: KONEKSI ROUTER MIKROTIK (API & CREDENTIALS) */}
             {currentStep === 3 && (
-              <Card className="border-border shadow-xs bg-card">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                        <Server className="w-5 h-5" />
+              <div className="space-y-6">
+                <Card className="border-border shadow-xs bg-card">
+                  <CardHeader>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                          <Server className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle>Koneksi Router MikroTik</CardTitle>
+                          <CardDescription>
+                            Konfigurasi kredensial API dan parameter koneksi MikroTik untuk billing & manajemen pelanggan.
+                          </CardDescription>
+                        </div>
                       </div>
-                      <div>
-                        <CardTitle>Koneksi Router MikroTik</CardTitle>
-                        <CardDescription>
-                          Konfigurasi kredensial API dan parameter koneksi MikroTik untuk billing & manajemen pelanggan.
-                        </CardDescription>
+                      <Button
+                        onClick={() => {
+                          setEditingRouter(null);
+                          setRouterFormData({
+                            name: 'Router Utama',
+                            nasname: '',
+                            shortname: '',
+                            type: 'mikrotik',
+                            ipAddress: '',
+                            username: '',
+                            password: '',
+                            port: '8728',
+                            apiPort: '8729',
+                            winboxPort: '8291',
+                            secret: 'secret123',
+                            ports: '1812',
+                            server: '',
+                            community: '',
+                            description: '',
+                            vpnClientId: vpnClientsList[0]?.id || '',
+                            authMode: 'local',
+                          });
+                          if (vpnClientsList.length > 0) {
+                            handleVpnClientChange(vpnClientsList[0].id);
+                          }
+                          setRouterConnTestResult(null);
+                          setShowRouterModal(true);
+                        }}
+                        className="bg-[#002C60] hover:bg-[#1b437c] text-white text-xs gap-1.5 shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Router</span>
+                      </Button>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-6">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total Router</p>
+                          <p className="text-xl font-bold text-foreground">{routersList.length}</p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                          <Server className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Online</p>
+                          <p className="text-xl font-bold text-emerald-600">
+                            {Object.values(routerStatusMap).filter((s) => s.online).length}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                          <Wifi className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">MikroTik</p>
+                          <p className="text-xl font-bold text-primary">
+                            {routersList.filter((r) => r.type === 'mikrotik').length}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-muted-foreground">via VPN</p>
+                          <p className="text-xl font-bold text-purple-600">
+                            {routersList.filter((r) => r.vpnClientId).length}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600">
+                          <Shield className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
-                    {routerSaved && (
-                      <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-700 gap-1">
-                        <Check className="w-3 h-3 text-emerald-600" /> Terhubung
-                      </Badge>
+
+                    {/* Router List */}
+                    {loadingRouters ? (
+                      <div className="p-10 flex flex-col items-center justify-center space-y-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        <p className="text-xs text-muted-foreground">Memuat data router...</p>
+                      </div>
+                    ) : routersList.length === 0 ? (
+                      <div className="p-6 rounded-2xl border border-border bg-muted/10 space-y-6">
+                        <div className="text-center space-y-2">
+                          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                            <Server className="w-6 h-6" />
+                          </div>
+                          <h4 className="text-sm font-bold text-foreground">Tambah Router MikroTik Utama</h4>
+                          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                            Isi detail koneksi API MikroTik Anda di bawah. Jika terhubung via VPN Client, kredensial dan IP akan otomatis terisi.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleSaveRouterSubmit} className="space-y-4 max-w-xl mx-auto">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="inlineRouterName">Nama Router *</Label>
+                              <Input
+                                id="inlineRouterName"
+                                value={routerFormData.name}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, name: e.target.value })}
+                                placeholder="Router Utama"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="inlineRouterType">Tipe Router *</Label>
+                              <select
+                                id="inlineRouterType"
+                                value={routerFormData.type}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, type: e.target.value })}
+                                className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                                required
+                              >
+                                <option value="mikrotik">Router MikroTik</option>
+                                <option value="gateway">Gateway VPS</option>
+                                <option value="other">Lainnya</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Auth Mode */}
+                          <div className="space-y-2">
+                            <Label>Mode Autentikasi Pelanggan *</Label>
+                            <select
+                              value={routerFormData.authMode || 'local'}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, authMode: e.target.value })}
+                              className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                              required
+                            >
+                              <option value="local">Local MikroTik API (Default - Langsung RouterOS)</option>
+                              <option value="radius">FreeRADIUS Server (Direct MySQL & CoA)</option>
+                            </select>
+                            <p className="text-[11px] text-muted-foreground">
+                              {routerFormData.authMode === 'radius'
+                                ? 'Autentikasi dikelola terpusat via server FreeRADIUS di MySQL radcheck/radreply.'
+                                : 'Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).'}
+                            </p>
+                          </div>
+
+                          {/* VPN Client Toggle */}
+                          <div className="p-3.5 bg-primary/5 border border-primary/20 rounded-xl space-y-2">
+                            <label className="flex items-center gap-2.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={useVpnClientInRouter}
+                                onChange={(e) => {
+                                  setUseVpnClientInRouter(e.target.checked);
+                                  if (!e.target.checked) setRouterFormData({ ...routerFormData, vpnClientId: '' });
+                                }}
+                                className="rounded border-border text-primary"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-foreground">Hubungkan via VPN Client</span>
+                                <p className="text-[11px] text-muted-foreground">Gunakan alamat IP VPN client yang ada</p>
+                              </div>
+                            </label>
+
+                            {useVpnClientInRouter && (
+                              <div className="pt-2">
+                                <Label className="text-xs mb-1 block">VPN Client *</Label>
+                                <select
+                                  value={routerFormData.vpnClientId}
+                                  onChange={(e) => handleVpnClientChange(e.target.value)}
+                                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
+                                  required={useVpnClientInRouter}
+                                >
+                                  <option value="">Pilih VPN Client</option>
+                                  {vpnClientsList.map((vpn) => (
+                                    <option key={vpn.id} value={vpn.id}>
+                                      {vpn.name} ({vpn.vpnIp}){vpn.isRadiusServer ? ' [RADIUS]' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* IP Addresses */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlineIp">Alamat IP (Untuk API) *</Label>
+                              <Input
+                                id="inlineIp"
+                                value={routerFormData.ipAddress}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, ipAddress: e.target.value })}
+                                placeholder="10.200.0.2"
+                                required
+                                disabled={useVpnClientInRouter && !!routerFormData.vpnClientId}
+                              />
+                              <p className="text-[11px] text-muted-foreground">Digunakan oleh VPS untuk meremote MikroTik via Winbox/API port.</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlineNas">NAS Name (IP) (Untuk RADIUS) *</Label>
+                              <Input
+                                id="inlineNas"
+                                value={routerFormData.nasname}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, nasname: e.target.value })}
+                                placeholder="10.200.0.2"
+                                required
+                                disabled={useVpnClientInRouter && !!routerFormData.vpnClientId}
+                              />
+                              <p className="text-[11px] text-muted-foreground">IP yang dikirim MikroTik ke RADIUS.</p>
+                            </div>
+                          </div>
+
+                          {/* Ports */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlinePort">Port API</Label>
+                              <Input
+                                id="inlinePort"
+                                type="number"
+                                value={routerFormData.port}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, port: e.target.value })}
+                                placeholder="8728"
+                              />
+                              <p className="text-[11px] text-muted-foreground">Port API MikroTik (default 8728)</p>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const port = routerFormData.port || '8728';
+                                  const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
+                                  await copyToClipboard(cmd);
+                                  showSuccess(`Script port ${port} & firewall disalin!`);
+                                }}
+                                className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
+                              >
+                                <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
+                              </button>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlineWinbox">Winbox Port</Label>
+                              <Input
+                                id="inlineWinbox"
+                                type="number"
+                                value={routerFormData.winboxPort}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, winboxPort: e.target.value })}
+                                placeholder="8291"
+                              />
+                              <p className="text-[11px] text-muted-foreground">Port Winbox MikroTik (default 8291)</p>
+                            </div>
+                          </div>
+
+                          {/* Credentials */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlineUser">Username *</Label>
+                              <Input
+                                id="inlineUser"
+                                value={routerFormData.username}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, username: e.target.value })}
+                                placeholder="admin"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlinePass">Password *</Label>
+                              <Input
+                                id="inlinePass"
+                                type="password"
+                                value={routerFormData.password}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, password: e.target.value })}
+                                placeholder="••••••••"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          {/* RADIUS Secret */}
+                          <div className="space-y-1.5">
+                            <Label htmlFor="inlineSecret">RADIUS Secret *</Label>
+                            <Input
+                              id="inlineSecret"
+                              value={routerFormData.secret}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, secret: e.target.value })}
+                              placeholder="secret123"
+                              required
+                            />
+                          </div>
+
+                          {/* Test Connection Box */}
+                          <div className="p-3.5 bg-muted/40 border border-border rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-foreground">Test Koneksi MikroTik</span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleTestRouterConnection}
+                                disabled={testingRouterConn}
+                                className="text-xs gap-1.5"
+                              >
+                                {testingRouterConn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Radio className="w-3.5 h-3.5 text-primary" />}
+                                <span>{testingRouterConn ? 'Menguji...' : 'Tes Koneksi'}</span>
+                              </Button>
+                            </div>
+
+                            {routerConnTestResult && (
+                              <div
+                                className={`p-3 rounded-lg text-xs ${
+                                  routerConnTestResult.success
+                                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
+                                    : 'bg-red-50 text-red-900 border border-red-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {routerConnTestResult.success ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4 text-red-600" />
+                                  )}
+                                  <span className="font-semibold">{routerConnTestResult.message}</span>
+                                </div>
+                                {routerConnTestResult.identity && (
+                                  <p className="mt-1 text-[11px] font-mono">Identitas: {routerConnTestResult.identity}</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <Button type="submit" disabled={savingRouterItem} className="w-full bg-[#002C60] hover:bg-[#1b437c] text-white gap-2">
+                            {savingRouterItem ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            <span>Simpan & Hubungkan Router</span>
+                          </Button>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {routersList.map((routerData) => {
+                          const status = routerStatusMap[routerData.id];
+                          return (
+                            <div
+                              key={routerData.id}
+                              className="p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all shadow-xs space-y-4"
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                                    <Server className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-bold text-sm text-foreground">{routerData.name}</h4>
+                                      {status?.online ? (
+                                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300">
+                                          Online
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-300">
+                                          Offline
+                                        </Badge>
+                                      )}
+                                      {routerData.vpnClient && (
+                                        <Badge variant="secondary" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                                          via VPN: {routerData.vpnClient.name}
+                                        </Badge>
+                                      )}
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {routerData.authMode === 'radius' ? 'FreeRADIUS' : 'Local API'}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {routerData.type} • {routerData.nasname}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleSetupRadius(routerData.id)}
+                                    disabled={settingUpRadiusId === routerData.id}
+                                    className="text-xs gap-1.5 h-8 border-primary/30 text-primary hover:bg-primary/10"
+                                    title="Setup RADIUS Client"
+                                  >
+                                    <Radio className="w-3.5 h-3.5" />
+                                    <span>RADIUS Script</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleSetupHotspot(routerData)}
+                                    disabled={settingUpHotspotId === routerData.id}
+                                    className="text-xs gap-1.5 h-8 border-emerald-500/30 text-emerald-700 hover:bg-emerald-50"
+                                    title="Setup Hotspot Gateway & VLAN"
+                                  >
+                                    <Wifi className="w-3.5 h-3.5" />
+                                    <span>Hotspot</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingRouter(routerData);
+                                      const winboxTarget = (routerData.vpnClient as any)?.publicPorts?.services?.winbox?.target?.toString() || '8291';
+                                      const apiTarget = (routerData.vpnClient as any)?.publicPorts?.services?.api?.target?.toString();
+                                      const effectivePort = routerData.port && routerData.port !== 8728 ? routerData.port.toString() : (apiTarget || routerData.port?.toString() || '8728');
+                                      setRouterFormData({
+                                        name: routerData.name,
+                                        nasname: routerData.nasname,
+                                        shortname: routerData.shortname,
+                                        type: routerData.type,
+                                        ipAddress: routerData.ipAddress,
+                                        username: routerData.username,
+                                        password: routerData.password,
+                                        port: effectivePort,
+                                        apiPort: routerData.apiPort ? routerData.apiPort.toString() : '8729',
+                                        winboxPort: winboxTarget,
+                                        secret: routerData.secret,
+                                        ports: routerData.ports?.toString() || '1812',
+                                        server: routerData.server || '',
+                                        community: routerData.community || '',
+                                        description: routerData.description || '',
+                                        vpnClientId: routerData.vpnClientId || '',
+                                        authMode: routerData.authMode || 'local',
+                                      });
+                                      setUseVpnClientInRouter(!!routerData.vpnClientId);
+                                      setShowRouterModal(true);
+                                    }}
+                                    className="text-xs h-8 px-2.5"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteRouterItem(routerData.id, routerData.name)}
+                                    className="text-xs h-8 px-2.5"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {/* Details Grid */}
+                              <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs">
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">NAS Name (IP)</span>
+                                  <div className="flex items-center gap-1">
+                                    <code className="font-mono text-primary font-bold">{routerData.nasname}</code>
+                                    <button
+                                      onClick={() => copyToClipboard(routerData.nasname)}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Short Name</span>
+                                  <span className="font-mono text-foreground">{routerData.shortname || '-'}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Tipe</span>
+                                  <span className="font-mono text-foreground">{routerData.type}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Port API</span>
+                                  <span className="font-mono text-foreground font-bold">{routerData.port}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">Port RADIUS</span>
+                                  <span className="font-mono text-foreground">{routerData.ports || 1812}</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted-foreground block mb-0.5 font-medium">RADIUS Secret</span>
+                                  <div className="flex items-center gap-1">
+                                    <code className="font-mono text-muted-foreground">{'*'.repeat(8)}</code>
+                                    <button
+                                      onClick={() => copyToClipboard(routerData.secret)}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Status Info if present */}
+                              {status && (status.identity || status.uptime) && (
+                                <div className="p-3 bg-muted/40 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs border border-border/60">
+                                  {status.identity && (
+                                    <div>
+                                      <span className="text-muted-foreground block mb-0.5 font-medium">Identitas Router</span>
+                                      <span className="font-mono text-emerald-700 font-bold">{status.identity}</span>
+                                    </div>
+                                  )}
+                                  {status.uptime && (
+                                    <div>
+                                      <span className="text-muted-foreground block mb-0.5 font-medium">Uptime</span>
+                                      <span className="font-mono text-foreground">{status.uptime}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {routerData.description && (
+                                <p className="text-xs text-muted-foreground">{routerData.description}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
-                  </div>
-                </CardHeader>
+                  </CardContent>
 
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="routerName">Nama Router / Identitas *</Label>
-                      <Input
-                        id="routerName"
-                        value={routerForm.name}
-                        onChange={(e) => setRouterForm({ ...routerForm, name: e.target.value })}
-                        placeholder="cth: MikroTik-Utama"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="routerIp">
-                        {connectionMethod === 'direct' ? 'Alamat IP (LAN / Publik Static) *' : 'IP VPN Client Tunnel *'}
-                      </Label>
-                      <Input
-                        id="routerIp"
-                        value={routerForm.ipAddress}
-                        onChange={(e) => setRouterForm({ ...routerForm, ipAddress: e.target.value })}
-                        placeholder="cth: 10.254.1.2"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="routerApiPort">Port API MikroTik *</Label>
-                      <Input
-                        id="routerApiPort"
-                        type="number"
-                        value={routerForm.port}
-                        onChange={(e) => setRouterForm({ ...routerForm, port: e.target.value })}
-                        placeholder="8728"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="routerWinboxPort">Port Winbox</Label>
-                      <Input
-                        id="routerWinboxPort"
-                        type="number"
-                        value={routerForm.winboxPort}
-                        onChange={(e) => setRouterForm({ ...routerForm, winboxPort: e.target.value })}
-                        placeholder="8291"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="routerWwwPort">Port WWW / WebFig</Label>
-                      <Input
-                        id="routerWwwPort"
-                        type="number"
-                        value={routerForm.wwwPort}
-                        onChange={(e) => setRouterForm({ ...routerForm, wwwPort: e.target.value })}
-                        placeholder="80"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Credentials Section */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="routerUsername">Username API MikroTik *</Label>
-                      <Input
-                        id="routerUsername"
-                        value={routerForm.username}
-                        onChange={(e) => setRouterForm({ ...routerForm, username: e.target.value })}
-                        placeholder="euginebill_api"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="routerPassword">Password API MikroTik *</Label>
-                      <Input
-                        id="routerPassword"
-                        type="password"
-                        value={routerForm.password}
-                        onChange={(e) => setRouterForm({ ...routerForm, password: e.target.value })}
-                        placeholder="Password API"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Auth Mode Section */}
-                  <div className="space-y-2 pt-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                      Mode Autentikasi Pelanggan *
-                    </Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                          routerForm.authMode === 'local'
-                            ? 'border-primary bg-primary/5 text-foreground font-medium'
-                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="authMode"
-                          value="local"
-                          checked={routerForm.authMode === 'local'}
-                          onChange={() => setRouterForm({ ...routerForm, authMode: 'local' })}
-                          className="mt-1"
-                        />
-                        <div className="text-xs space-y-0.5">
-                          <div className="font-bold text-foreground">Local MikroTik API (Default - Langsung RouterOS)</div>
-                          <p className="text-muted-foreground text-[11px]">
-                            Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).
-                          </p>
-                        </div>
-                      </label>
-
-                      <label
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                          routerForm.authMode === 'radius'
-                            ? 'border-primary bg-primary/5 text-foreground font-medium'
-                            : 'border-border bg-background text-muted-foreground hover:border-border/80'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="authMode"
-                          value="radius"
-                          checked={routerForm.authMode === 'radius'}
-                          onChange={() => setRouterForm({ ...routerForm, authMode: 'radius' })}
-                          className="mt-1"
-                        />
-                        <div className="text-xs space-y-0.5">
-                          <div className="font-bold text-foreground">FreeRADIUS Server Mode</div>
-                          <p className="text-muted-foreground text-[11px]">
-                            Autentikasi dikelola secara terpusat melalui server FreeRADIUS VPS EugineBill.
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* FreeRADIUS Integration Card — STRICTLY HIDDEN UNLESS radiusEnabled && authMode === 'radius' */}
-                  {radiusEnabled && routerForm.authMode === 'radius' && (
-                    <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 space-y-2 text-xs">
-                      <div className="font-bold flex items-center gap-2">
-                        <Radio className="w-4 h-4 text-amber-600" />
-                        <span>FreeRADIUS Server Integration</span>
-                      </div>
-                      <p>
-                        RADIUS Secret: <code className="font-mono font-bold bg-amber-100 px-1 py-0.5 rounded">{routerForm.secret}</code>
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Test Result Box */}
-                  {testResult && (
-                    <div
-                      className={`p-4 rounded-lg border text-xs leading-relaxed ${
-                        testResult.success
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                          : 'border-destructive/30 bg-destructive/10 text-destructive'
-                      }`}
-                    >
-                      <div className="font-bold mb-1">
-                        {testResult.success ? 'Koneksi Berhasil!' : 'Koneksi Gagal'}
-                      </div>
-                      <p>{testResult.message}</p>
-                    </div>
-                  )}
-                </CardContent>
-
-                <CardFooter className="justify-between border-t border-border pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStep(2)}>
-                    Kembali
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={handleTestRouter} disabled={isTestingRouter}>
-                      {isTestingRouter ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Radio className="w-4 h-4 text-primary" />}
-                      <span>Uji Koneksi API</span>
+                  <CardFooter className="justify-between border-t border-border pt-4">
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>
+                      Kembali
                     </Button>
-                    <Button onClick={handleSaveRouter} disabled={isSavingRouter} className="bg-[#002C60] hover:bg-[#1b437c] text-white">
+                    <Button
+                      onClick={() => {
+                        markStepCompleted(3);
+                        setCurrentStep(4);
+                      }}
+                      className="bg-[#002C60] hover:bg-[#1b437c] text-white"
+                    >
                       <span>Lanjut ke Sistem Isolir</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
+                  </CardFooter>
+                </Card>
+
+                {/* Add / Edit Router Modal */}
+                {showRouterModal && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-card border border-border rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-5 border-b border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Server className="w-5 h-5" />
+                          </div>
+                          <h3 className="font-bold text-base text-foreground">
+                            {editingRouter ? 'Edit Router' : 'Tambah Router Baru'}
+                          </h3>
+                        </div>
+                        <button onClick={() => setShowRouterModal(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveRouterSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+                        <div className="space-y-1.5">
+                          <Label>Nama Router *</Label>
+                          <Input
+                            value={routerFormData.name}
+                            onChange={(e) => setRouterFormData({ ...routerFormData, name: e.target.value })}
+                            placeholder="Router Utama"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Tipe Router *</Label>
+                          <select
+                            value={routerFormData.type}
+                            onChange={(e) => setRouterFormData({ ...routerFormData, type: e.target.value })}
+                            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                            required
+                          >
+                            <option value="mikrotik">Router MikroTik</option>
+                            <option value="gateway">Gateway VPS</option>
+                            <option value="other">Lainnya</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>Mode Autentikasi Pelanggan *</Label>
+                          <select
+                            value={routerFormData.authMode || 'local'}
+                            onChange={(e) => setRouterFormData({ ...routerFormData, authMode: e.target.value })}
+                            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none"
+                            required
+                          >
+                            <option value="local">Local MikroTik API (Default - Langsung RouterOS)</option>
+                            <option value="radius">FreeRADIUS Server (Direct MySQL & CoA)</option>
+                          </select>
+                          <p className="text-[11px] text-muted-foreground">
+                            {routerFormData.authMode === 'radius'
+                              ? 'Autentikasi dikelola terpusat via server FreeRADIUS di MySQL radcheck/radreply.'
+                              : 'Autentikasi dikelola langsung pada database internal MikroTik (/ppp/secret & /ip/hotspot/user).'}
+                          </p>
+                        </div>
+
+                        {/* VPN Client selector in modal */}
+                        <div className="p-3.5 bg-muted/40 border border-border rounded-xl space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={useVpnClientInRouter}
+                              onChange={(e) => {
+                                setUseVpnClientInRouter(e.target.checked);
+                                if (!e.target.checked) setRouterFormData({ ...routerFormData, vpnClientId: '' });
+                              }}
+                              className="rounded border-border text-primary"
+                            />
+                            <div>
+                              <span className="text-xs font-bold text-foreground">Hubungkan via VPN Client</span>
+                              <p className="text-[11px] text-muted-foreground">Gunakan alamat IP VPN client yang ada</p>
+                            </div>
+                          </label>
+
+                          {useVpnClientInRouter && (
+                            <div className="pt-2">
+                              <Label className="text-xs mb-1 block">VPN Client *</Label>
+                              <select
+                                value={routerFormData.vpnClientId}
+                                onChange={(e) => handleVpnClientChange(e.target.value)}
+                                className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs text-foreground focus:outline-none"
+                                required={useVpnClientInRouter}
+                              >
+                                <option value="">Pilih VPN Client</option>
+                                {vpnClientsList.map((vpn) => (
+                                  <option key={vpn.id} value={vpn.id}>
+                                    {vpn.name} ({vpn.vpnIp}){vpn.isRadiusServer ? ' [RADIUS]' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label>Alamat IP (Untuk API) *</Label>
+                            <Input
+                              value={routerFormData.ipAddress}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, ipAddress: e.target.value })}
+                              placeholder="10.200.0.2"
+                              required
+                              disabled={useVpnClientInRouter && !!routerFormData.vpnClientId}
+                            />
+                            <p className="text-[11px] text-muted-foreground">Digunakan oleh VPS untuk meremote MikroTik via Winbox/API port.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label>NAS Name (IP) (Untuk RADIUS) *</Label>
+                            <Input
+                              value={routerFormData.nasname}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, nasname: e.target.value })}
+                              placeholder="10.200.0.2"
+                              required
+                              disabled={useVpnClientInRouter && !!routerFormData.vpnClientId}
+                            />
+                            <p className="text-[11px] text-muted-foreground">IP yang dikirim MikroTik ke RADIUS.</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label>Port API</Label>
+                            <Input
+                              type="number"
+                              value={routerFormData.port}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, port: e.target.value })}
+                              placeholder="8728"
+                            />
+                            <p className="text-[11px] text-muted-foreground">Port API MikroTik (default 8728)</p>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const port = routerFormData.port || '8728';
+                                const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
+                                await copyToClipboard(cmd);
+                                showSuccess(`Script port ${port} & firewall disalin!`);
+                              }}
+                              className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
+                            >
+                              <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label>Winbox Port</Label>
+                            <Input
+                              type="number"
+                              value={routerFormData.winboxPort}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, winboxPort: e.target.value })}
+                              placeholder="8291"
+                            />
+                            <p className="text-[11px] text-muted-foreground">Port Winbox MikroTik (default 8291)</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label>Username *</Label>
+                            <Input
+                              value={routerFormData.username}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, username: e.target.value })}
+                              placeholder="admin"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Password *</Label>
+                            <Input
+                              type="password"
+                              value={routerFormData.password}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, password: e.target.value })}
+                              placeholder="••••••••"
+                              required={!editingRouter}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label>RADIUS Secret *</Label>
+                          <Input
+                            value={routerFormData.secret}
+                            onChange={(e) => setRouterFormData({ ...routerFormData, secret: e.target.value })}
+                            placeholder="secret123"
+                            required
+                          />
+                        </div>
+
+                        {/* Test Connection Box in Modal */}
+                        {!editingRouter && (
+                          <div className="p-3.5 bg-muted/40 border border-border rounded-xl space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-foreground">Test Koneksi</span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleTestRouterConnection}
+                                disabled={testingRouterConn}
+                                className="text-xs gap-1.5"
+                              >
+                                {testingRouterConn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Radio className="w-3.5 h-3.5 text-primary" />}
+                                <span>{testingRouterConn ? 'Menguji...' : 'Tes'}</span>
+                              </Button>
+                            </div>
+
+                            {routerConnTestResult && (
+                              <div
+                                className={`p-3 rounded-lg text-xs ${
+                                  routerConnTestResult.success
+                                    ? 'bg-emerald-50 text-emerald-900 border border-emerald-300'
+                                    : 'bg-red-50 text-red-900 border border-red-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {routerConnTestResult.success ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  ) : (
+                                    <XCircle className="w-4 h-4 text-red-600" />
+                                  )}
+                                  <span className="font-semibold">{routerConnTestResult.message}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-3 pt-3">
+                          <Button type="button" variant="outline" onClick={() => setShowRouterModal(false)} className="flex-1">
+                            Batal
+                          </Button>
+                          <Button type="submit" disabled={savingRouterItem} className="flex-1 bg-[#002C60] hover:bg-[#1b437c] text-white">
+                            {savingRouterItem ? 'Menyimpan...' : editingRouter ? 'Update Router' : 'Simpan Router'}
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
-                </CardFooter>
-              </Card>
+                )}
+
+                {/* Modal: RADIUS Setup Script */}
+                {showRadiusScriptModal && radiusScriptModalData && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-card border border-border rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-5 border-b border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Radio className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-foreground">Script Setup RADIUS Client MikroTik</h3>
+                            <p className="text-xs text-muted-foreground">Konfigurasi otomatis AAA RADIUS client &amp; incoming CoA di MikroTik</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowRadiusScriptModal(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Pilih Versi RouterOS:
+                          </span>
+                          <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setRadiusScriptRosTab(7)}
+                              className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                                radiusScriptRosTab === 7 ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                              }`}
+                            >
+                              RouterOS 7.x (Recommended)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRadiusScriptRosTab(6)}
+                              className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                                radiusScriptRosTab === 6 ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                              }`}
+                            >
+                              RouterOS 6.x
+                            </button>
+                          </div>
+                        </div>
+
+                        <pre className="w-full font-mono text-xs p-4 rounded-xl border border-border bg-muted/60 text-foreground overflow-auto max-h-72 whitespace-pre-wrap break-words">
+                          {radiusScriptRosTab === 6 && radiusScriptModalData.scriptRos6
+                            ? radiusScriptModalData.scriptRos6
+                            : (radiusScriptModalData.scriptRos7 || radiusScriptModalData.script)}
+                        </pre>
+
+                        <div className="p-3.5 bg-muted/30 border border-border rounded-xl text-xs space-y-1 text-muted-foreground">
+                          <p className="font-semibold text-foreground">Cara Menggunakan:</p>
+                          <p>1. Buka Winbox &gt; Terminal MikroTik.</p>
+                          <p>2. Salin dan tempel skrip di atas ke Terminal lalu tekan Enter.</p>
+                        </div>
+                      </div>
+
+                      <div className="p-4 border-t border-border flex gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const toCopy = radiusScriptRosTab === 6 && radiusScriptModalData.scriptRos6
+                              ? radiusScriptModalData.scriptRos6
+                              : (radiusScriptModalData.scriptRos7 || radiusScriptModalData.script);
+                            copyToClipboard(toCopy);
+                            showSuccess(`Script RADIUS ROS ${radiusScriptRosTab}.x disalin!`);
+                          }}
+                          className="flex-1 gap-1.5"
+                        >
+                          <Copy className="w-4 h-4 text-primary" />
+                          <span>Salin Script (ROS {radiusScriptRosTab})</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => setShowRadiusScriptModal(false)}
+                          className="flex-1 bg-[#002C60] hover:bg-[#1b437c] text-white"
+                        >
+                          Tutup
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Setup Hotspot Gateway & VLAN */}
+                {showHotspotSetupModal && hotspotModalData && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+                    <div className="bg-card border border-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-5 border-b border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Wifi className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-foreground">Setup Hotspot Gateway &amp; VLAN</h3>
+                            <p className="text-xs text-muted-foreground">{hotspotModalData.router.name} ({hotspotModalData.router.nasname})</p>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowHotspotSetupModal(false)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                        {/* Parameters Form */}
+                        <div className="p-4 bg-muted/40 border border-border rounded-xl space-y-3">
+                          <p className="text-xs font-semibold text-foreground">Parameter Hotspot (Standard Identik)</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">VLAN ID</Label>
+                              <Input
+                                type="number"
+                                value={hotspotForm.vlanId}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, vlanId: e.target.value })}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">Parent Interface</Label>
+                              <Input
+                                value={hotspotForm.parentInterface}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, parentInterface: e.target.value })}
+                                placeholder="bridge-LAN"
+                                className="h-8 text-xs font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">DNS Name (Captive)</Label>
+                              <Input
+                                value={hotspotForm.dnsName}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, dnsName: e.target.value })}
+                                className="h-8 text-xs font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">Gateway IP</Label>
+                              <Input
+                                value={hotspotForm.hotspotAddress}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, hotspotAddress: e.target.value })}
+                                className="h-8 text-xs font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">Subnet</Label>
+                              <Input
+                                value={hotspotForm.hotspotSubnet}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, hotspotSubnet: e.target.value })}
+                                className="h-8 text-xs font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[11px]">Pool Range</Label>
+                              <Input
+                                value={hotspotForm.poolRange}
+                                onChange={(e) => setHotspotForm({ ...hotspotForm, poolRange: e.target.value })}
+                                className="h-8 text-xs font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end pt-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetupHotspot(hotspotModalData.router, hotspotForm)}
+                              disabled={settingUpHotspotId === hotspotModalData.router.id}
+                              className="text-xs h-7 gap-1"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${settingUpHotspotId === hotspotModalData.router.id ? 'animate-spin' : ''}`} />
+                              <span>Perbarui Script</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Version Tabs */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            Pilih Versi RouterOS:
+                          </span>
+                          <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setHotspotRosTab(7)}
+                              className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                                hotspotRosTab === 7 ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                              }`}
+                            >
+                              RouterOS 7.x (Recommended)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setHotspotRosTab(6)}
+                              className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                                hotspotRosTab === 6 ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                              }`}
+                            >
+                              RouterOS 6.x
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Script Output */}
+                        <pre className="w-full font-mono text-xs p-4 rounded-xl border border-border bg-muted/60 text-foreground overflow-auto max-h-56 whitespace-pre-wrap break-words">
+                          {hotspotRosTab === 6 && hotspotModalData.scriptRos6
+                            ? hotspotModalData.scriptRos6
+                            : (hotspotModalData.scriptRos7 || hotspotModalData.script)}
+                        </pre>
+
+                        {/* Walled Garden Info */}
+                        <div className="p-3.5 bg-muted/20 border border-border rounded-xl text-xs space-y-2">
+                          <div className="font-semibold text-foreground">Walled Garden Payment Gateway (Otomatis):</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['*.midtrans.com', '*.xendit.co', '*.tripay.co.id', '*.duitku.com', '*.qrin.id'].map((d) => (
+                              <Badge key={d} variant="outline" className="font-mono text-[10px] bg-primary/5 text-primary border-primary/20">
+                                {d}
+                              </Badge>
+                            ))}
+                          </div>
+                          <p className="text-muted-foreground text-[11px]">
+                            Pelanggan yang belum login dapat membuka link pembayaran e-voucher dan scan QRIS secara instan tanpa terblokir captive portal.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-4 border-t border-border flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const toCopy = hotspotRosTab === 6 && hotspotModalData.scriptRos6
+                              ? hotspotModalData.scriptRos6
+                              : (hotspotModalData.scriptRos7 || hotspotModalData.script);
+                            copyToClipboard(toCopy);
+                            showSuccess(`Script Hotspot ROS ${hotspotRosTab}.x disalin!`);
+                          }}
+                          className="flex-1 gap-1.5"
+                        >
+                          <Copy className="w-4 h-4 text-primary" />
+                          <span>Salin Script (ROS {hotspotRosTab})</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleApplyHotspotDirect}
+                          disabled={applyingHotspot}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                        >
+                          {applyingHotspot ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                          <span>{applyingHotspot ? 'Menerapkan ke Router...' : 'Terapkan Otomatis via API'}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setShowHotspotSetupModal(false)}
+                        >
+                          Tutup
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* STEP 4: SISTEM ISOLIR */}

@@ -10,15 +10,27 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.85
+- **Version**: 2.40.86
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
-- **Last Updated**: September 25, 2026
+- **Last Updated**: September 26, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 26, 2026 — v2.40.86: Setup Wizard 100% Admin Parity: Complete Step 2 VPN Client Modal Flow & Step 3 Router MikroTik Management)
+
+- **Hard Invariant: 100% Admin Parity for Setup Wizard Step 2 & 3 (`src/app/setup/page.tsx`)**:
+  - **Step 2 (VPN Client)**:
+    - Form Tambah VPN Client mendukung pemilihan Server VPN (VPS Native WireGuard / L2TP / CHR External), tab protokol VPN (WireGuard, L2TP/IPSec, PPTP, SSTP), nama client, deskripsi, AllowedIPs di balik NAS, custom IP VPN, dan target port MikroTik (Winbox: 8291, API: 8728, WWW: 80).
+    - Modal Kredensial & Skrip RouterOS langsung tampil setelah pembuatan berhasil, memuat alokasi port publik VPS (`10011`, `10012`, `10014`, dll.) dan pilihan mode skrip RouterOS (Lengkap vs Singkat UltraVPN).
+    - Daftar kartu VPN Client mendukung inline edit IP VPN, toggle RADIUS Server, dan tombol aksi lihat skrip / hapus.
+  - **Step 3 (Router MikroTik Connection)**:
+    - Form Tambah/Edit Router menyediakan opsi "Hubungkan via VPN Client". Ketika VPN Client dipilih, IP Address, NAS Name, API port target (`8520`), Winbox port target (`8228`), kredensial `username` & `password`, dan RADIUS secret otomatis diisi.
+    - Pintasan "Salin script port X untuk MikroTik" dan fitur Test Koneksi (API ping & status check) terintegrasi langsung.
+    - Kartu Router MikroTik yang tersimpan dilengkapi tombol modal RADIUS Script (ROS 6 & 7) dan modal Setup Hotspot Gateway & VLAN (dengan opsi Terapkan Otomatis via API).
 
 ### Recent Patch Log (September 25, 2026 — v2.40.85: Setup Wizard Dedicated Steps 2 & 3, Dynamic Real VPS IP Injection, Single-Token QRIN)
 
