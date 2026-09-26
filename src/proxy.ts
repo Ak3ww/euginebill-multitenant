@@ -7,14 +7,16 @@ const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ||
   (process.env.NODE_ENV !== 'production' ? 'EugineBill-radius-secret-change-in-production' : undefined);
 
 /**
- * Proxy to handle:
- * 1. Admin authentication (only /admin routes)
- * 2. Isolated user detection (auto-redirect to /isolated page)
- * 3. Security headers
- * 4. Bot/scanner path blocking
- * 5. Brute-force rate limiting for admin login
- * 
- * Customer routes (/customer, /login, /) are PUBLIC - no NextAuth protection
+ * Proxy & Edge Subdomain Middleware:
+ * 1. Multi-Tenant Subdomain Routing:
+ *    - saas.domain.com / app.domain.com -> /saas-admin
+ *    - <tenant-slug>.domain.com -> injects 'x-tenant-slug' header & rewrites to tenant portals
+ *    - customer / agent / teknisi / admin subdomains -> mapped to portal paths
+ * 2. Admin authentication (/admin routes)
+ * 3. Isolated user detection (auto-redirect to /isolated page)
+ * 4. Security headers & CSP
+ * 5. Bot/scanner path blocking
+ * 6. Brute-force rate limiting for admin login
  */
 
 // ============================================
@@ -44,8 +46,8 @@ const BLOCKED_PATHS = [
 // Suspicious User-Agent substrings
 const BLOCKED_UA_PATTERNS = ['sqlmap', 'nikto', 'masscan', 'nmap', 'hydra', 'medusa'];
 
-// Subdomain → path mapping
-const SUBDOMAIN_MAP: Record<string, string> = {
+// Standard portal subdomains
+const PORTAL_SUBDOMAIN_MAP: Record<string, string> = {
   'customer': '/customer',
   'pelanggan': '/customer',
   'agent': '/agent',
@@ -55,53 +57,59 @@ const SUBDOMAIN_MAP: Record<string, string> = {
   'admin': '/admin',
 };
 
+function applySecurityHeaders(res: NextResponse, tenantSlug?: string): NextResponse {
+  // X-Frame-Options: Prevents clickjacking attacks
+  res.headers.set('X-Frame-Options', 'DENY');
+  
+  // X-Content-Type-Options: Prevents MIME sniffing
+  res.headers.set('X-Content-Type-Options', 'nosniff');
+  
+  // X-XSS-Protection: Legacy XSS protection
+  res.headers.set('X-XSS-Protection', '1; mode=block');
+  
+  // Referrer-Policy
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Permissions-Policy
+  res.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(self), interest-cohort=()'
+  );
+  
+  // Content-Security-Policy
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
+    "script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://api.fonnte.com https://api.wablas.com https://api.kirimi.id https://cloudflareinsights.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'"
+  ].join('; ');
+  res.headers.set('Content-Security-Policy', cspDirectives);
+  
+  // Extra security headers
+  res.headers.set('X-DNS-Prefetch-Control', 'off');
+  res.headers.set('X-Download-Options', 'noopen');
+  res.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
+  
+  if (tenantSlug) {
+    res.headers.set('x-tenant-slug', tenantSlug);
+  }
+  
+  // Remove technology disclosure headers
+  res.headers.delete('X-Powered-By');
+  res.headers.delete('Server');
+  
+  return res;
+}
+
 export default async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
-
-  // ============================================
-  // 0. SUBDOMAIN ROUTING
-  // Map subdomains to portal paths:
-  //   customer.domain.com  → /customer
-  //   agent.domain.com     → /agent
-  //   teknisi.domain.com   → /technician
-  //   admin.domain.com     → /admin
-  // ============================================
-  const host = req.headers.get('host') || '';
-  const hostname = host.split(':')[0]; // strip port
-  const hostParts = hostname.split('.');
-  if (hostParts.length >= 3) {
-    const subdomain = hostParts[0].toLowerCase();
-    const targetBase = SUBDOMAIN_MAP[subdomain];
-    if (targetBase) {
-      // Don't rewrite API routes, Next.js internals, or static files
-      const isSystem = pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.startsWith('/favicon');
-      const isStaticFile = /\.(ico|png|jpg|jpeg|gif|svg|js|css|woff|woff2|ttf|mp4|webp|json|txt|xml)$/.test(pathname);
-      // Standalone public routes that should NOT be scoped to a subdomain prefix:
-      const isStandaloneRoute = 
-        pathname.startsWith('/invoice') || 
-        pathname.startsWith('/pay') || 
-        pathname.startsWith('/isolated') || 
-        pathname.startsWith('/uploads') ||
-        pathname.startsWith('/setup') ||
-        pathname.startsWith('/docs');
-
-      if (!isSystem && !isStaticFile && !isStandaloneRoute) {
-        if (!pathname.startsWith(targetBase)) {
-          const url = req.nextUrl.clone();
-          url.pathname = targetBase + (pathname === '/' ? '' : pathname);
-          
-          // CRITICAL FIX: Force protocol to http: for the internal rewrite.
-          // Because Nginx sends X-Forwarded-Proto: https, Next.js thinks the URL is https:.
-          // But the local Node server runs on http:. 
-          // If we rewrite to an https: URL, Next.js thinks it's an external proxy and tries to fetch it,
-          // causing an SSL EPROTO error because localhost:3000 doesn't speak HTTPS.
-          url.protocol = 'http:';
-          
-          return NextResponse.rewrite(url);
-        }
-      }
-    }
-  }
 
   // ============================================
   // 0a. BLOCK KNOWN SCANNER/BOT PATHS
@@ -135,6 +143,83 @@ export default async function proxy(req: NextRequest) {
   }
 
   // ============================================
+  // 0d. SUBDOMAIN & MULTI-TENANT EDGE ROUTING
+  // ============================================
+  const host = req.headers.get('host') || '';
+  const hostname = host.split(':')[0].toLowerCase();
+  const hostParts = hostname.split('.');
+
+  const isSystem = pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.startsWith('/favicon');
+  const isStaticFile = /\.(ico|png|jpg|jpeg|gif|svg|js|css|woff|woff2|ttf|mp4|webp|json|txt|xml)$/.test(pathname);
+  const isStandaloneRoute = 
+    pathname.startsWith('/invoice') || 
+    pathname.startsWith('/pay') || 
+    pathname.startsWith('/isolated') || 
+    pathname.startsWith('/uploads') ||
+    pathname.startsWith('/setup') ||
+    pathname.startsWith('/docs');
+
+  let detectedTenantSlug: string | undefined = undefined;
+
+  // If request comes with 3 or more domain parts (e.g. tenant.domain.com, saas.domain.com)
+  if (hostParts.length >= 3) {
+    const subdomain = hostParts[0];
+
+    // Branch 1: SaaS Master Admin Routing (saas.domain.com or app.domain.com)
+    if (subdomain === 'saas' || subdomain === 'app') {
+      if (!isSystem && !isStaticFile && !isStandaloneRoute) {
+        if (!pathname.startsWith('/saas-admin') && !pathname.startsWith('/saas')) {
+          const url = req.nextUrl.clone();
+          url.pathname = '/saas-admin' + (pathname === '/' ? '' : pathname);
+          url.protocol = 'http:';
+          const rewriteRes = NextResponse.rewrite(url);
+          return applySecurityHeaders(rewriteRes);
+        }
+      }
+    }
+    // Branch 2: Standard Portal Subdomains (customer.domain.com, admin.domain.com, etc.)
+    else if (PORTAL_SUBDOMAIN_MAP[subdomain]) {
+      const targetBase = PORTAL_SUBDOMAIN_MAP[subdomain];
+      if (!isSystem && !isStaticFile && !isStandaloneRoute) {
+        if (!pathname.startsWith(targetBase)) {
+          const url = req.nextUrl.clone();
+          url.pathname = targetBase + (pathname === '/' ? '' : pathname);
+          url.protocol = 'http:';
+          const rewriteRes = NextResponse.rewrite(url);
+          return applySecurityHeaders(rewriteRes);
+        }
+      }
+    }
+    // Branch 3: Multi-Tenant Tenant Subdomain (<tenant-slug>.domain.com)
+    else {
+      detectedTenantSlug = subdomain;
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set('x-tenant-slug', subdomain);
+
+      if (!isSystem && !isStaticFile && !isStandaloneRoute) {
+        // If root path is accessed on tenant subdomain, route to customer portal by default
+        if (pathname === '/') {
+          const url = req.nextUrl.clone();
+          url.pathname = '/customer';
+          url.protocol = 'http:';
+          const rewriteRes = NextResponse.rewrite(url, {
+            request: { headers: requestHeaders },
+          });
+          return applySecurityHeaders(rewriteRes, detectedTenantSlug);
+        } else {
+          // Pass x-tenant-slug header through rewrite
+          const url = req.nextUrl.clone();
+          url.protocol = 'http:';
+          const rewriteRes = NextResponse.rewrite(url, {
+            request: { headers: requestHeaders },
+          });
+          return applySecurityHeaders(rewriteRes, detectedTenantSlug);
+        }
+      }
+    }
+  }
+
+  // ============================================
   // 1. ISOLATION CHECK (for all non-static routes)
   // ============================================
   const forwarded = req.headers.get('x-forwarded-for');
@@ -149,7 +234,7 @@ export default async function proxy(req: NextRequest) {
       
       if (isIsolatedIp) {
         const allowedPaths = [
-          '/isolated', '/pay', '/setup', '/api', '/_next', '/favicon.ico', '/logo.png', '/images', '/admin',
+          '/isolated', '/pay', '/setup', '/api', '/_next', '/favicon.ico', '/logo.png', '/images', '/admin', '/saas-admin'
         ];
         const isAllowedPath = allowedPaths.some(path => pathname.startsWith(path));
         const hasFileExtension = /\.[a-zA-Z0-9]+$/.test(pathname);
@@ -166,7 +251,7 @@ export default async function proxy(req: NextRequest) {
       console.error('[PROXY] Error checking isolation settings:', error);
       // Fallback hardcoded check
       if (sourceIp.startsWith('192.168.200.')) {
-        const allowedPaths = ['/isolated', '/pay', '/setup', '/api', '/_next', '/favicon.ico', '/logo.png', '/images', '/admin'];
+        const allowedPaths = ['/isolated', '/pay', '/setup', '/api', '/_next', '/favicon.ico', '/logo.png', '/images', '/admin', '/saas-admin'];
         const isAllowedPath = allowedPaths.some(path => pathname.startsWith(path));
         const hasFileExtension = /\.[a-zA-Z0-9]+$/.test(pathname);
         
@@ -204,64 +289,16 @@ export default async function proxy(req: NextRequest) {
   }
 
   // ============================================
-  // 3. SECURITY HEADERS (for all routes)
+  // 3. PASS-THROUGH RESPONSE WITH SECURITY HEADERS
   // ============================================
   const response = NextResponse.next();
-    
-  // X-Frame-Options: Prevents clickjacking attacks
-  response.headers.set('X-Frame-Options', 'DENY');
-  
-  // X-Content-Type-Options: Prevents MIME sniffing
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  
-  // X-XSS-Protection: Legacy XSS protection (for older browsers)
-  response.headers.set('X-XSS-Protection', '1; mode=block');
-  
-  // Referrer-Policy: Controls referrer information
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
-  // Permissions-Policy: Controls browser features
-  // geolocation=(self) — allow same-origin geolocation (used in GPS features on admin pages)
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(self), interest-cohort=()'
-  );
-  
-  // Content-Security-Policy: Comprehensive protection against XSS
-  const cspDirectives = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
-    "script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-    "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://api.fonnte.com https://api.wablas.com https://api.kirimi.id https://cloudflareinsights.com",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'"
-  ].join('; ');
-  response.headers.set('Content-Security-Policy', cspDirectives);
-  
-  // X-DNS-Prefetch-Control: Control DNS prefetching
-  response.headers.set('X-DNS-Prefetch-Control', 'off');
-  
-  // X-Download-Options: Prevent IE from executing downloads
-  response.headers.set('X-Download-Options', 'noopen');
-  
-  // X-Permitted-Cross-Domain-Policies: Control Adobe Flash/PDF
-  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
-  
-  // Remove technology disclosure headers
-  response.headers.delete('X-Powered-By');
-  response.headers.delete('Server');
-  
-  return response;
+  return applySecurityHeaders(response, detectedTenantSlug);
 }
 
 export const config = {
   matcher: [
     '/admin/:path*',  // Admin routes (auth required)
+    '/saas-admin/:path*', // SaaS Admin routes
     '/api/auth/callback/:path*',  // NextAuth callback - untuk admin login brute-force protection
     '/((?!api|_next/static|_next/image|favicon.ico|logo.png|manifest.json|manifest-admin.json|manifest-agent.json|manifest-customer.json|manifest-technician.json|pwa).*)', // All other routes (for isolated IP check + security headers)
   ],

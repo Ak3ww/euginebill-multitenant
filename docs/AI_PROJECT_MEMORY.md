@@ -10,8 +10,8 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.87
-- **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
+- **Version**: 2.40.88
+- **Status**: Commercial Turnkey & Multi-Tenant SaaS Release (Ready to Rent / Sell as Managed Single-Tenant VPS or Cloud Multi-Tenant)
 - **Last Updated**: September 26, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
@@ -19,6 +19,14 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 26, 2026 — v2.40.88: SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning)
+
+- **Hard Invariant: Hallmark Oceanic Blue Design System (`src/app/saas/page.tsx`)**:
+  - Halaman SaaS publik wajib menggunakan palet warna Oceanic Blue (`#002c60`, `#1b437c`) dengan hairline borders (`#e2e8f0` / `border-slate-200`) dan tipografi roman bersih (dilarang menggunakan italic header).
+  - DILARANG KERAS menggunakan teks emoji/emotikon di seluruh teks UI; seluruh ikon grafis WAJIB menggunakan `Lucide React` (`<Wifi />`, `<Server />`, `<Zap />`, `<CheckCircle2 />`, `<ShieldCheck />`, `<Radio />`, dll.).
+  - Formulir pendaftaran trial 7 hari (`Coba Gratis 7 Hari`) terintegrasi langsung dengan debounce checker ketersediaan subdomain (`/api/saas/check-subdomain`) dan alur simulasi provisioning database multi-langkah (`/api/saas/register`).
+  - Section harga menyediakan switch interaktif Bulanan vs Tahunan (Hemat 20%) dengan 3 tingkatan paket: *Starter* (Rp 99.000), *Pro* (Rp 249.000, Paling Populer & Rekomendasi), dan *Enterprise* (Rp 499.000).
 
 ### Recent Patch Log (September 26, 2026 — v2.40.87: Network Parity: 3-Column Ports Layout, Dynamic Port Forwarding & Smart Shortcut Conditioning)
 

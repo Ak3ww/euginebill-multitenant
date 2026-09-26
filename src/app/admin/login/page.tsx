@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2, Shield, Smartphone, User, Lock, Clock, LogIn, ArrowLeft, KeyRound } from 'lucide-react';
@@ -395,8 +396,16 @@ function LoginForm() {
             </form>
           )}
 
+          {/* SaaS Link */}
+          <div className="mt-6 text-center text-xs text-slate-500">
+            <span>Ingin sistem billing cloud mandiri? </span>
+            <Link href="/saas" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+              Coba Gratis 7 Hari
+            </Link>
+          </div>
+
           {/* Footer */}
-          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-8">
+          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
             {footerText.includes('EugineBill') ? (
               <>
                 {footerText.split('EugineBill')[0]}

@@ -4,6 +4,36 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.88] — 2026-09-26
+
+### SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning (`src/app/saas/page.tsx`, `src/app/api/saas/*`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **SaaS Public Landing Page**: Diperlukan landing page SaaS publik berstandar Hallmark Design dengan tema Oceanic Blue (`#002c60`, `#1b437c`) untuk memasarkan layanan Cloud Billing & Network Management ISP / RT-RW Net EugineBill.
+  2. **Interaktivitas Paket & Harga**: Daftar harga transparan dengan toggle bulanan/tahunan (diskon 20%) dan 3 tier paket (Starter, Pro, Enterprise).
+  3. **Alur Pendaftaran Trial 7 Hari**: Form pendaftaran interaktif dengan pengecekan ketersediaan subdomain instan secara debounce dan animasi simulasi provisioning database terisolasi.
+  4. **Strict No Emojis & Indonesian Professional Copy**: Menggunakan komponen ikon resmi `Lucide React` di seluruh elemen visual dan copywriting bahasa Indonesia yang profesional tanpa teks buatan/jargon palsu.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Landing Page SaaS Komprehensif (`src/app/saas/page.tsx`)**:
+     - *Hero Section*: Pengumuman rilis v2.40, badge versi, headline, deskripsi manfaat, tombol aksi CTA ganda (Coba Gratis 7 Hari & Demo Sandbox), 4 trust badges, dan kartu showcase dashboard interaktif.
+     - *Feature Highlights Grid*: 6 modul unggulan (MikroTik API & Dynamic Ports, FreeRADIUS 3.x, WhatsApp Bot Otomatis, Cetak Voucher Hotspot Kilat, TR-069 GenieACS ONT Management, dan Integrasi Payment Gateway Lengkap).
+     - *Interactive Price List*: 3 paket berlangganan dengan toggle billing cycle bulanan/tahunan dan kartu Pro berlabel "Paling Populer & Rekomendasi".
+     - *Interactive Modal Pendaftaran Trial*: Form pendaftaran dengan realtime validation, visual status subdomain, dan progress stepper multi-langkah sebelum redirect ke halaman setup tenant.
+     - *Pilar Keamanan & FAQ Accordion*: 4 badge keamanan arsitektur data terisolasi dan daftar pertanyaan umum interaktif.
+  2. **Subdomain Checker API (`src/app/api/saas/check-subdomain/route.ts`)**: Endpoint verifikasi ketersediaan dan format slug subdomain tenant.
+  3. **SaaS Registration API (`src/app/api/saas/register/route.ts`)**: Endpoint penanganan registrasi trial dengan validasi kredensial dan pemetaan redirect URL tenant.
+  4. **Dokumentasi Teknis (`docs/saas/SAAS_LANDING_AND_TRIAL.md`)**: Panduan arsitektur dan kontrak API SaaS.
+
+- **Files**:
+  - Added: `src/app/saas/page.tsx`
+  - Added: `src/app/api/saas/register/route.ts`
+  - Added: `src/app/api/saas/check-subdomain/route.ts`
+  - Added: `docs/saas/SAAS_LANDING_AND_TRIAL.md`
+  - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.87] — 2026-09-26
 
 ### Network Parity & Dynamic Script Mirroring: 3-Column Ports Layout (API, Winbox, WWW), Dynamic Port Forwarding, and Smart Shortcut Conditioning (`src/app/setup/page.tsx`, `src/app/admin/network/routers/page.tsx`)

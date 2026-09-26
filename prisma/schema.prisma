@@ -2961,3 +2961,162 @@ model ontRemoteSession {
   @@map("ont_remote_sessions")
 }
 
+// =============================================
+// SAAS MULTI-TENANT MASTER MODELS
+// =============================================
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  DEMO
+}
+
+enum SaaSAdminRole {
+  SUPERADMIN
+  SUPPORT
+}
+
+enum SaaSInvoiceStatus {
+  UNPAID
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+model Tenant {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  name           String
+  email          String
+  phone          String?
+  status         TenantStatus  @default(TRIAL)
+  databaseName   String        @default("EugineBill_radius")
+  customDomain   String?       @unique
+  planId         String?
+  trialEndsAt    DateTime?
+  expiresAt      DateTime?
+  totalRouters   Int           @default(1)
+  totalCustomers Int           @default(0)
+  mrr            Int           @default(0)
+  isDemo         Boolean       @default(false)
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  plan                SubscriptionPlan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscriptions       TenantSubscription[]
+  invoices            SaaSInvoice[]
+  impersonationTokens SaaSImpersonationToken[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([email])
+  @@map("saas_tenants")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  name         String   // Starter, Pro, Enterprise, Demo
+  code         String   @unique // starter, pro, enterprise, demo
+  priceMonthly Int      @default(0)
+  priceYearly  Int      @default(0)
+  maxRouters   Int      @default(1)
+  maxUsers     Int      @default(100)
+  maxVouchers  Int      @default(500)
+  features     Json?    // List of enabled features / limits
+  isPopular    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenants       Tenant[]
+  subscriptions TenantSubscription[]
+
+  @@index([code])
+  @@map("saas_subscription_plans")
+}
+
+model TenantSubscription {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  planId             String
+  status             SubscriptionStatus @default(TRIAL)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime
+  paymentGateway     String?            // midtrans, xendit, manual, tripay
+  autoRenew          Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([status])
+  @@map("saas_tenant_subscriptions")
+}
+
+model SaaSAdminUser {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  email        String        @unique
+  passwordHash String
+  name         String?
+  role         SaaSAdminRole @default(SUPERADMIN)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([username])
+  @@index([email])
+  @@map("saas_admin_users")
+}
+
+model SaaSInvoice {
+  id            String            @id @default(cuid())
+  tenantId      String
+  invoiceNumber String            @unique
+  amount        Int
+  status        SaaSInvoiceStatus @default(UNPAID)
+  paymentMethod String?           // QRIS, VA, CC, MANUAL
+  paidAt        DateTime?
+  paymentToken  String?           @unique
+  paymentUrl    String?           @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([invoiceNumber])
+  @@index([status])
+  @@map("saas_invoices")
+}
+
+model SaaSImpersonationToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  tenantId  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([tenantId])
+  @@map("saas_impersonation_tokens")
+}
+
+
+
