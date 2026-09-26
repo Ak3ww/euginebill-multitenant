@@ -4,6 +4,28 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.87] — 2026-09-26
+
+### Network Parity & Dynamic Script Mirroring: 3-Column Ports Layout (API, Winbox, WWW), Dynamic Port Forwarding, and Smart Shortcut Conditioning (`src/app/setup/page.tsx`, `src/app/admin/network/routers/page.tsx`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Dukungan Penuh WWW / WebFig Port**: Pada form router MikroTik (baik di Wizard Setup Step 3 maupun Admin Network Routers), field `wwwPort` (WebFig MikroTik) belum diexpose di UI dan belum diteruskan ke VPS port forwarding helper (`applyAdminPortForwarding`).
+  2. **Port Allocation Dinamis**: Alokasi port publik VPS (`10011`, `10012`, `10014`, `10016`, dll.) diatur secara otomatis per block oleh `vpn-port-allocator.ts` sehingga setiap router/VPN client baru otomatis menerima blok port publik unik.
+  3. **Kondisi Pintasan Salin Script Port**: Tombol shortcut "Salin script port X untuk MikroTik" hanya relevan untuk koneksi langsung (Non-VPN) karena pada koneksi via VPN Client, script setup VPN (WireGuard/L2TP) sudah secara otomatis mengonfigurasi `/ip service` dan firewall input accept.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **3-Column Port Grid**: Menyelaraskan form input port menjadi 3 kolom sejajar (`Port API`, `Winbox Port`, `WWW Port (WebFig)`) pada modal tambah/edit router di Admin dan Wizard Setup.
+  2. **Backend Port Forwarding Propagation (`src/app/api/network/routers/route.ts`)**: Menerima `wwwPort` dari payload request (POST & PUT) dan menyertakannya saat memanggil `applyAdminPortForwarding`.
+  3. **Smart Shortcut Script Conditioning**: Menyembunyikan tombol shortcut salin script port ketika mode "Hubungkan via VPN Client" aktif, dan hanya menampilkannya saat mode direct IP.
+  4. **Dynamic Parity RouterOS Scripts**: Memastikan generator script MikroTik (L2TP & WireGuard) di Setup Wizard menghasilkan konfigurasi UltraVPN standard yang 100% identik dan dinamis sesuai alokasi server & kredensial client.
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/admin/network/routers/page.tsx`
+  - Modified: `src/app/api/network/routers/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.86] — 2026-09-26
 
 ### Setup Wizard 100% Admin Parity: Complete Step 2 VPN Client Modal Flow & Step 3 Router MikroTik Management (`src/app/setup/page.tsx`)

@@ -177,7 +177,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, ipAddress, nasIpAddress, nasname: nasnameFromBody, username, password, port, apiPort, winboxPort, secret, latitude, longitude, vpnClientId, type, authMode } = body;
+    const { name, ipAddress, nasIpAddress, nasname: nasnameFromBody, username, password, port, apiPort, winboxPort, wwwPort, secret, latitude, longitude, vpnClientId, type, authMode } = body;
 
     // Basic validation
     if (!name || !ipAddress) {
@@ -285,6 +285,7 @@ export async function POST(request: NextRequest) {
         api: portInt,
         apiSsl: parseInt(apiPort) || undefined,
         winbox: parseInt(winboxPort) || undefined,
+        www: parseInt(wwwPort) || undefined,
       }).catch(e => console.warn('[routers] applyAdminPortForwarding error on POST:', e.message));
     }
 
@@ -329,7 +330,7 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     // Support both 'nasname' (from frontend) and 'nasIpAddress' for backward compatibility
-    const { id, name, type, ipAddress, nasIpAddress, nasname: nasnameFromBody, username, password, port, apiPort, winboxPort, secret, isActive, latitude, longitude, vpnClientId, authMode } = body;
+    const { id, name, type, ipAddress, nasIpAddress, nasname: nasnameFromBody, username, password, port, apiPort, winboxPort, wwwPort, secret, isActive, latitude, longitude, vpnClientId, authMode } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Router ID is required' }, { status: 400 });
@@ -408,6 +409,7 @@ export async function PUT(request: NextRequest) {
         api: port ? parseInt(port.toString()) : router.port,
         apiSsl: apiPort ? parseInt(apiPort.toString()) : router.apiPort,
         winbox: winboxPort ? parseInt(winboxPort.toString()) : undefined,
+        www: wwwPort ? parseInt(wwwPort.toString()) : undefined,
       }).catch(e => console.warn('[routers] applyAdminPortForwarding error on PUT:', e.message));
     }
 

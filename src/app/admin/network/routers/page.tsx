@@ -77,6 +77,7 @@ export default function RouterPage() {
     port: '8728',
     apiPort: '8729',
     winboxPort: '8291',
+    wwwPort: '80',
     secret: 'secret123',
     ports: '1812',
     server: '',
@@ -142,7 +143,6 @@ export default function RouterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ routerIds }),
       })
-
       if (response.ok) {
         const data = await response.json()
         setStatusMap(data.statusMap || {})
@@ -158,6 +158,7 @@ export default function RouterPage() {
       if (vpnClient) {
         const vpnApiTarget = (vpnClient as any).publicPorts?.services?.api?.target?.toString()
         const vpnWinboxTarget = (vpnClient as any).publicPorts?.services?.winbox?.target?.toString()
+        const vpnWwwTarget = (vpnClient as any).publicPorts?.services?.www?.target?.toString()
         setFormData(prev => ({
           ...prev,
           vpnClientId,
@@ -168,14 +169,15 @@ export default function RouterPage() {
           password: vpnClient.resolvedPassword || prev.password,
           // Auto-fill RADIUS secret from NAS entry linked to this VPN client
           secret: vpnClient.nasSecret || prev.secret,
-          // Auto-fill custom target ports configured during VPN setup (e.g. 8520)
+          // Auto-fill custom target ports configured during VPN setup (e.g. 8520, 8228, 80)
           ...(vpnApiTarget ? { port: vpnApiTarget } : {}),
           ...(vpnWinboxTarget ? { winboxPort: vpnWinboxTarget } : {}),
+          ...(vpnWwwTarget ? { wwwPort: vpnWwwTarget } : {}),
         }))
       }
     } else {
       // VPN client dihapus — kosongkan IP agar user isi manual
-      setFormData(prev => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '' }))
+      setFormData(prev => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '', wwwPort: '80' }))
     }
   }
 
@@ -327,7 +329,7 @@ export default function RouterPage() {
   const resetForm = () => {
     setFormData({
       name: '', nasname: '', shortname: '', type: 'mikrotik', ipAddress: '', username: '', password: '',
-      port: '8728', apiPort: '8729', winboxPort: '8291', secret: 'secret123', ports: '1812', server: '', community: '', description: '', vpnClientId: '',
+      port: '8728', apiPort: '8729', winboxPort: '8291', wwwPort: '80', secret: 'secret123', ports: '1812', server: '', community: '', description: '', vpnClientId: '',
       authMode: 'local',
     })
     setTestResult(null)
@@ -338,11 +340,12 @@ export default function RouterPage() {
     setEditingRouter(routerData)
     const winboxTarget = (routerData.vpnClient as any)?.publicPorts?.services?.winbox?.target?.toString() || '8291'
     const apiTarget = (routerData.vpnClient as any)?.publicPorts?.services?.api?.target?.toString()
+    const wwwTarget = (routerData.vpnClient as any)?.publicPorts?.services?.www?.target?.toString() || '80'
     const effectivePort = routerData.port && routerData.port !== 8728 ? routerData.port.toString() : (apiTarget || routerData.port?.toString() || '8728')
     setFormData({
       name: routerData.name, nasname: routerData.nasname, shortname: routerData.shortname, type: routerData.type,
       ipAddress: routerData.ipAddress, username: routerData.username, password: routerData.password,
-      port: effectivePort, apiPort: routerData.apiPort ? routerData.apiPort.toString() : '8729', winboxPort: winboxTarget, secret: routerData.secret,
+      port: effectivePort, apiPort: routerData.apiPort ? routerData.apiPort.toString() : '8729', winboxPort: winboxTarget, wwwPort: wwwTarget, secret: routerData.secret,
       ports: routerData.ports.toString(), server: routerData.server || '', community: routerData.community || '',
       description: routerData.description || '', vpnClientId: routerData.vpnClientId || '',
       authMode: routerData.authMode || 'local',
@@ -1195,29 +1198,31 @@ export default function RouterPage() {
 
                 {/* Ports — only show for MikroTik routers, not gateway/VPS */}
                 {formData.type !== 'gateway' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[#00f7ff] mb-2">{t('network.apiPort')}</label>
                     <input
                       type="number"
                       value={formData.port}
                       onChange={(e) => setFormData({ ...formData, port: e.target.value })}
-                      className="w-full px-4 py-3 bg-input border border-border rounded-xl text-foreground focus:border-[#00f7ff] focus:ring-2 focus:ring-[#00f7ff]/30 transition-all"
+                      className="w-full px-4 py-3 bg-input border border-border rounded-xl text-foreground focus:border-[#00f7ff] focus:ring-2 focus:ring-[#00f7ff]/30 transition-all font-mono text-sm"
                       placeholder="8728"
                     />
                     <p className="text-xs text-muted-foreground mt-1">Port API MikroTik (default 8728)</p>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const port = formData.port || '8728'
-                        const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`
-                        await copyToClipboardUtil(cmd)
-                        addToast({ type: 'success', title: `Script port ${port} & firewall disalin!` })
-                      }}
-                      className="mt-1.5 text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-mono"
-                    >
-                      <Copy className="w-3 h-3" /> Salin script port {formData.port || '8728'} untuk MikroTik
-                    </button>
+                    {!formData.vpnClientId && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const port = formData.port || '8728'
+                          const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`
+                          await copyToClipboardUtil(cmd)
+                          addToast({ type: 'success', title: `Script port ${port} & firewall disalin!` })
+                        }}
+                        className="mt-1.5 text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-mono"
+                      >
+                        <Copy className="w-3 h-3" /> Salin script port {formData.port || '8728'} untuk MikroTik
+                      </button>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#00f7ff] mb-2">Winbox Port</label>
@@ -1225,10 +1230,21 @@ export default function RouterPage() {
                       type="number"
                       value={formData.winboxPort}
                       onChange={(e) => setFormData({ ...formData, winboxPort: e.target.value })}
-                      className="w-full px-4 py-3 bg-input border border-border rounded-xl text-foreground focus:border-[#00f7ff] focus:ring-2 focus:ring-[#00f7ff]/30 transition-all"
+                      className="w-full px-4 py-3 bg-input border border-border rounded-xl text-foreground focus:border-[#00f7ff] focus:ring-2 focus:ring-[#00f7ff]/30 transition-all font-mono text-sm"
                       placeholder="8291"
                     />
                     <p className="text-xs text-muted-foreground mt-1">Port Winbox MikroTik (default 8291)</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#00f7ff] mb-2">WWW Port (WebFig)</label>
+                    <input
+                      type="number"
+                      value={formData.wwwPort}
+                      onChange={(e) => setFormData({ ...formData, wwwPort: e.target.value })}
+                      className="w-full px-4 py-3 bg-input border border-border rounded-xl text-foreground focus:border-[#00f7ff] focus:ring-2 focus:ring-[#00f7ff]/30 transition-all font-mono text-sm"
+                      placeholder="80"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Port WWW / Web (default 80)</p>
                   </div>
                 </div>
                 )}

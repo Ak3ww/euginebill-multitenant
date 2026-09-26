@@ -10,7 +10,7 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.86
+- **Version**: 2.40.87
 - **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
 - **Last Updated**: September 26, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
@@ -19,6 +19,14 @@
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 26, 2026 — v2.40.87: Network Parity: 3-Column Ports Layout, Dynamic Port Forwarding & Smart Shortcut Conditioning)
+
+- **Hard Invariant: 3-Column Port Layout & Port Forwarding Parity (`src/app/setup/page.tsx`, `src/app/admin/network/routers/page.tsx`, `src/app/api/network/routers/route.ts`)**:
+  - Modal tambah/edit router MikroTik menampilkan 3 field port sejajar: `Port API` (default 8728), `Winbox Port` (default 8291), dan `WWW Port (WebFig)` (default 80).
+  - Backend API (`POST /api/network/routers` & `PUT /api/network/routers`) menerima `wwwPort` dan meneruskannya ke `applyAdminPortForwarding` pada VPS Linux.
+  - Shortcut "Salin script port X untuk MikroTik" disembunyikan secara cerdas saat terhubung via VPN Client (karena skrip setup VPN sudah mengonfigurasi `/ip service` dan filter accept secara otomatis), dan hanya dimunculkan saat koneksi direct IP.
+  - Alokasi port publik VPS (`10011`, `10012`, `10014`, dll.) dikelola secara dinamis per client/router melalui `vpn-port-allocator.ts` dengan block offset 10 port per VPN client.
 
 ### Recent Patch Log (September 26, 2026 — v2.40.86: Setup Wizard 100% Admin Parity: Complete Step 2 VPN Client Modal Flow & Step 3 Router MikroTik Management)
 

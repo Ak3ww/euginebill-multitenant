@@ -379,6 +379,7 @@ export default function UnifiedSetupWizardPage() {
     port: '8728',
     apiPort: '8729',
     winboxPort: '8291',
+    wwwPort: '80',
     secret: 'secret123',
     ports: '1812',
     server: '',
@@ -1287,6 +1288,7 @@ export default function UnifiedSetupWizardPage() {
       if (vpnClient) {
         const vpnApiTarget = (vpnClient as any).publicPorts?.services?.api?.target?.toString();
         const vpnWinboxTarget = (vpnClient as any).publicPorts?.services?.winbox?.target?.toString();
+        const vpnWwwTarget = (vpnClient as any).publicPorts?.services?.www?.target?.toString();
         setRouterFormData((prev) => ({
           ...prev,
           name: prev.name && prev.name !== 'Router Utama' ? prev.name : vpnClient.name,
@@ -1298,10 +1300,11 @@ export default function UnifiedSetupWizardPage() {
           secret: vpnClient.nasSecret || prev.secret || 'secret123',
           ...(vpnApiTarget ? { port: vpnApiTarget } : {}),
           ...(vpnWinboxTarget ? { winboxPort: vpnWinboxTarget } : {}),
+          ...(vpnWwwTarget ? { wwwPort: vpnWwwTarget } : {}),
         }));
       }
     } else {
-      setRouterFormData((prev) => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '' }));
+      setRouterFormData((prev) => ({ ...prev, vpnClientId: '', ipAddress: '', nasname: '', wwwPort: '80' }));
     }
   };
 
@@ -3063,6 +3066,7 @@ export default function UnifiedSetupWizardPage() {
                             port: '8728',
                             apiPort: '8729',
                             winboxPort: '8291',
+                            wwwPort: '80',
                             secret: 'secret123',
                             ports: '1812',
                             server: '',
@@ -3269,7 +3273,7 @@ export default function UnifiedSetupWizardPage() {
                           </div>
 
                           {/* Ports */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="space-y-1.5">
                               <Label htmlFor="inlinePort">Port API</Label>
                               <Input
@@ -3278,20 +3282,23 @@ export default function UnifiedSetupWizardPage() {
                                 value={routerFormData.port}
                                 onChange={(e) => setRouterFormData({ ...routerFormData, port: e.target.value })}
                                 placeholder="8728"
+                                className="font-mono text-xs"
                               />
                               <p className="text-[11px] text-muted-foreground">Port API MikroTik (default 8728)</p>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const port = routerFormData.port || '8728';
-                                  const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
-                                  await copyToClipboard(cmd);
-                                  showSuccess(`Script port ${port} & firewall disalin!`);
-                                }}
-                                className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
-                              >
-                                <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
-                              </button>
+                              {!routerFormData.vpnClientId && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const port = routerFormData.port || '8728';
+                                    const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
+                                    await copyToClipboard(cmd);
+                                    showSuccess(`Script port ${port} & firewall disalin!`);
+                                  }}
+                                  className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
+                                >
+                                  <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
+                                </button>
+                              )}
                             </div>
 
                             <div className="space-y-1.5">
@@ -3302,8 +3309,22 @@ export default function UnifiedSetupWizardPage() {
                                 value={routerFormData.winboxPort}
                                 onChange={(e) => setRouterFormData({ ...routerFormData, winboxPort: e.target.value })}
                                 placeholder="8291"
+                                className="font-mono text-xs"
                               />
                               <p className="text-[11px] text-muted-foreground">Port Winbox MikroTik (default 8291)</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="inlineWww">WWW Port (WebFig)</Label>
+                              <Input
+                                id="inlineWww"
+                                type="number"
+                                value={routerFormData.wwwPort}
+                                onChange={(e) => setRouterFormData({ ...routerFormData, wwwPort: e.target.value })}
+                                placeholder="80"
+                                className="font-mono text-xs"
+                              />
+                              <p className="text-[11px] text-muted-foreground">Port WWW / Web (default 80)</p>
                             </div>
                           </div>
 
@@ -3461,6 +3482,7 @@ export default function UnifiedSetupWizardPage() {
                                       setEditingRouter(routerData);
                                       const winboxTarget = (routerData.vpnClient as any)?.publicPorts?.services?.winbox?.target?.toString() || '8291';
                                       const apiTarget = (routerData.vpnClient as any)?.publicPorts?.services?.api?.target?.toString();
+                                      const wwwTarget = (routerData.vpnClient as any)?.publicPorts?.services?.www?.target?.toString() || '80';
                                       const effectivePort = routerData.port && routerData.port !== 8728 ? routerData.port.toString() : (apiTarget || routerData.port?.toString() || '8728');
                                       setRouterFormData({
                                         name: routerData.name,
@@ -3473,6 +3495,7 @@ export default function UnifiedSetupWizardPage() {
                                         port: effectivePort,
                                         apiPort: routerData.apiPort ? routerData.apiPort.toString() : '8729',
                                         winboxPort: winboxTarget,
+                                        wwwPort: wwwTarget,
                                         secret: routerData.secret,
                                         ports: routerData.ports?.toString() || '1812',
                                         server: routerData.server || '',
@@ -3718,7 +3741,7 @@ export default function UnifiedSetupWizardPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div className="space-y-1.5">
                             <Label>Port API</Label>
                             <Input
@@ -3728,18 +3751,20 @@ export default function UnifiedSetupWizardPage() {
                               placeholder="8728"
                             />
                             <p className="text-[11px] text-muted-foreground">Port API MikroTik (default 8728)</p>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const port = routerFormData.port || '8728';
-                                const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
-                                await copyToClipboard(cmd);
-                                showSuccess(`Script port ${port} & firewall disalin!`);
-                              }}
-                              className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
-                            >
-                              <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
-                            </button>
+                            {(!useVpnClientInRouter || !routerFormData.vpnClientId) && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const port = routerFormData.port || '8728';
+                                  const cmd = `/ip service set api port=${port} disabled=no address=""\n/ip firewall filter add chain=input action=accept protocol=tcp dst-port=${port},8728 comment="Allow EugineBill VPS API" place-before=0`;
+                                  await copyToClipboard(cmd);
+                                  showSuccess(`Script port ${port} & firewall disalin!`);
+                                }}
+                                className="text-[11px] text-primary hover:underline flex items-center gap-1 font-mono"
+                              >
+                                <Copy className="w-3 h-3" /> Salin script port {routerFormData.port || '8728'} untuk MikroTik
+                              </button>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
@@ -3751,6 +3776,17 @@ export default function UnifiedSetupWizardPage() {
                               placeholder="8291"
                             />
                             <p className="text-[11px] text-muted-foreground">Port Winbox MikroTik (default 8291)</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label>WWW Port (WebFig)</Label>
+                            <Input
+                              type="number"
+                              value={routerFormData.wwwPort}
+                              onChange={(e) => setRouterFormData({ ...routerFormData, wwwPort: e.target.value })}
+                              placeholder="80"
+                            />
+                            <p className="text-[11px] text-muted-foreground">Port WebFig MikroTik (default 80)</p>
                           </div>
                         </div>
 
