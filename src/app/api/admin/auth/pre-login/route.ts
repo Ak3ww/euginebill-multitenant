@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { prisma } from '@/server/db/client';
+import { prisma as defaultPrisma } from '@/server/db/client';
+import { getTenantFromRequest, getTenantPrisma } from '@/server/db/tenant-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +19,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Username and password are required' }, { status: 400 });
     }
 
-    const user = await prisma.adminUser.findUnique({
-      where: { username },
+    const tenantSlug = getTenantFromRequest(req);
+    const db = tenantSlug ? getTenantPrisma(tenantSlug) : defaultPrisma;
+
+    const user = await db.adminUser.findFirst({
+      where: {
+        OR: [
+          { username: username.trim() },
+          { email: username.trim().toLowerCase() },
+        ],
+      },
       select: {
         id: true,
         password: true,
@@ -45,7 +54,7 @@ export async function POST(req: NextRequest) {
     // Credentials are valid — check if 2FA is required
     if (user.twoFactorEnabled && user.twoFactorSecret) {
       const token = crypto.randomUUID().replace(/-/g, '');
-      await prisma.adminTwoFactorPending.create({
+      await db.adminTwoFactorPending.create({
         data: {
           token,
           userId: user.id,

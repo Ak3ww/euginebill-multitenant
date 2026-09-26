@@ -5,7 +5,8 @@ import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { TOTP } from 'otpauth';
-import { prisma } from '@/server/db/client';
+import { prisma as defaultPrisma } from '@/server/db/client';
+import { getTenantFromRequest, getTenantPrisma } from '@/server/db/tenant-manager';
 import { logActivity } from '@/server/services/activity-log.service';
 
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ||
@@ -55,10 +56,13 @@ export const authOptions: NextAuthOptions = {
         tfaToken: { label: '2FA Token', type: 'text' },
         tfaCode: { label: '2FA Code', type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
+        const tenantSlug = getTenantFromRequest(req);
+        const db = tenantSlug ? getTenantPrisma(tenantSlug) : defaultPrisma;
+
         // -- Branch A: Two-Factor verification step --------------------------
         if (credentials?.tfaToken && credentials?.tfaCode) {
-          const pending = await prisma.adminTwoFactorPending.findUnique({
+          const pending = await db.adminTwoFactorPending.findUnique({
             where: { token: credentials.tfaToken },
           });
 
@@ -66,7 +70,7 @@ export const authOptions: NextAuthOptions = {
             throw new Error('2FA session expired. Please log in again.');
           }
 
-          const user = await prisma.adminUser.findUnique({
+          const user = await db.adminUser.findUnique({
             where: { id: pending.userId },
           });
 
@@ -82,10 +86,10 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Consume the pending token
-          await prisma.adminTwoFactorPending.delete({ where: { token: credentials.tfaToken } });
+          await db.adminTwoFactorPending.delete({ where: { token: credentials.tfaToken } });
 
           // Update last login + log
-          await prisma.adminUser.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+          await db.adminUser.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
           try {
             await logActivity({
               userId: user.id, username: user.username, userRole: user.role,
@@ -94,7 +98,14 @@ export const authOptions: NextAuthOptions = {
             });
           } catch {}
 
-          return { id: user.id, username: user.username, email: user.email, name: user.name, role: user.role };
+          return {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            tenantSlug: tenantSlug || undefined,
+          };
         }
 
         // -- Branch B: Initial credential check ------------------------------
@@ -102,9 +113,16 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Username and password are required');
         }
 
-        // Find user
-        const user = await prisma.adminUser.findUnique({
-          where: { username: credentials.username },
+        const usernameInput = credentials.username.trim();
+
+        // Find user by username or email
+        const user = await db.adminUser.findFirst({
+          where: {
+            OR: [
+              { username: usernameInput },
+              { email: usernameInput.toLowerCase() },
+            ],
+          },
         });
 
         if (!user) {
@@ -132,7 +150,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Update last login
-        await prisma.adminUser.update({
+        await db.adminUser.update({
           where: { id: user.id },
           data: { lastLogin: new Date() },
         });
@@ -159,6 +177,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          tenantSlug: tenantSlug || undefined,
         };
       },
     }),
@@ -170,6 +189,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.username = (user as any).username;
         token.role = (user as any).role;
+        token.tenantSlug = (user as any).tenantSlug;
       }
       return token;
     },
@@ -179,6 +199,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id = token.id;
         (session.user as any).username = token.username;
         (session.user as any).role = token.role;
+        (session.user as any).tenantSlug = token.tenantSlug;
       }
       return session;
     },
@@ -214,8 +235,11 @@ export async function verifyAuth(request: NextRequest | Request) {
     });
     
     if (token && token.id && token.username && token.role) {
+      const tenantSlug = (token as any).tenantSlug || getTenantFromRequest(request);
+      const db = tenantSlug ? getTenantPrisma(tenantSlug) : defaultPrisma;
+
       // Verify user still exists and is active
-      const user = await prisma.adminUser.findUnique({
+      const user = await db.adminUser.findUnique({
         where: { id: token.id as string },
         select: {
           id: true,
@@ -238,6 +262,7 @@ export async function verifyAuth(request: NextRequest | Request) {
         email: user.email,
         name: user.name,
         role: user.role,
+        tenantSlug: tenantSlug || null,
       };
     }
     
