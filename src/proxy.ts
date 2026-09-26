@@ -201,10 +201,10 @@ export default async function proxy(req: NextRequest) {
       requestHeaders.set('x-tenant-slug', subdomain);
 
       if (!isSystem && !isStaticFile && !isStandaloneRoute) {
-        // If root path is accessed on tenant subdomain, route to customer portal by default
+        // If root path is accessed on tenant subdomain, route to /admin (or /admin/login)
         if (pathname === '/') {
           const url = req.nextUrl.clone();
-          url.pathname = '/customer';
+          url.pathname = '/admin';
           url.protocol = 'http:';
           const rewriteRes = NextResponse.rewrite(url, {
             request: { headers: requestHeaders },
