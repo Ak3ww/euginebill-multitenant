@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -16,11 +16,9 @@ import {
   Sparkles,
   Lock,
   Database,
-  RotateCcw,
   Building2,
   Globe,
   CheckCircle2,
-  Layers,
   HelpCircle,
   ChevronDown,
   X,
@@ -30,11 +28,10 @@ import {
   Activity,
   Users,
   Cpu,
-  FileText,
-  Clock,
+  Star,
+  Quote,
+  Copy,
   ExternalLink,
-  ChevronRight,
-  Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,7 +76,7 @@ const PLANS: PlanDetail[] = [
   },
   {
     id: 'pro',
-    name: 'Pro',
+    name: 'Pro ISP',
     tagline: 'Pilihan terfavorit untuk ISP berkembang & RT/RW Net skala menengah.',
     monthlyPrice: 249000,
     yearlyMonthlyEquivalent: 199200,
@@ -119,12 +116,12 @@ const FEATURES_GRID = [
   {
     icon: Server,
     title: 'Native MikroTik API & Dynamic Ports',
-    desc: 'Integrasi langsung dengan RouterOS v6 & v7 via secure VPN tunnel proxy. Mendukung akses remote Winbox, API socket, dan WebFig tanpa IP publik statis.',
+    desc: 'Integrasi langsung dengan RouterOS v6 & v7 via secure VPN tunnel proxy. Akses remote Winbox, API socket, dan WebFig tanpa memerlukan IP publik statis di lokasi router.',
   },
   {
     icon: Zap,
     title: 'FreeRADIUS 3.x High-Performance',
-    desc: 'Engine autentikasi AAA performa tinggi berskala puluhan ribu sesi simultan. Dilengkapi CoA Disconnect untuk eksekusi isolasi dan aktivasi instan tanpa reboot.',
+    desc: 'Engine autentikasi AAA performa tinggi berskala puluhan ribu sesi simultan. Dilengkapi CoA Disconnect untuk eksekusi isolasi dan aktivasi instan tanpa reboot router.',
   },
   {
     icon: MessageSquare,
@@ -148,53 +145,53 @@ const FEATURES_GRID = [
   },
 ];
 
-const SECURITY_BADGES = [
+const TESTIMONIALS = [
   {
-    icon: Database,
-    title: '100% Data Terisolasi',
-    desc: 'Setiap tenant memiliki database mandiri terpisah untuk menjamin privasi data pelanggan.',
+    name: 'Budi Santoso',
+    role: 'Owner & Network Engineer',
+    company: 'CitraNet Mandiri — Bogor, Jawa Barat',
+    comment: 'Sebelumnya pusing mengelola 4 MikroTik dan isolasi pelanggan manual satu per satu tiap tanggal 20. Sejak pakai EugineBill, semua tagihan terkirim otomatis via WhatsApp dengan PDF resmi dan isolasi otomatis jika telat bayar. Cashflow jadi sangat lancar.',
+    rating: 5,
+    highlight: 'Kolektibilitas Tagihan Naik 98%',
   },
   {
-    icon: Activity,
-    title: 'SLA Uptime 99.99%',
-    desc: 'Arsitektur cloud terdistribusi dengan pemantauan otomatis 24/7 dan failover zero-downtime.',
+    name: 'Ahmad Fauzi',
+    role: 'CTO & Operational Lead',
+    company: 'Megavision Fiber — Surabaya, Jawa Timur',
+    comment: 'Fitur cetak voucher thermal dan TR-069 GenieACS sangat membantu tim teknisi kami di lapangan. Redaman optik ONT bisa dipantau langsung dari HP tanpa perlu datang ke rumah pelanggan.',
+    rating: 5,
+    highlight: 'Hemat Biaya Operasional Teknisi',
   },
   {
-    icon: Lock,
-    title: 'Enkripsi Bank-Grade',
-    desc: 'Komunikasi data diamankan dengan TLS/SSL 256-bit dan proteksi kredensial router terenkripsi.',
-  },
-  {
-    icon: RotateCcw,
-    title: 'Pencadangan Otomatis',
-    desc: 'Pencadangan basis data harian otomatis ke cloud multi-region dan notifikasi via bot Telegram.',
+    name: 'Rian Ardiansyah',
+    role: 'Founder',
+    company: 'Borneo Fiber Net — Samarinda, Kaltim',
+    comment: 'Arsitektur database terisolasi per tenant membuat kami percaya diri scale up pelanggan dari 200 ke 1.500+ pelanggan tanpa kendala database lambat. Sangat stabil dan profesional.',
+    rating: 5,
+    highlight: 'Scale Up dari 200 ke 1.500+ Pelanggan',
   },
 ];
 
 const FAQS = [
   {
-    q: 'Bagaimana cara kerja Trial Gratis 7 Hari?',
-    a: 'Anda mendapatkan akses penuh tanpa batasan fitur selama 7 hari ke paket yang Anda pilih. Tanpa perlu kartu kredit atau deposit. Setelah mendaftar, sistem akan otomatis menyiapkan instance database dan subdomain khusus untuk ISP Anda.',
-  },
-  {
     q: 'Apakah saya membutuhkan IP Publik Statis di MikroTik saya?',
-    a: 'Tidak. EugineBill menyediakan VPN Server terintegrasi. MikroTik Anda cukup terkoneksi ke internet dan menjalankan script koneksi VPN client kami untuk terhubung secara aman dengan cloud billing.',
+    a: 'Tidak perlu. EugineBill menyediakan secure VPN tunnel proxy bawaan (WireGuard & L2TP). MikroTik Anda cukup terkoneksi ke internet dan otomatis terhubung ke cloud server EugineBill.',
   },
   {
-    q: 'Apakah bisa digunakan untuk router MikroTik RouterOS v6 dan v7?',
-    a: 'Ya, sistem kami mendukung penuh RouterOS versi 6.x hingga 7.x terbaru, baik mode API port standar maupun FreeRADIUS AAA.',
+    q: 'Bagaimana cara kerja WhatsApp Bot Billing?',
+    a: 'Sistem menggunakan engine WhatsApp Baileys native. Anda cukup scan QR code WhatsApp nomor bisnis Anda di panel admin, dan sistem akan otomatis mengirim notifikasi tagihan, invoice PDF, dan bukti lunas kepada pelanggan.',
   },
   {
-    q: 'Bagaimana cara integrasi WhatsApp Bot?',
-    a: 'Kami menyediakan service WhatsApp Baileys bawaan yang dapat langsung dihubungkan via scan QR Code dari nomor WhatsApp resmi Anda, atau menggunakan gateway API pihak ketiga yang Anda miliki.',
+    q: 'Apakah data pelanggan dan router saya aman dari ISP lain?',
+    a: '100% Aman. EugineBill menggunakan arsitektur Database-per-Tenant terisolasi fisik. Database Anda terpisah secara independen dan tidak bercampur dengan database ISP manapun.',
   },
   {
-    q: 'Apakah data pelanggan saya aman jika menggunakan layanan cloud?',
-    a: 'Sangat aman. EugineBill menerapkan isolasi database per-tenant (database terpisah untuk setiap ISP), enkripsi kata sandi standar industri, dan pencadangan harian otomatis.',
+    q: 'Apakah setelah masa uji coba 7 hari data konfigurasi saya akan hilang?',
+    a: 'Tidak. Seluruh data router, paket, dan pelanggan yang sudah Anda masukkan saat uji coba 7 hari akan tetap tersimpan utuh saat Anda melanjutkan langganan.',
   },
   {
-    q: 'Dapatkah saya upgrade atau downgrade paket setelah masa trial?',
-    a: 'Tentu saja. Anda dapat mengubah paket langganan kapan saja melalui panel admin tanpa kehilangan data konfigurasi maupun histori transaksi.',
+    q: 'Bisakah saya melakukan migrasi data dari billing lama saya?',
+    a: 'Bisa. Tersedia fitur Import Pelanggan via Excel (.xlsx) dan sinkronisasi otomatis langsung dari database MikroTik PPP Secret & Hotspot User.',
   },
 ];
 
@@ -203,16 +200,15 @@ const PROVISIONING_STEPS = [
   'Menyiapkan cluster database terisolasi tenant...',
   'Menginisialisasi skema billing, RADIUS engine & tabel router...',
   'Mengonfigurasi layanan WhatsApp Bot & webhook gateway...',
-  'Instansiasi selesai! Mengalihkan ke Halaman Setup...',
+  'Instansiasi selesai! Akun SuperAdmin siap digunakan.',
 ];
 
-export default function SaasLandingPage() {
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('yearly');
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('pro');
+export default function SaaSLandingPage() {
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>('starter');
 
-  // Form State
+  // Form states
   const [companyName, setCompanyName] = useState('');
   const [subdomain, setSubdomain] = useState('');
   const [email, setEmail] = useState('');
@@ -220,45 +216,36 @@ export default function SaasLandingPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Subdomain Validation State
+  // Subdomain check state
   const [subdomainStatus, setSubdomainStatus] = useState<'idle' | 'checking' | 'available' | 'unavailable'>('idle');
   const [subdomainMessage, setSubdomainMessage] = useState('');
 
-  // Submission & Provisioning Simulation State
+  // Submission & Provisioning states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [registrationSuccessData, setRegistrationSuccessData] = useState<{
+    subdomain: string;
+    email: string;
+    loginUrl: string;
+  } | null>(null);
 
-  // Format IDR Currency
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
+  // FAQ Accordion State
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  // Open Modal with specific plan
-  const handleOpenRegister = (planId: PlanType = 'pro') => {
+  const handleOpenRegister = (planId: PlanType = 'starter') => {
     setSelectedPlan(planId);
-    setErrorMessage('');
+    setErrorMessage(null);
+    setRegistrationSuccessData(null);
     setIsRegisterOpen(true);
   };
 
-  // Debounced Subdomain Check
+  // Debounced Subdomain Availability Check
   useEffect(() => {
     const cleanSlug = subdomain.trim().toLowerCase();
-    if (!cleanSlug) {
+    if (!cleanSlug || cleanSlug.length < 3) {
       setSubdomainStatus('idle');
       setSubdomainMessage('');
-      return;
-    }
-
-    const slugRegex = /^[a-z0-9]([a-z0-9-]{1,28}[a-z0-9])?$/;
-    if (!slugRegex.test(cleanSlug)) {
-      setSubdomainStatus('unavailable');
-      setSubdomainMessage('Gunakan 3-30 karakter huruf kecil, angka, atau strip (-)');
       return;
     }
 
@@ -274,7 +261,7 @@ export default function SaasLandingPage() {
           setSubdomainStatus('unavailable');
           setSubdomainMessage(data.message || 'Subdomain tidak tersedia');
         }
-      } catch (err) {
+      } catch {
         setSubdomainStatus('idle');
       }
     }, 450);
@@ -282,10 +269,10 @@ export default function SaasLandingPage() {
     return () => clearTimeout(timer);
   }, [subdomain]);
 
-  // Handle Form Submit & Step-by-Step Progress
+  // Handle Form Submit
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage('');
+    setErrorMessage(null);
 
     if (!companyName.trim()) {
       setErrorMessage('Nama ISP / Perusahaan wajib diisi.');
@@ -300,11 +287,11 @@ export default function SaasLandingPage() {
       return;
     }
     if (!phone.trim()) {
-      setErrorMessage('Nomor WhatsApp wajib diisi untuk pengiriman kredensial.');
+      setErrorMessage('Nomor WhatsApp wajib diisi untuk verifikasi.');
       return;
     }
-    if (!password || password.length < 8) {
-      setErrorMessage('Password SuperAdmin minimal 8 karakter.');
+    if (!password || password.length < 6) {
+      setErrorMessage('Password SuperAdmin minimal 6 karakter.');
       return;
     }
 
@@ -312,7 +299,6 @@ export default function SaasLandingPage() {
     setCurrentStepIndex(0);
 
     try {
-      // Step 1: Call API
       const res = await fetch('/api/saas/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,18 +323,22 @@ export default function SaasLandingPage() {
 
       // Progress animation sequence
       for (let i = 1; i < PROVISIONING_STEPS.length; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 850));
+        await new Promise((resolve) => setTimeout(resolve, 750));
         setCurrentStepIndex(i);
       }
 
-      const redirectTarget = result.data?.redirectUrl || `/setup?tenant=${encodeURIComponent(subdomain.trim().toLowerCase())}`;
-      setSuccessRedirectUrl(redirectTarget);
+      const cleanSlug = subdomain.trim().toLowerCase();
+      const originHost = typeof window !== 'undefined' ? window.location.host : 'euginemediagroup.site';
+      const rootDomain = originHost.includes('localhost') ? 'localhost:3000' : 'euginemediagroup.site';
+      const targetLoginUrl = `http://${cleanSlug}.${rootDomain}/admin/login?callbackUrl=/setup&email=${encodeURIComponent(email.trim().toLowerCase())}`;
 
-      // Short delay before actual redirection
-      setTimeout(() => {
-        window.location.href = redirectTarget;
-      }, 1200);
-    } catch (err) {
+      setRegistrationSuccessData({
+        subdomain: `${cleanSlug}.${rootDomain}`,
+        email: email.trim().toLowerCase(),
+        loginUrl: targetLoginUrl,
+      });
+      setIsSubmitting(false);
+    } catch {
       setIsSubmitting(false);
       setErrorMessage('Terjadi gangguan jaringan saat memproses pendaftaran. Silakan coba lagi.');
     }
@@ -360,300 +350,153 @@ export default function SaasLandingPage() {
       <div className="bg-[#002c60] text-white text-xs sm:text-sm py-2 px-4 text-center border-b border-[#1b437c] flex items-center justify-center gap-2">
         <Sparkles className="w-4 h-4 text-sky-300 shrink-0" />
         <span>
-          <strong>Rilis v2.40:</strong> Integrasi TR-069 GenieACS Multi-Vendor & Generator QRIS Dinamis Otomatis kini tersedia!
+          <strong>Rilis v2.40:</strong> Integrasi TR-069 GenieACS Multi-Vendor & QRIS Dinamis Otomatis kini tersedia!
         </span>
         <button
-          onClick={() => handleOpenRegister('pro')}
+          onClick={() => handleOpenRegister('starter')}
           className="underline font-semibold hover:text-sky-200 transition-colors ml-1 hidden sm:inline"
         >
-          Coba Gratis Sekarang
+          Coba Gratis 7 Hari Sekarang
         </button>
       </div>
 
       {/* Main Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 transition-all">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
-          <Link href="/saas" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#002c60] to-[#1b437c] flex items-center justify-center text-white shadow-md shadow-blue-950/15 group-hover:scale-105 transition-transform">
               <Wifi className="w-5 h-5 text-sky-200" />
             </div>
             <div>
-              <div className="font-bold text-lg sm:text-xl tracking-tight text-[#002c60] flex items-center gap-1.5">
+              <div className="text-lg font-black tracking-tight text-[#002c60] flex items-center gap-1.5">
                 <span>EugineBill</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-[#1b437c] font-medium border border-blue-200">
-                  Cloud
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-[#002c60] font-bold tracking-normal">
+                  SaaS
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 hidden sm:block">ISP & RT-RW Net Billing Management</p>
+              <p className="text-[10px] text-slate-500 font-medium tracking-wide">
+                ISP & RT-RW Net Cloud Billing Platform
+              </p>
             </div>
           </Link>
 
+          {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <a href="#fitur" className="hover:text-[#002c60] transition-colors">
+            <a href="#features" className="hover:text-[#002c60] transition-colors">
               Fitur Utama
             </a>
-            <a href="#harga" className="hover:text-[#002c60] transition-colors">
-              Paket & Harga
+            <a href="#pricing" className="hover:text-[#002c60] transition-colors">
+              Pilihan Paket & Harga
             </a>
-            <a href="#keamanan" className="hover:text-[#002c60] transition-colors">
-              Arsitektur & Keamanan
+            <a href="#testimonials" className="hover:text-[#002c60] transition-colors">
+              Testimoni ISP
             </a>
             <a href="#faq" className="hover:text-[#002c60] transition-colors">
               FAQ
             </a>
           </nav>
 
+          {/* Action CTAs */}
           <div className="flex items-center gap-3">
-            <Link href="/customer/login" className="hidden sm:inline-flex">
-              <Button variant="ghost" className="text-slate-600 hover:text-[#002c60] text-sm">
-                Login Portal
+            <Link href="/saas-admin/login">
+              <Button variant="ghost" size="sm" className="text-slate-700 hover:text-[#002c60] text-xs font-semibold">
+                Login Master SaaS
               </Button>
             </Link>
             <Button
-              onClick={() => handleOpenRegister('pro')}
-              className="bg-[#002c60] hover:bg-[#1b437c] text-white shadow-sm font-medium px-4 sm:px-5"
+              onClick={() => handleOpenRegister('starter')}
+              size="sm"
+              className="bg-[#002c60] hover:bg-[#1b437c] text-white text-xs font-semibold px-4 shadow-sm shadow-blue-950/20"
             >
-              <Sparkles className="w-4 h-4 mr-2" />
-              <span>Coba Gratis 7 Hari</span>
+              Coba Gratis 7 Hari
             </Button>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative pt-12 pb-20 sm:pt-20 sm:pb-28 overflow-hidden bg-gradient-to-b from-blue-50/50 via-white to-[#f9f9fe]">
-        <div className="absolute inset-0 bg-[radial-gradient(#1b437c_1px,transparent_1px)] [background-size:24px_24px] opacity-[0.04] pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-4xl mx-auto space-y-6">
-            {/* Version Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100/70 border border-blue-200/80 text-[#002c60] text-xs sm:text-sm font-semibold shadow-xs">
-              <ShieldCheck className="w-4 h-4 text-[#1b437c]" />
+            {/* Pill Badge */}
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 text-[#002c60] text-xs font-semibold shadow-xs">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>Cloud ISP & RT-RW Net Billing Platform v2.40</span>
             </div>
 
-            {/* Headline */}
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-[#002c60] tracking-tight leading-[1.15] text-balance">
-              Sistem Billing & Network Management ISP / RT-RW Net Berbasis Cloud
+            {/* Main Headline */}
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-950 tracking-tight leading-[1.15]">
+              Sistem Billing & Manajemen Jaringan ISP{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#002c60] via-[#1b437c] to-sky-600">
+                Berbasis Cloud
+              </span>
             </h1>
 
-            {/* Subtitle */}
-            <p className="text-base sm:text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed text-pretty">
-              Kelola router MikroTik tak terbatas, isolasi pelanggan otomatis, WhatsApp Bot Billing, FreeRADIUS 3, TR-069
-              ACS ONT, dan pembayaran QRIS dalam satu platform terpadu.
+            {/* Subheadline */}
+            <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
+              Kelola router MikroTik tak terbatas, isolasi pelanggan otomatis, WhatsApp Bot notifikasi PDF, FreeRADIUS 3 AAA, TR-069 ACS ONT, dan pembayaran QRIS dalam satu platform cloud terisolasi.
             </p>
 
-            {/* CTAs */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            {/* Hero Action Buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Button
                 size="lg"
-                onClick={() => handleOpenRegister('pro')}
+                onClick={() => handleOpenRegister('starter')}
                 className="w-full sm:w-auto bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold px-8 py-6 text-base shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.99]"
               >
-                <span>Coba Gratis 7 Hari</span>
+                <span>Coba Gratis 7 Hari Sekarang</span>
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
-              <Link href="/admin/login" className="w-full sm:w-auto">
+              <a href="#pricing" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
                   className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold px-6 py-6 text-base"
                 >
-                  <Server className="w-4 h-4 mr-2 text-slate-500" />
-                  <span>Buka Live Demo Sandbox</span>
+                  <span>Lihat Pilihan Paket</span>
                 </Button>
-              </Link>
+              </a>
             </div>
 
-            {/* Trust Badges Bar */}
-            <div className="pt-8 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-200/80 shadow-xs">
-                <div className="w-8 h-8 rounded-md bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
+            {/* Trust Badges Grid */}
+            <div className="pt-10 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
                   <Database className="w-4 h-4" />
                 </div>
                 <div className="text-xs">
-                  <div className="font-bold text-slate-900">100% Terisolasi</div>
-                  <div className="text-slate-500">Database per ISP</div>
+                  <div className="font-bold text-slate-900">100% Data Terisolasi</div>
+                  <div className="text-slate-500">Database Mandiri per ISP</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-200/80 shadow-xs">
-                <div className="w-8 h-8 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
                   <Activity className="w-4 h-4" />
                 </div>
                 <div className="text-xs">
-                  <div className="font-bold text-slate-900">99.99% SLA</div>
-                  <div className="text-slate-500">Cloud High Uptime</div>
+                  <div className="font-bold text-slate-900">99.99% Uptime SLA</div>
+                  <div className="text-slate-500">Cloud High Availability</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-200/80 shadow-xs">
-                <div className="w-8 h-8 rounded-md bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
                   <Cpu className="w-4 h-4" />
                 </div>
                 <div className="text-xs">
                   <div className="font-bold text-slate-900">MikroTik Ready</div>
-                  <div className="text-slate-500">RouterOS v6 & v7</div>
+                  <div className="text-slate-500">RouterOS v6 & v7 Support</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-200/80 shadow-xs">
-                <div className="w-8 h-8 rounded-md bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-200/80 shadow-xs">
+                <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#002c60] flex items-center justify-center shrink-0">
                   <Zap className="w-4 h-4" />
                 </div>
                 <div className="text-xs">
                   <div className="font-bold text-slate-900">FreeRADIUS 3.x</div>
-                  <div className="text-slate-500">High-Speed Engine</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Cloud Architecture / UI Mockup Showcase */}
-          <div className="mt-14 max-w-5xl mx-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 overflow-hidden">
-            {/* Header Mockup */}
-            <div className="bg-slate-900 px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-slate-800 text-white">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <span className="ml-2 text-xs font-mono text-slate-400">admin.euginemediagroup.site/dashboard</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-slate-300">
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Network Sync Active</span>
-                </span>
-                <span className="hidden sm:inline text-slate-500">|</span>
-                <span className="hidden sm:inline text-slate-400 font-mono">Tenant ID: isp-citranet-live</span>
-              </div>
-            </div>
-
-            {/* Dashboard Mockup Body */}
-            <div className="p-4 sm:p-6 bg-slate-50/60 space-y-5">
-              {/* Top Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
-                    <span>PPPoE Aktif Online</span>
-                    <Wifi className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div className="text-xl sm:text-2xl font-bold text-slate-900">842 / 910</div>
-                  <div className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>92.5% Pelanggan Aktif</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
-                    <span>Voucher Terjual (Bulan Ini)</span>
-                    <Printer className="w-4 h-4 text-[#002c60]" />
-                  </div>
-                  <div className="text-xl sm:text-2xl font-bold text-slate-900">1,420 Voucher</div>
-                  <div className="text-[11px] text-slate-500 mt-1">Total Rp 7.100.000</div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
-                    <span>Isolasi Otomatis (CoA)</span>
-                    <ShieldCheck className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <div className="text-xl sm:text-2xl font-bold text-slate-900">14 Pelanggan</div>
-                  <div className="text-[11px] text-amber-600 mt-1">Jatuh tempo hari ini</div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
-                    <span>TR-069 ACS ONT Online</span>
-                    <Radio className="w-4 h-4 text-sky-600" />
-                  </div>
-                  <div className="text-xl sm:text-2xl font-bold text-slate-900">798 Device</div>
-                  <div className="text-[11px] text-slate-500 mt-1">Rata-rata Optical: -19.4 dBm</div>
-                </div>
-              </div>
-
-              {/* Central Architecture Flow Mockup */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#002c60] uppercase tracking-wider">
-                    <Server className="w-4 h-4" />
-                    <span>MikroTik Router Cluster</span>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-semibold text-slate-800">CCR2004-Core-Router</div>
-                        <div className="text-[11px] text-slate-500">VPN IP: 10.255.0.12</div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                        Connected
-                      </span>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-semibold text-slate-800">RB4011-Distribusi-Utara</div>
-                        <div className="text-[11px] text-slate-500">VPN IP: 10.255.0.18</div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                        Connected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#002c60] uppercase tracking-wider">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>WhatsApp Bot Billing</span>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-100 text-emerald-900">
-                      <div className="font-semibold flex items-center justify-between">
-                        <span>Invoice #INV-2026-0921</span>
-                        <span className="text-[10px] text-emerald-700">Terkirim</span>
-                      </div>
-                      <div className="text-[11px] text-emerald-800 mt-1">
-                        PDF Tagihan 50 Mbps terkirim ke WhatsApp 0812-XXXX-8921
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 text-blue-900">
-                      <div className="font-semibold flex items-center justify-between">
-                        <span>Notifikasi Pembayaran</span>
-                        <span className="text-[10px] text-blue-700">Auto Lunas</span>
-                      </div>
-                      <div className="text-[11px] text-blue-800 mt-1">QRIS Rp 185.000 diverifikasi otomatis</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#002c60] uppercase tracking-wider">
-                    <Radio className="w-4 h-4" />
-                    <span>TR-069 ACS Telemetry</span>
-                  </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-slate-800">ONT ZTE F670L</div>
-                        <div className="text-[11px] text-slate-500">SN: ZTEGC4219FA1</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] font-bold text-emerald-600">-18.2 dBm</div>
-                        <div className="text-[10px] text-slate-400">Normal</div>
-                      </div>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-slate-800">ONT Huawei HG8245H5</div>
-                        <div className="text-[11px] text-slate-500">SN: 48575443F89A</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[11px] font-bold text-emerald-600">-20.1 dBm</div>
-                        <div className="text-[10px] text-slate-400">Normal</div>
-                      </div>
-                    </div>
-                  </div>
+                  <div className="text-slate-500">High-Speed CoA Engine</div>
                 </div>
               </div>
             </div>
@@ -661,41 +504,34 @@ export default function SaasLandingPage() {
         </div>
       </section>
 
-      {/* Feature Highlights Grid (6 Key Modules) */}
-      <section id="fitur" className="py-20 bg-white border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
-            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50/50 font-semibold px-3 py-1">
-              Modul Enterprise Terintegrasi
+      {/* Features Grid Section */}
+      <section id="features" className="py-16 sm:py-24 bg-white border-y border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50/50 text-xs px-3 py-1 font-bold">
+              Fitur Lengkap Turnkey
             </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#002c60] tracking-tight">
-              Segala Kebutuhan Manajemen ISP & RT-RW Net dalam Satu Dasbor
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              Semua yang Dibutuhkan ISP & RT/RW Net
             </h2>
-            <p className="text-base text-slate-600 leading-relaxed">
-              Dirancang khusus oleh praktisi jaringan untuk mengotomatisasi operasional teknis, penagihan, hingga layanan
-              pelanggan tanpa beban server mandiri.
+            <p className="text-sm sm:text-base text-slate-600">
+              Didesain khusus untuk mempermudah operasional billing, otomatisasi tagihan, dan monitoring teknis dari hulu ke hilir.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES_GRID.map((feat, idx) => {
-              const IconComp = feat.icon;
+              const Icon = feat.icon;
               return (
                 <div
                   key={idx}
-                  className="p-6 rounded-2xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between group"
+                  className="p-6 rounded-2xl border border-slate-200 bg-[#fbfbfe] hover:bg-white hover:border-[#1b437c]/30 hover:shadow-lg hover:shadow-blue-950/5 transition-all space-y-3 group"
                 >
-                  <div className="space-y-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#002c60] flex items-center justify-center group-hover:bg-[#002c60] group-hover:text-white transition-colors">
-                      <IconComp className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-900 tracking-tight">{feat.title}</h3>
-                    <p className="text-sm text-slate-600 leading-relaxed">{feat.desc}</p>
+                  <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 text-[#002c60] group-hover:bg-[#002c60] group-hover:text-white transition-colors flex items-center justify-center shadow-xs">
+                    <Icon className="w-6 h-6" />
                   </div>
-                  <div className="pt-4 border-t border-slate-100 mt-4 flex items-center text-xs font-semibold text-[#1b437c] group-hover:text-[#002c60]">
-                    <span>Fitur Lengkap Tersedia</span>
-                    <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                  </div>
+                  <h3 className="text-base font-bold text-slate-900">{feat.title}</h3>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{feat.desc}</p>
                 </div>
               );
             })}
@@ -703,111 +539,103 @@ export default function SaasLandingPage() {
         </div>
       </section>
 
-      {/* Interactive Price List Section */}
-      <section id="harga" className="py-20 sm:py-28 bg-[#f9f9fe]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-4 mb-12">
-            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50 font-semibold px-3 py-1">
-              Transparan & Terjangkau
+      {/* Pricing Section */}
+      <section id="pricing" className="py-16 sm:py-24 bg-[#f9f9fe]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-4">
+            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50/50 text-xs px-3 py-1 font-bold">
+              Pilihan Paket & Harga
             </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#002c60] tracking-tight">
-              Pilihan Paket Sesuai Skala Jaringan Anda
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              Investasi Hemat untuk Bisnis ISP Anda
             </h2>
-            <p className="text-base text-slate-600">
-              Mulai gratis 7 hari tanpa kartu kredit. Upgrade atau sesuaikan kapasitas kapan saja seiring bertumbuhnya jumlah pelanggan Anda.
+            <p className="text-sm sm:text-base text-slate-600">
+              Mulai gratis 7 hari tanpa kartu kredit. Tingkatkan paket kapan saja sesuai pertumbuhan jaringan pelanggan Anda.
             </p>
 
-            {/* Monthly / Yearly Billing Toggle */}
-            <div className="pt-4 flex items-center justify-center gap-3">
-              <span
-                className={`text-sm font-semibold cursor-pointer ${
-                  billingCycle === 'monthly' ? 'text-[#002c60]' : 'text-slate-500'
-                }`}
-                onClick={() => setBillingCycle('monthly')}
-              >
+            {/* Monthly / Yearly Billing Cycle Switch */}
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <span className={`text-xs sm:text-sm font-semibold ${billingCycle === 'monthly' ? 'text-slate-900' : 'text-slate-500'}`}>
                 Ditagih Bulanan
               </span>
               <Switch
                 checked={billingCycle === 'yearly'}
                 onCheckedChange={(checked) => setBillingCycle(checked ? 'yearly' : 'monthly')}
-                className="data-[state=checked]:bg-[#002c60]"
               />
-              <span
-                className={`text-sm font-semibold cursor-pointer flex items-center gap-1.5 ${
-                  billingCycle === 'yearly' ? 'text-[#002c60]' : 'text-slate-500'
-                }`}
-                onClick={() => setBillingCycle('yearly')}
-              >
-                <span>Ditagih Tahunan</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xs sm:text-sm font-semibold ${billingCycle === 'yearly' ? 'text-slate-900' : 'text-slate-500'}`}>
+                  Ditagih Tahunan
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                   Hemat 20%
                 </span>
-              </span>
+              </div>
             </div>
           </div>
 
           {/* Pricing Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {PLANS.map((plan) => {
-              const displayPrice =
-                billingCycle === 'yearly' ? plan.yearlyMonthlyEquivalent : plan.monthlyPrice;
-
+              const price = billingCycle === 'yearly' ? plan.yearlyMonthlyEquivalent : plan.monthlyPrice;
               return (
                 <Card
                   key={plan.id}
-                  className={`relative flex flex-col justify-between rounded-2xl transition-all duration-200 bg-white ${
+                  className={`flex flex-col justify-between relative rounded-2xl transition-all ${
                     plan.isPopular
-                      ? 'border-2 border-[#002c60] shadow-xl shadow-blue-900/10 lg:-translate-y-2'
-                      : 'border border-slate-200 shadow-sm hover:shadow-md'
+                      ? 'border-2 border-[#002c60] bg-white shadow-xl shadow-blue-900/10 scale-100 lg:scale-105 z-10'
+                      : 'border border-slate-200 bg-white/90 shadow-sm hover:border-slate-300'
                   }`}
                 >
                   {plan.isPopular && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#002c60] text-white text-xs font-bold px-4 py-1 rounded-full tracking-wide shadow-sm flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-sky-300" />
-                      <span>PALING POPULER & REKOMENDASI</span>
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-[#002c60] text-white text-[11px] font-bold uppercase tracking-wider shadow-sm flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-300" />
+                      <span>Paling Populer & Rekomendasi</span>
                     </div>
                   )}
 
-                  <CardHeader className="pt-8 pb-4">
-                    <CardTitle className="text-2xl font-bold text-[#002c60]">{plan.name}</CardTitle>
-                    <CardDescription className="text-slate-600 text-xs leading-relaxed min-h-[36px]">
+                  <CardHeader className="p-6 pb-4 space-y-2">
+                    <CardTitle className="text-xl font-bold text-slate-900">{plan.name}</CardTitle>
+                    <CardDescription className="text-xs text-slate-500 leading-relaxed min-h-[36px]">
                       {plan.tagline}
                     </CardDescription>
 
-                    <div className="pt-4 flex items-baseline gap-1">
-                      <span className="text-3xl sm:text-4xl font-extrabold text-slate-900">
-                        {formatCurrency(displayPrice)}
-                      </span>
-                      <span className="text-sm font-medium text-slate-500">/ bulan</span>
+                    <div className="pt-3 pb-1 border-b border-slate-100">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-sm font-bold text-slate-700">Rp</span>
+                        <span className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight">
+                          {price.toLocaleString('id-ID')}
+                        </span>
+                        <span className="text-xs text-slate-500">/ bulan</span>
+                      </div>
+                      {billingCycle === 'yearly' && (
+                        <p className="text-[11px] text-emerald-600 font-medium mt-1">
+                          Ditagih tahunan Rp {(price * 12).toLocaleString('id-ID')}
+                        </p>
+                      )}
                     </div>
-                    {billingCycle === 'yearly' && (
-                      <p className="text-xs text-emerald-600 font-medium pt-1">
-                        Ditagih tahunan (Total {formatCurrency(displayPrice * 12)} / tahun)
-                      </p>
-                    )}
                   </CardHeader>
 
-                  <CardContent className="space-y-4 py-4 flex-1">
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Fitur Termasuk:
+                  <CardContent className="p-6 pt-2 flex-1 space-y-3">
+                    <div className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">
+                      Fitur & Kuota Termasuk:
                     </div>
-                    <ul className="space-y-3 text-sm text-slate-700">
-                      {plan.features.map((feature, fIdx) => (
-                        <li key={fIdx} className="flex items-start gap-2.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                          <span>{feature}</span>
+                    <ul className="space-y-2.5">
+                      {plan.features.map((feat, fIdx) => (
+                        <li key={fIdx} className="flex items-start gap-2.5 text-xs text-slate-700">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{feat}</span>
                         </li>
                       ))}
                     </ul>
                   </CardContent>
 
-                  <CardFooter className="pt-4 pb-8">
+                  <CardFooter className="p-6 pt-2">
                     <Button
                       onClick={() => handleOpenRegister(plan.id)}
-                      className={`w-full py-6 font-semibold text-sm transition-all ${
+                      className={`w-full py-5 font-semibold text-xs transition-all ${
                         plan.isPopular
-                          ? 'bg-[#002c60] hover:bg-[#1b437c] text-white shadow-md'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300'
+                          ? 'bg-[#002c60] hover:bg-[#1b437c] text-white shadow-md shadow-blue-900/20'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
                       }`}
                     >
                       <span>{plan.ctaLabel}</span>
@@ -818,89 +646,90 @@ export default function SaasLandingPage() {
               );
             })}
           </div>
-
-          <div className="mt-12 text-center text-xs text-slate-500 flex flex-wrap items-center justify-center gap-6">
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-600" /> Tanpa Kartu Kredit
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-600" /> Pembatalan Kapan Saja
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="w-4 h-4 text-emerald-600" /> Bantuan Setup Gratis dari Tim Ahli
-            </span>
-          </div>
         </div>
       </section>
 
-      {/* Security & Data Isolation Badges */}
-      <section id="keamanan" className="py-20 bg-white border-t border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
-            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50 font-semibold px-3 py-1">
-              Keamanan Tingkat Tinggi
+      {/* Testimonials Section */}
+      <section id="testimonials" className="py-16 sm:py-24 bg-white border-y border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50/50 text-xs px-3 py-1 font-bold">
+              Testimoni Pengguna
             </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#002c60] tracking-tight">
-              Arsitektur Cloud Andal untuk Bisnis Tanpa Hambatan
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
+              Dipercaya oleh Pengusaha ISP di Seluruh Indonesia
             </h2>
-            <p className="text-base text-slate-600">
-              Kredibilitas ISP Anda adalah prioritas utama. Kami menjamin integritas data pelanggan dan stabilitas koneksi jaringan 24/7.
+            <p className="text-sm sm:text-base text-slate-600">
+              Dengarkan cerita sukses bagaimana EugineBill membantu rekan-rekan ISP mengotomasi billing dan operasional jaringan.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {SECURITY_BADGES.map((sec, idx) => {
-              const SecIcon = sec.icon;
-              return (
-                <div key={idx} className="p-6 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-                  <div className="w-10 h-10 rounded-xl bg-white text-[#002c60] border border-slate-200 flex items-center justify-center shadow-2xs">
-                    <SecIcon className="w-5 h-5" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((testi, idx) => (
+              <div
+                key={idx}
+                className="p-6 rounded-2xl border border-slate-200 bg-[#fbfbfe] flex flex-col justify-between space-y-4 shadow-xs"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-amber-400">
+                      {[...Array(testi.rating)].map((_, rIdx) => (
+                        <Star key={rIdx} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                    <Quote className="w-6 h-6 text-slate-300" />
                   </div>
-                  <h3 className="font-bold text-slate-900 text-base">{sec.title}</h3>
-                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{sec.desc}</p>
+                  <Badge variant="outline" className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border-emerald-200">
+                    {testi.highlight}
+                  </Badge>
+                  <p className="text-xs sm:text-sm text-slate-700 leading-relaxed italic">
+                    "{testi.comment}"
+                  </p>
                 </div>
-              );
-            })}
+
+                <div className="pt-3 border-t border-slate-200/70">
+                  <div className="font-bold text-sm text-slate-900">{testi.name}</div>
+                  <div className="text-xs text-slate-500 font-medium">{testi.role}</div>
+                  <div className="text-[11px] text-[#002c60] font-semibold mt-0.5">{testi.company}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Interactive FAQ Accordion */}
-      <section id="faq" className="py-20 bg-[#f9f9fe] border-t border-slate-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center space-y-4 mb-14">
-            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50 font-semibold px-3 py-1">
-              Tanya Jawab (FAQ)
+      {/* FAQ Section */}
+      <section id="faq" className="py-16 sm:py-24 bg-[#f9f9fe]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="text-center space-y-3">
+            <Badge variant="outline" className="text-[#002c60] border-blue-200 bg-blue-50/50 text-xs px-3 py-1 font-bold">
+              Frequently Asked Questions
             </Badge>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-[#002c60] tracking-tight">
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-950 tracking-tight">
               Pertanyaan yang Sering Diajukan
             </h2>
-            <p className="text-base text-slate-600">
-              Segala hal yang perlu Anda ketahui mengenai aktivasi, teknis, dan dukungan EugineBill Cloud.
+            <p className="text-sm sm:text-base text-slate-600">
+              Punya pertanyaan seputar integrasi MikroTik, WhatsApp Bot, atau keamanan database? Temukan jawabannya di sini.
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {FAQS.map((faq, idx) => {
-              const isOpen = openFaqIndex === idx;
+              const isOpen = openFaq === idx;
               return (
                 <div
                   key={idx}
-                  className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all"
+                  className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all shadow-xs"
                 >
                   <button
-                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                    className="w-full text-left px-5 py-4 sm:py-5 flex items-center justify-between gap-4 font-semibold text-slate-900 hover:text-[#002c60] transition-colors"
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    className="w-full p-4 sm:p-5 text-left font-bold text-sm sm:text-base text-slate-900 flex items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
                   >
-                    <span className="text-base sm:text-lg">{faq.q}</span>
-                    <ChevronDown
-                      className={`w-5 h-5 text-slate-400 shrink-0 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180 text-[#002c60]' : ''
-                      }`}
-                    />
+                    <span>{faq.q}</span>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {isOpen && (
-                    <div className="px-5 pb-5 pt-1 text-sm sm:text-base text-slate-600 border-t border-slate-100 leading-relaxed">
+                    <div className="px-4 pb-5 sm:px-5 sm:pb-6 text-xs sm:text-sm text-slate-600 border-t border-slate-100 pt-3 leading-relaxed">
                       {faq.a}
                     </div>
                   )}
@@ -911,315 +740,289 @@ export default function SaasLandingPage() {
         </div>
       </section>
 
-      {/* Bottom Final CTA Banner */}
-      <section className="py-16 sm:py-20 bg-[#002c60] text-white relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-6">
-          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-            Siap Mengembangkan Bisnis ISP & RT-RW Net Anda ke Tingkat Berikutnya?
-          </h2>
-          <p className="text-slate-300 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
-            Dapatkan instance billing cloud mandiri dengan isolasi database dan aktivasi instan dalam waktu kurang dari 1 menit.
-          </p>
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button
-              size="lg"
-              onClick={() => handleOpenRegister('pro')}
-              className="w-full sm:w-auto bg-white text-[#002c60] hover:bg-slate-100 font-bold px-8 py-6 text-base shadow-lg transition-all"
-            >
-              <Sparkles className="w-5 h-5 mr-2 text-[#002c60]" />
-              <span>Coba Gratis 7 Hari Sekarang</span>
-            </Button>
-            <Link href="/admin/login" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto border-white/30 text-white hover:bg-white/10 font-semibold px-6 py-6 text-base"
-              >
-                <span>Masuk ke Dashboard</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 text-xs py-12 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#1b437c] flex items-center justify-center text-white font-bold">
-                <Wifi className="w-4 h-4" />
-              </div>
-              <span className="text-white font-bold text-base tracking-tight">EugineBill Cloud SaaS</span>
+      <footer className="bg-[#002c60] text-white py-12 border-t border-[#1b437c]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <Wifi className="w-4 h-4 text-sky-200" />
             </div>
-
-            <div className="flex flex-wrap items-center gap-6 text-slate-400">
-              <a href="#fitur" className="hover:text-white transition-colors">
-                Fitur
-              </a>
-              <a href="#harga" className="hover:text-white transition-colors">
-                Harga
-              </a>
-              <a href="#keamanan" className="hover:text-white transition-colors">
-                Keamanan
-              </a>
-              <a href="#faq" className="hover:text-white transition-colors">
-                FAQ
-              </a>
-              <Link href="/customer/login" className="hover:text-white transition-colors">
-                Customer Portal
-              </Link>
-              <Link href="/technician/login" className="hover:text-white transition-colors">
-                Technician Portal
-              </Link>
+            <div>
+              <div className="font-bold text-sm tracking-tight">EugineBill SaaS Platform</div>
+              <div className="text-xs text-sky-200/70">Powered by Eugine Media Group</div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-            <div>
-              &copy; {new Date().getFullYear()} EugineBill Cloud Platform. Seluruh hak cipta dilindungi.
-            </div>
-            <div className="flex items-center gap-2 text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Semua Sistem Operasional 99.99%</span>
-            </div>
+          <div className="text-xs text-sky-200/70 text-center sm:text-right space-y-1">
+            <p>&copy; {new Date().getFullYear()} EugineBill. All rights reserved.</p>
+            <p>Sistem Billing & Network Management ISP / RT-RW Net Berbasis Cloud.</p>
           </div>
         </div>
       </footer>
 
-      {/* Interactive "Coba Gratis 7 Hari" Modal */}
-      <Dialog open={isRegisterOpen} onOpenChange={(open) => !isSubmitting && setIsRegisterOpen(open)}>
-        <DialogContent className="max-w-lg p-6 bg-white rounded-2xl sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl sm:text-2xl font-bold text-[#002c60] flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-sky-600" />
-              <span>Mulai Trial Gratis 7 Hari</span>
+      {/* ── Interactive Registration & Provisioning Modal ── */}
+      <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden rounded-2xl bg-white border-slate-200">
+          <DialogHeader className="p-6 pb-4 bg-gradient-to-r from-[#002c60] to-[#1b437c] text-white">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-300" />
+              <span>Mulai Uji Coba Gratis 7 Hari</span>
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm text-slate-500">
-              Instance database cloud dan subdomain mandiri Anda akan disiapkan secara instan.
+            <DialogDescription className="text-xs text-sky-100">
+              Database cloud dan subdomain terisolasi Anda akan dibuatkan secara instan.
             </DialogDescription>
           </DialogHeader>
 
-          {isSubmitting ? (
-            /* Provisioning Progress Stepper Screen */
-            <div className="py-8 px-2 space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 text-[#002c60] flex items-center justify-center mx-auto animate-pulse">
-                  <Cpu className="w-7 h-7 animate-spin" />
-                </div>
-                <h3 className="font-bold text-lg text-[#002c60]">Menyiapkan Cloud Tenant Anda...</h3>
-                <p className="text-xs text-slate-500">Mohon jangan menutup halaman ini.</p>
-              </div>
+          {/* Body Section */}
+          <div className="p-6 space-y-4">
+            {/* Step 1: Active Form Input */}
+            {!isSubmitting && !registrationSuccessData && (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
 
-              <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                {PROVISIONING_STEPS.map((stepText, sIdx) => {
-                  const isDone = currentStepIndex > sIdx;
-                  const isCurrent = currentStepIndex === sIdx;
-
-                  return (
-                    <div key={sIdx} className="flex items-center gap-3 text-xs sm:text-sm">
-                      {isDone ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : isCurrent ? (
-                        <div className="w-4 h-4 rounded-full border-2 border-[#002c60] border-t-transparent animate-spin shrink-0" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
-                      )}
-                      <span
-                        className={`${
-                          isDone
-                            ? 'text-slate-800 font-medium'
-                            : isCurrent
-                            ? 'text-[#002c60] font-bold'
-                            : 'text-slate-400'
+                {/* Plan Selector Badge */}
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-slate-500">Paket Terpilih:</span>
+                    <span className="font-bold text-[#002c60] ml-1.5 uppercase">
+                      {PLANS.find((p) => p.id === selectedPlan)?.name} ({billingCycle === 'yearly' ? 'Tahunan' : 'Bulanan'})
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {PLANS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSelectedPlan(p.id)}
+                        className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                          selectedPlan === p.id
+                            ? 'bg-[#002c60] text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
                         }`}
                       >
-                        {stepText}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            /* Registration Form Screen */
-            <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-2">
-              {errorMessage && (
-                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              {/* Selected Plan Display */}
-              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] text-slate-500 font-medium">Paket Dipilih:</div>
-                  <div className="font-bold text-[#002c60] text-sm">
-                    Paket {selectedPlan.toUpperCase()} ({billingCycle === 'yearly' ? 'Tahunan' : 'Bulanan'})
+                        {p.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsRegisterOpen(false)}
-                  className="text-xs text-[#1b437c] hover:bg-blue-100/50"
-                >
-                  Ubah Paket
-                </Button>
-              </div>
 
-              {/* ISP / Company Name */}
-              <div className="space-y-1.5">
-                <Label htmlFor="companyName" className="text-xs font-semibold text-slate-700">
-                  Nama ISP / Usaha RT-RW Net <span className="text-rose-500">*</span>
-                </Label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                {/* Nama ISP */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="companyName" className="text-xs font-bold text-slate-700">
+                    Nama ISP / Usaha RT-RW Net *
+                  </Label>
                   <Input
                     id="companyName"
                     placeholder="Contoh: PT Citra Solusi Internet / CitraNet"
                     value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="pl-9 text-sm"
+                    onChange={(e) => {
+                      setCompanyName(e.target.value);
+                      if (!subdomain) {
+                        setSubdomain(
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]/g, '')
+                            .slice(0, 20)
+                        );
+                      }
+                    }}
+                    className="text-xs"
                     required
                   />
                 </div>
-              </div>
 
-              {/* Subdomain Input with Live Checker */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="subdomain" className="text-xs font-semibold text-slate-700">
-                    Subdomain Pilihan <span className="text-rose-500">*</span>
+                {/* Subdomain Choice */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="subdomain" className="text-xs font-bold text-slate-700">
+                    Subdomain Pilihan Anda *
                   </Label>
-                  {subdomainStatus === 'checking' && (
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <div className="w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin" />
-                      Memeriksa...
-                    </span>
-                  )}
-                  {subdomainStatus === 'available' && (
-                    <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Tersedia
-                    </span>
-                  )}
-                  {subdomainStatus === 'unavailable' && (
-                    <span className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Tidak Tersedia
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex rounded-lg shadow-xs">
-                  <div className="relative flex-1">
-                    <Globe className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <div className="flex rounded-md shadow-xs">
                     <Input
                       id="subdomain"
                       placeholder="citranet"
                       value={subdomain}
                       onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                      className="pl-9 rounded-r-none border-r-0 text-sm font-mono"
+                      className="rounded-r-none border-r-0 text-xs font-mono"
+                      required
+                    />
+                    <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-xs font-mono">
+                      .euginemediagroup.site
+                    </span>
+                  </div>
+                  {subdomainMessage && (
+                    <p
+                      className={`text-[11px] ${
+                        subdomainStatus === 'available' ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-medium'
+                      }`}
+                    >
+                      {subdomainMessage}
+                    </p>
+                  )}
+                </div>
+
+                {/* Email & Phone Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-xs font-bold text-slate-700">
+                      Email SuperAdmin *
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="admin@ispanda.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="text-xs"
                       required
                     />
                   </div>
-                  <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-xs font-mono">
-                    .euginemediagroup.site
-                  </span>
-                </div>
-                {subdomainMessage && (
-                  <p
-                    className={`text-[11px] ${
-                      subdomainStatus === 'available' ? 'text-emerald-600' : 'text-rose-600'
-                    }`}
-                  >
-                    {subdomainMessage}
-                  </p>
-                )}
-              </div>
 
-              {/* Email & Phone Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone" className="text-xs font-bold text-slate-700">
+                      Nomor WhatsApp *
+                    </Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="081234567890"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Password SuperAdmin */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-xs font-semibold text-slate-700">
-                    Email Penanggung Jawab <span className="text-rose-500">*</span>
+                  <Label htmlFor="password" className="text-xs font-bold text-slate-700">
+                    Password SuperAdmin *
                   </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="admin@citranet.id"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="text-sm"
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Minimal 6 karakter"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pr-9 text-xs"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="phone" className="text-xs font-semibold text-slate-700">
-                    Nomor WhatsApp <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="081234567890"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Password SuperAdmin */}
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs font-semibold text-slate-700">
-                  Password SuperAdmin Baru <span className="text-rose-500">*</span>
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Minimal 8 karakter"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10 text-sm"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-4 flex items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsRegisterOpen(false)}
-                  className="text-xs sm:text-sm"
-                >
-                  Batal
-                </Button>
+                {/* Submit Button */}
                 <Button
                   type="submit"
-                  disabled={subdomainStatus === 'unavailable'}
-                  className="bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold text-xs sm:text-sm shadow-sm"
+                  disabled={subdomainStatus === 'unavailable' || subdomainStatus === 'checking'}
+                  className="w-full bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold py-5 text-xs shadow-md"
                 >
-                  <span>Mulai Trial 7 Hari (Aktivasi Instan)</span>
+                  <span>Daftar & Siapkan Instance Sekarang</span>
                   <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
+              </form>
+            )}
+
+            {/* Step 2: Live Provisioning Stepper Animation */}
+            {isSubmitting && (
+              <div className="py-6 space-y-6 text-center">
+                <div className="w-12 h-12 rounded-full border-4 border-[#002c60] border-t-transparent animate-spin mx-auto" />
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Menyiapkan Cloud Instance Anda...</h3>
+                  <p className="text-xs text-slate-500 mt-1">Mohon jangan menutup halaman ini.</p>
+                </div>
+
+                <div className="space-y-2.5 text-left max-w-sm mx-auto">
+                  {PROVISIONING_STEPS.map((step, idx) => {
+                    const isDone = idx < currentStepIndex;
+                    const isCurrent = idx === currentStepIndex;
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-center gap-2.5 text-xs transition-colors ${
+                          isDone
+                            ? 'text-emerald-700 font-semibold'
+                            : isCurrent
+                            ? 'text-[#002c60] font-bold animate-pulse'
+                            : 'text-slate-400'
+                        }`}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : isCurrent ? (
+                          <div className="w-4 h-4 rounded-full border-2 border-[#002c60] border-t-transparent animate-spin shrink-0" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-slate-300 shrink-0" />
+                        )}
+                        <span>{step}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </form>
-          )}
+            )}
+
+            {/* Step 3: Success Screen with Credentials & Direct Login Button */}
+            {registrationSuccessData && (
+              <div className="py-4 space-y-5 text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-xs">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-950">Instance SaaS Anda Siap!</h3>
+                  <p className="text-xs text-slate-600">
+                    Database cloud dan subdomain mandiri Anda telah berhasil diinisialisasi.
+                  </p>
+                </div>
+
+                {/* Credentials Box */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <span className="text-slate-500 font-medium">Subdomain Portal:</span>
+                    <span className="font-mono font-bold text-[#002c60]">{registrationSuccessData.subdomain}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <span className="text-slate-500 font-medium">Username / Email:</span>
+                    <span className="font-mono font-bold text-slate-900">{registrationSuccessData.email}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Status Akun:</span>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold text-[10px]">
+                      Trial 7 Hari Aktif
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Primary Login Button leading to Login -> Setup */}
+                <Button
+                  onClick={() => {
+                    window.location.href = registrationSuccessData.loginUrl;
+                  }}
+                  className="w-full bg-[#002c60] hover:bg-[#1b437c] text-white font-bold py-6 text-sm shadow-md shadow-blue-950/20"
+                >
+                  <span>Masuk ke Halaman Login Admin</span>
+                  <ExternalLink className="w-4 h-4 ml-2" />
+                </Button>
+
+                <p className="text-[11px] text-slate-500">
+                  Setelah login dengan akun di atas, Anda akan langsung diarahkan ke Wizard Setup Onboarding.
+                </p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
