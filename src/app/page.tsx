@@ -1,8 +1,7 @@
-import { redirect } from 'next/navigation';
+import SaaSLandingPage from '@/app/saas/page';
 
-// Root URL always goes to customer portal
-// Customer page handles auth check internally (redirects to /login if no session)
-// Admin panel is at /admin or /admin/login (not public-facing)
+// Root Apex Domain (euginemediagroup.site) serves the SaaS Landing Page & Pricing
+// Tenant Subdomains (e.g. citranet.euginemediagroup.site) are rewritten by proxy.ts to /customer or /admin
 export default function Home() {
-  redirect('/customer');
+  return <SaaSLandingPage />;
 }

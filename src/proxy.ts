@@ -190,6 +190,10 @@ export default async function proxy(req: NextRequest) {
         }
       }
     }
+    // Branch 2b: WWW Subdomain (Treat as apex domain / SaaS landing page)
+    else if (subdomain === 'www') {
+      // Pass through directly to root SaaS landing page
+    }
     // Branch 3: Multi-Tenant Tenant Subdomain (<tenant-slug>.domain.com)
     else {
       detectedTenantSlug = subdomain;
