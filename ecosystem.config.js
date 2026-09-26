@@ -9,7 +9,7 @@
  * This file is copied by install-pm2.sh and updater.sh to APP_DIR/ecosystem.config.js
  */
 
-const APP_DIR = process.env.APP_DIR || '/var/www/EugineBill-radius';
+const APP_DIR = process.env.APP_DIR || __dirname;
 
 module.exports = {
   apps: [
