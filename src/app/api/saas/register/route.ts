@@ -12,31 +12,28 @@ export async function POST(request: NextRequest) {
     const planCode = body.planCode || body.plan || 'starter';
     const customDomain = body.customDomain;
 
-    // 1. Validation
+    // 1. Validation & Auto-Slug Generation
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
       return NextResponse.json(
-        { success: false, message: 'Nama ISP / Perusahaan minimal 2 karakter' },
+        { success: false, message: 'Nama lengkap minimal 2 karakter' },
         { status: 400 }
       );
     }
 
-    if (!slug || typeof slug !== 'string') {
-      return NextResponse.json(
-        { success: false, message: 'Subdomain / slug wajib diisi' },
-        { status: 400 }
-      );
+    let cleanSlug = (slug || '').toLowerCase().trim();
+    if (!cleanSlug) {
+      // Auto-generate from name or email
+      const baseFromUser = (name || email?.split('@')[0] || 'tenant')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 14);
+      const randSuffix = Math.random().toString(36).substring(2, 6);
+      cleanSlug = `${baseFromUser || 'user'}-${randSuffix}`;
     }
 
-    const cleanSlug = slug.toLowerCase().trim();
     const slugRegex = /^[a-z0-9]([a-z0-9-]{1,28}[a-z0-9])?$/;
     if (!slugRegex.test(cleanSlug)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Format subdomain tidak valid (3-30 karakter huruf kecil, angka, atau strip)',
-        },
-        { status: 400 }
-      );
+      cleanSlug = `tenant-${Math.random().toString(36).substring(2, 8)}`;
     }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

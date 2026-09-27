@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -20,32 +20,30 @@ import {
   Check,
   Server,
   Zap,
+  User,
+  Phone,
+  Mail,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 
 const PROVISIONING_STEPS = [
-  'Memvalidasi data pendaftaran & ketersediaan subdomain...',
-  'Menyiapkan cluster database cloud terisolasi tenant...',
+  'Memvalidasi data pendaftaran akun...',
+  'Menyiapkan cluster database cloud terisolasi...',
   'Menginisialisasi skema billing, FreeRADIUS & tabel router...',
   'Mengonfigurasi akun SuperAdmin & template WhatsApp...',
-  'Instansiasi selesai! Menyiapkan tautan portal...',
+  'Instansiasi selesai! Menyiapkan portal billing...',
 ];
 
 function RegisterFormContent() {
-  const [companyName, setCompanyName] = useState('');
-  const [subdomain, setSubdomain] = useState('');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // Subdomain availability check
-  const [subdomainStatus, setSubdomainStatus] = useState<'idle' | 'checking' | 'available' | 'unavailable'>('idle');
-  const [subdomainMessage, setSubdomainMessage] = useState('');
 
   // Form submission & provisioning animation
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,44 +56,27 @@ function RegisterFormContent() {
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Real-time Subdomain Availability Checker (Debounced)
-  useEffect(() => {
-    if (!subdomain || subdomain.trim().length < 3) {
-      setSubdomainStatus('idle');
-      setSubdomainMessage('');
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setSubdomainStatus('checking');
-      setSubdomainMessage('Memeriksa ketersediaan...');
-
-      try {
-        const res = await fetch(`/api/saas/check-subdomain?slug=${encodeURIComponent(subdomain.trim().toLowerCase())}`);
-        const data = await res.json();
-
-        if (data.available) {
-          setSubdomainStatus('available');
-          setSubdomainMessage(`Subdomain ${subdomain.trim().toLowerCase()}.euginemediagroup.site tersedia!`);
-        } else {
-          setSubdomainStatus('unavailable');
-          setSubdomainMessage(data.message || 'Subdomain sudah digunakan. Silakan pilih nama lain.');
-        }
-      } catch {
-        setSubdomainStatus('idle');
-        setSubdomainMessage('');
-      }
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [subdomain]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
-    if (subdomainStatus === 'unavailable') {
-      setErrorMessage('Subdomain pilihan Anda sudah terpakai. Mohon gunakan subdomain lain.');
+    if (!fullName.trim()) {
+      setErrorMessage('Nama lengkap wajib diisi.');
+      return;
+    }
+
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrorMessage('Format alamat email tidak valid.');
+      return;
+    }
+
+    if (!phone.trim() || phone.trim().length < 8) {
+      setErrorMessage('Nomor Telepon / WhatsApp wajib diisi (minimal 8 digit).');
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setErrorMessage('Password minimal 6 karakter.');
       return;
     }
 
@@ -103,14 +84,21 @@ function RegisterFormContent() {
     setCurrentStepIndex(0);
 
     try {
+      // Clean phone number (add 0 or handle +62)
+      let cleanPhone = phone.trim().replace(/[^0-9]/g, '');
+      if (cleanPhone.startsWith('62')) {
+        cleanPhone = '0' + cleanPhone.slice(2);
+      } else if (!cleanPhone.startsWith('0')) {
+        cleanPhone = '0' + cleanPhone;
+      }
+
       const res = await fetch('/api/saas/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          companyName: companyName.trim(),
-          subdomain: subdomain.trim().toLowerCase(),
+          name: fullName.trim(),
           email: email.trim().toLowerCase(),
-          phone: phone.trim(),
+          phone: cleanPhone,
           password,
           plan: 'starter',
           planCode: 'starter',
@@ -122,7 +110,7 @@ function RegisterFormContent() {
 
       if (!res.ok || !result.success) {
         setIsSubmitting(false);
-        setErrorMessage(result.message || 'Pendaftaran gagal. Silakan periksa kembali form Anda.');
+        setErrorMessage(result.message || 'Pendaftaran gagal. Silakan periksa kembali formulir Anda.');
         return;
       }
 
@@ -132,7 +120,7 @@ function RegisterFormContent() {
         setCurrentStepIndex(i);
       }
 
-      const cleanSlug = subdomain.trim().toLowerCase();
+      const cleanSlug = result.data?.tenant?.slug || result.data?.slug || 'tenant';
       const originHost = typeof window !== 'undefined' ? window.location.host : 'euginemediagroup.site';
       const rootDomain = originHost.includes('localhost') ? 'localhost:3000' : 'euginemediagroup.site';
       const targetLoginUrl = `http://${cleanSlug}.${rootDomain}/admin/login?callbackUrl=/setup&email=${encodeURIComponent(email.trim().toLowerCase())}`;
@@ -151,7 +139,7 @@ function RegisterFormContent() {
 
   const handleCopyCredentials = () => {
     if (!registrationSuccessData) return;
-    const text = `Portal URL: ${registrationSuccessData.loginUrl}\nUsername/Email: ${registrationSuccessData.email}\nPassword: (password pendaftaran anda)`;
+    const text = `Portal URL: ${registrationSuccessData.loginUrl}\nUsername/Email: ${registrationSuccessData.email}\nPassword: (password yang Anda buat)`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -185,17 +173,17 @@ function RegisterFormContent() {
 
       {/* Main Content Area */}
       <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="w-full max-w-xl">
+        <div className="w-full max-w-lg">
           <Card className="border border-slate-200 bg-white rounded-2xl shadow-xl shadow-blue-950/5 overflow-hidden">
             {/* Card Banner Header */}
             <div className="bg-gradient-to-r from-[#002c60] to-[#1b437c] p-6 text-white text-center space-y-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-sky-200 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Uji Coba Gratis 7 Hari • Full Akses Fitur</span>
+                <span>Uji Coba Gratis 7 Hari • Akses Penuh</span>
               </div>
-              <h1 className="text-2xl font-black tracking-tight">Daftar Instance Baru</h1>
+              <h1 className="text-2xl font-black tracking-tight">Daftar Akun Baru</h1>
               <p className="text-xs text-sky-100/90 max-w-md mx-auto leading-relaxed">
-                Database MySQL terisolasi dan subdomain mandiri Anda akan disiapkan secara otomatis.
+                Instance cloud dan cluster database MySQL mandiri Anda akan disiapkan secara instan.
               </p>
             </div>
 
@@ -216,108 +204,73 @@ function RegisterFormContent() {
                     <div>
                       <span className="font-bold text-[#002c60]">Trial 7 Hari Langsung Aktif:</span>
                       <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
-                        Akses penuh modul MikroTik API, PPPoE, Hotspot Voucher, WhatsApp Bot PDF, TR-069 ACS ONT, dan Isolasi Otomatis. Paket langganan dapat dipilih kapan saja dari dalam dashboard billing Anda.
+                        Nikmati seluruh fitur billing MikroTik PPPoE & Hotspot, bot WhatsApp PDF, dan TR-069 ACS ONT. Paket langganan dapat dipilih kapan saja dari dalam dashboard.
                       </p>
                     </div>
                   </div>
 
-                  {/* Nama ISP */}
+                  {/* 1. Nama Lengkap */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="companyName" className="text-xs font-bold text-slate-700">
-                      Nama ISP / Usaha RT-RW Net *
+                    <Label htmlFor="fullName" className="text-xs font-bold text-slate-700">
+                      Nama Lengkap *
                     </Label>
                     <Input
-                      id="companyName"
-                      placeholder="Contoh: PT Citra Solusi Internet / CitraNet"
-                      value={companyName}
-                      onChange={(e) => {
-                        setCompanyName(e.target.value);
-                        if (!subdomain) {
-                          setSubdomain(
-                            e.target.value
-                              .toLowerCase()
-                              .replace(/[^a-z0-9]/g, '')
-                              .slice(0, 20)
-                          );
-                        }
-                      }}
+                      id="fullName"
+                      placeholder="Masukkan nama lengkap Anda"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                       className="text-xs h-10"
                       required
                     />
                   </div>
 
-                  {/* Subdomain Choice */}
+                  {/* 2. Email */}
                   <div className="space-y-1.5">
-                    <Label htmlFor="subdomain" className="text-xs font-bold text-slate-700">
-                      Subdomain Pilihan Anda *
+                    <Label htmlFor="email" className="text-xs font-bold text-slate-700">
+                      Email *
                     </Label>
-                    <div className="flex rounded-md shadow-xs">
-                      <Input
-                        id="subdomain"
-                        placeholder="citranet"
-                        value={subdomain}
-                        onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        className="rounded-r-none border-r-0 text-xs font-mono h-10"
-                        required
-                      />
-                      <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-slate-200 bg-slate-50 text-slate-500 text-xs font-mono">
-                        .euginemediagroup.site
-                      </span>
-                    </div>
-                    {subdomainMessage && (
-                      <p
-                        className={`text-[11px] ${
-                          subdomainStatus === 'available' ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-medium'
-                        }`}
-                      >
-                        {subdomainMessage}
-                      </p>
-                    )}
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Masukkan alamat email aktif"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="text-xs h-10"
+                      required
+                    />
                   </div>
 
-                  {/* Email & Phone Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="email" className="text-xs font-bold text-slate-700">
-                        Email Penanggung Jawab *
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="admin@citranet.id"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="text-xs h-10"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone" className="text-xs font-bold text-slate-700">
-                        Nomor WhatsApp *
-                      </Label>
+                  {/* 3. Nomor Telepon / WhatsApp */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="phone" className="text-xs font-bold text-slate-700">
+                      Nomor Telepon / WhatsApp *
+                    </Label>
+                    <div className="flex rounded-md shadow-xs">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-200 bg-slate-50 text-slate-600 text-xs font-semibold">
+                        +62
+                      </span>
                       <Input
                         id="phone"
                         type="tel"
-                        placeholder="081234567890"
+                        placeholder="81234567890"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="text-xs h-10"
+                        className="rounded-l-none text-xs h-10"
                         required
                       />
                     </div>
                   </div>
 
-                  {/* Password SuperAdmin */}
+                  {/* 4. Password */}
                   <div className="space-y-1.5">
                     <Label htmlFor="password" className="text-xs font-bold text-slate-700">
-                      Password Baru SuperAdmin *
+                      Password *
                     </Label>
                     <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Minimal 6 karakter"
+                        placeholder="Masukkan password (min. 6 karakter)"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pr-10 text-xs h-10"
@@ -336,7 +289,6 @@ function RegisterFormContent() {
                   {/* Submit CTA */}
                   <Button
                     type="submit"
-                    disabled={subdomainStatus === 'unavailable' || subdomainStatus === 'checking'}
                     className="w-full bg-[#002c60] hover:bg-[#1b437c] text-white font-bold py-6 text-sm shadow-md shadow-blue-950/20 transition-all hover:scale-[1.01]"
                   >
                     <span>Mulai Inisiasi Cloud Tenant Sekarang</span>
@@ -350,7 +302,7 @@ function RegisterFormContent() {
                 <div className="py-8 space-y-6 text-center">
                   <div className="w-14 h-14 rounded-full border-4 border-[#002c60] border-t-transparent animate-spin mx-auto" />
                   <div>
-                    <h3 className="text-lg font-bold text-slate-950">Menyiapkan Cloud Tenant Anda...</h3>
+                    <h3 className="text-lg font-bold text-slate-950">Menyiapkan Cloud Instance Anda...</h3>
                     <p className="text-xs text-slate-500 mt-1">Mohon tunggu beberapa detik, database terisolasi sedang dibuat.</p>
                   </div>
 
@@ -407,7 +359,7 @@ function RegisterFormContent() {
                     <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                       <span className="text-slate-500 font-medium">Username / Login ID:</span>
                       <span className="font-mono font-bold text-slate-900">
-                        superadmin <span className="text-slate-400 font-normal">atau</span> {registrationSuccessData.email}
+                        {registrationSuccessData.email} <span className="text-slate-400 font-normal">atau</span> superadmin
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
