@@ -122,8 +122,9 @@ function RegisterFormContent() {
 
       const cleanSlug = result.data?.tenant?.slug || result.data?.slug || 'tenant';
       const originHost = typeof window !== 'undefined' ? window.location.host : 'euginemediagroup.site';
+      const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
       const rootDomain = originHost.includes('localhost') ? 'localhost:3000' : 'euginemediagroup.site';
-      const targetLoginUrl = `http://${cleanSlug}.${rootDomain}/admin/login?callbackUrl=/setup&email=${encodeURIComponent(email.trim().toLowerCase())}`;
+      const targetLoginUrl = `${protocol}//${cleanSlug}.${rootDomain}/admin/login?callbackUrl=/setup&email=${encodeURIComponent(email.trim().toLowerCase())}`;
 
       setRegistrationSuccessData({
         subdomain: `${cleanSlug}.${rootDomain}`,
