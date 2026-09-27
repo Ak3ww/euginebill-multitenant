@@ -286,6 +286,7 @@ export default async function proxy(req: NextRequest) {
     const token = await getToken({
       req,
       secret: NEXTAUTH_SECRET,
+      secureCookie: false,
     });
 
     if (!token) {

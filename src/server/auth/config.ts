@@ -213,6 +213,35 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
     updateAge: 60 * 60, // Update session every hour
   },
+  useSecureCookies: false,
+  cookies: {
+    sessionToken: {
+      name: 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: false,
+      },
+    },
+    callbackUrl: {
+      name: 'next-auth.callback-url',
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: false,
+      },
+    },
+    csrfToken: {
+      name: 'next-auth.csrf-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: false,
+      },
+    },
+  },
   secret: NEXTAUTH_SECRET,
 };
 
@@ -231,7 +260,8 @@ export async function verifyAuth(request: NextRequest | Request) {
     // Method 1: Check NextAuth JWT token from cookies
     const token = await getToken({ 
       req: nextRequest,
-      secret: NEXTAUTH_SECRET
+      secret: NEXTAUTH_SECRET,
+      secureCookie: false,
     });
     
     if (token && token.id && token.username && token.role) {
