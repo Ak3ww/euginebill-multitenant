@@ -353,7 +353,7 @@ export default function SaaSLandingPage() {
           <strong>Rilis v2.40:</strong> Integrasi TR-069 GenieACS Multi-Vendor & QRIS Dinamis Otomatis kini tersedia!
         </span>
         <Link
-          href="/register?plan=starter"
+          href="/register"
           className="underline font-semibold hover:text-sky-200 transition-colors ml-1 hidden sm:inline"
         >
           Coba Gratis 7 Hari Sekarang
@@ -406,7 +406,7 @@ export default function SaaSLandingPage() {
                 Login Master SaaS
               </Button>
             </Link>
-            <Link href="/register?plan=starter">
+            <Link href="/register">
               <Button
                 size="sm"
                 className="bg-[#002c60] hover:bg-[#1b437c] text-white text-xs font-semibold px-4 shadow-sm shadow-blue-950/20"
@@ -443,7 +443,7 @@ export default function SaaSLandingPage() {
 
             {/* Hero Action Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link href="/register?plan=starter" className="w-full sm:w-auto">
+              <Link href="/register" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   className="w-full sm:w-auto bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold px-8 py-6 text-base shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.99]"
@@ -684,7 +684,7 @@ export default function SaaSLandingPage() {
                   </CardContent>
 
                   <CardFooter className="p-6 pt-2">
-                    <Link href={`/register?plan=${plan.id}`} className="w-full">
+                    <Link href="/register" className="w-full">
                       <Button
                         className={`w-full py-5 font-semibold text-xs transition-all ${
                           plan.isPopular

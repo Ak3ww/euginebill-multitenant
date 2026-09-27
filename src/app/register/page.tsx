@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import {
   ShieldCheck,
   Wifi,
@@ -21,13 +20,12 @@ import {
   Check,
   Server,
   Zap,
-  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 const PROVISIONING_STEPS = [
   'Memvalidasi data pendaftaran & ketersediaan subdomain...',
@@ -37,33 +35,7 @@ const PROVISIONING_STEPS = [
   'Instansiasi selesai! Menyiapkan tautan portal...',
 ];
 
-const PLAN_INFO: Record<string, { name: string; tag: string; price: string; desc: string }> = {
-  starter: {
-    name: 'Starter Trial',
-    tag: 'Gratis 7 Hari',
-    price: 'Rp 0 / 7 Hari',
-    desc: '1 Router MikroTik, 100 Pelanggan PPPoE, 500 Voucher Hotspot, Notifikasi WhatsApp Bot, Isolasi Otomatis.',
-  },
-  pro: {
-    name: 'Pro ISP',
-    tag: 'Populer',
-    price: 'Rp 249.000 / bln',
-    desc: '5 Router MikroTik, 1.000 Pelanggan PPPoE, Unlimited Voucher, TR-069 GenieACS Remote ONT, Payment Gateway.',
-  },
-  enterprise: {
-    name: 'Enterprise',
-    tag: 'Whitelabel Ready',
-    price: 'Rp 499.000 / bln',
-    desc: 'Unlimited Router & Pelanggan, Dedicated VPN Server, Custom Domain Whitelabel, Prioritas Support 24/7.',
-  },
-};
-
 function RegisterFormContent() {
-  const searchParams = useSearchParams();
-  const rawPlan = searchParams.get('plan')?.toLowerCase() || 'starter';
-  const initialPlan = ['starter', 'pro', 'enterprise'].includes(rawPlan) ? rawPlan : 'starter';
-
-  const [selectedPlan, setSelectedPlan] = useState<string>(initialPlan);
   const [companyName, setCompanyName] = useState('');
   const [subdomain, setSubdomain] = useState('');
   const [email, setEmail] = useState('');
@@ -85,12 +57,6 @@ function RegisterFormContent() {
     loginUrl: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (rawPlan && ['starter', 'pro', 'enterprise'].includes(rawPlan)) {
-      setSelectedPlan(rawPlan);
-    }
-  }, [rawPlan]);
 
   // Real-time Subdomain Availability Checker (Debounced)
   useEffect(() => {
@@ -146,8 +112,8 @@ function RegisterFormContent() {
           email: email.trim().toLowerCase(),
           phone: phone.trim(),
           password,
-          plan: selectedPlan,
-          planCode: selectedPlan,
+          plan: 'starter',
+          planCode: 'starter',
           billingCycle: 'monthly',
         }),
       });
@@ -191,8 +157,6 @@ function RegisterFormContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentPlanMeta = PLAN_INFO[selectedPlan] || PLAN_INFO.starter;
-
   return (
     <div className="min-h-screen bg-[#f9f9fe] text-[#1a1c20] antialiased flex flex-col justify-between">
       {/* Top Header */}
@@ -227,9 +191,9 @@ function RegisterFormContent() {
             <div className="bg-gradient-to-r from-[#002c60] to-[#1b437c] p-6 text-white text-center space-y-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-sky-200 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Pendaftaran Cloud Instance • Trial 7 Hari Aktif</span>
+                <span>Uji Coba Gratis 7 Hari • Full Akses Fitur</span>
               </div>
-              <h1 className="text-2xl font-black tracking-tight">Daftar Akun Baru</h1>
+              <h1 className="text-2xl font-black tracking-tight">Daftar Instance Baru</h1>
               <p className="text-xs text-sky-100/90 max-w-md mx-auto leading-relaxed">
                 Database MySQL terisolasi dan subdomain mandiri Anda akan disiapkan secara otomatis.
               </p>
@@ -246,33 +210,15 @@ function RegisterFormContent() {
                     </div>
                   )}
 
-                  {/* Plan Selector Tab */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700">Pilihan Paket Awal:</span>
-                      <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        {currentPlanMeta.tag}
-                      </span>
+                  {/* Included Trial Badge */}
+                  <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 text-xs flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-[#002c60]">Trial 7 Hari Langsung Aktif:</span>
+                      <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
+                        Akses penuh modul MikroTik API, PPPoE, Hotspot Voucher, WhatsApp Bot PDF, TR-069 ACS ONT, dan Isolasi Otomatis. Paket langganan dapat dipilih kapan saja dari dalam dashboard billing Anda.
+                      </p>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {(['starter', 'pro', 'enterprise'] as const).map((pKey) => (
-                        <button
-                          key={pKey}
-                          type="button"
-                          onClick={() => setSelectedPlan(pKey)}
-                          className={`py-2 px-2 text-xs font-bold rounded-lg border transition-all ${
-                            selectedPlan === pKey
-                              ? 'bg-[#002c60] text-white border-[#002c60] shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          {PLAN_INFO[pKey].name}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-500 pt-1 leading-relaxed">
-                      {currentPlanMeta.desc}
-                    </p>
                   </div>
 
                   {/* Nama ISP */}
