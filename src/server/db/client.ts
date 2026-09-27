@@ -6,20 +6,40 @@
  *
  * Lokasi lama: src/lib/prisma.ts (sekarang re-export proxy)
  * Lokasi baru: src/server/db/client.ts (file ini)
- *
- * @module server/db/client
  */
 
 import { PrismaClient } from '@prisma/client'
+import { getTenantFromRequest, getTenantPrisma, masterPrisma } from './tenant-manager'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
   processGuardsRegistered: boolean | undefined
 }
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-})
+export const prisma = (globalForPrisma.prisma ?? new Proxy(masterPrisma, {
+  get(target, prop, receiver) {
+    let tenantClient: PrismaClient | null = null;
+    try {
+      // Safely access current request headers in Next.js Server Components / Route Handlers
+      const { headers } = require('next/headers');
+      const headerList = headers();
+      const slug = getTenantFromRequest({ headers: headerList });
+      if (slug) {
+        tenantClient = getTenantPrisma(slug);
+      }
+    } catch {
+      // Outside request context (e.g. background jobs / build time / migrations)
+    }
+
+    const activeClient = tenantClient || target;
+    const value = Reflect.get(activeClient, prop, activeClient);
+
+    if (typeof value === 'function') {
+      return value.bind(activeClient);
+    }
+    return value;
+  },
+})) as PrismaClient;
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 

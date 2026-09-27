@@ -8,7 +8,6 @@
  */
 
 import { PrismaClient, Tenant } from '@prisma/client';
-import { prisma as defaultPrisma } from './client';
 
 // Global reference for Master Prisma
 const globalForMaster = globalThis as unknown as {
@@ -16,7 +15,14 @@ const globalForMaster = globalThis as unknown as {
   tenantPool: Map<string, { client: PrismaClient; lastUsed: number }> | undefined;
 };
 
-export const masterPrisma = globalForMaster.masterPrisma ?? defaultPrisma;
+export const masterPrisma = globalForMaster.masterPrisma ?? new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL || 'mysql://root:@localhost:3306/euginebill_master',
+    },
+  },
+  log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+});
 if (process.env.NODE_ENV !== 'production') {
   globalForMaster.masterPrisma = masterPrisma;
 }

@@ -25,6 +25,7 @@
     "db:seed:company": "tsx prisma/seeds/seed-company.ts",
     "db:seed:templates": "tsx prisma/seeds/isolation-templates.ts",
     "db:seed:reset-templates": "tsx prisma/seeds/seed-all.ts --force-templates",
+    "db:fresh:multitenant": "tsx scripts/fresh-master-db.ts",
     "db:migrate:auto": "tsx scripts/run-migrations.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
