@@ -352,12 +352,12 @@ export default function SaaSLandingPage() {
         <span>
           <strong>Rilis v2.40:</strong> Integrasi TR-069 GenieACS Multi-Vendor & QRIS Dinamis Otomatis kini tersedia!
         </span>
-        <button
-          onClick={() => handleOpenRegister('starter')}
+        <Link
+          href="/free-trial"
           className="underline font-semibold hover:text-sky-200 transition-colors ml-1 hidden sm:inline"
         >
           Coba Gratis 7 Hari Sekarang
-        </button>
+        </Link>
       </div>
 
       {/* Main Navigation Bar */}
@@ -403,13 +403,14 @@ export default function SaaSLandingPage() {
                 Login Master SaaS
               </Button>
             </Link>
-            <Button
-              onClick={() => handleOpenRegister('starter')}
-              size="sm"
-              className="bg-[#002c60] hover:bg-[#1b437c] text-white text-xs font-semibold px-4 shadow-sm shadow-blue-950/20"
-            >
-              Coba Gratis 7 Hari
-            </Button>
+            <Link href="/free-trial">
+              <Button
+                size="sm"
+                className="bg-[#002c60] hover:bg-[#1b437c] text-white text-xs font-semibold px-4 shadow-sm shadow-blue-950/20"
+              >
+                Coba Gratis 7 Hari
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -439,14 +440,15 @@ export default function SaaSLandingPage() {
 
             {/* Hero Action Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Button
-                size="lg"
-                onClick={() => handleOpenRegister('starter')}
-                className="w-full sm:w-auto bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold px-8 py-6 text-base shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.99]"
-              >
-                <span>Coba Gratis 7 Hari Sekarang</span>
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
+              <Link href="/free-trial" className="w-full sm:w-auto">
+                <Button
+                  size="lg"
+                  className="w-full sm:w-auto bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold px-8 py-6 text-base shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.99]"
+                >
+                  <span>Coba Gratis 7 Hari Sekarang</span>
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </Link>
               <a href="#pricing" className="w-full sm:w-auto">
                 <Button
                   size="lg"
@@ -630,17 +632,18 @@ export default function SaaSLandingPage() {
                   </CardContent>
 
                   <CardFooter className="p-6 pt-2">
-                    <Button
-                      onClick={() => handleOpenRegister(plan.id)}
-                      className={`w-full py-5 font-semibold text-xs transition-all ${
-                        plan.isPopular
-                          ? 'bg-[#002c60] hover:bg-[#1b437c] text-white shadow-md shadow-blue-900/20'
-                          : 'bg-slate-900 hover:bg-slate-800 text-white'
-                      }`}
-                    >
-                      <span>{plan.ctaLabel}</span>
-                      <ArrowRight className="w-4 h-4 ml-1.5" />
-                    </Button>
+                    <Link href="/free-trial" className="w-full">
+                      <Button
+                        className={`w-full py-5 font-semibold text-xs transition-all ${
+                          plan.isPopular
+                            ? 'bg-[#002c60] hover:bg-[#1b437c] text-white shadow-md shadow-blue-900/20'
+                            : 'bg-slate-900 hover:bg-slate-800 text-white'
+                        }`}
+                      >
+                        <span>{plan.ctaLabel}</span>
+                        <ArrowRight className="w-4 h-4 ml-1.5" />
+                      </Button>
+                    </Link>
                   </CardFooter>
                 </Card>
               );

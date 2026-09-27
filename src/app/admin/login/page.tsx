@@ -41,7 +41,7 @@ function LoginForm() {
 
   const [setupSuccess, setSetupSuccess] = useState(false);
 
-  // Check idle logout or setup success
+  // Check idle logout, setup success, or prefilled email
   useEffect(() => {
     const reason = searchParams.get('reason');
     if (reason === 'idle') {
@@ -55,6 +55,10 @@ function LoginForm() {
       setTimeout(() => {
         window.history.replaceState({}, '', '/admin/login');
       }, 5000);
+    }
+    const urlEmail = searchParams.get('email') || searchParams.get('username');
+    if (urlEmail) {
+      setFormData((prev) => ({ ...prev, username: urlEmail }));
     }
   }, [searchParams]);
 
@@ -299,7 +303,7 @@ function LoginForm() {
                   autoComplete="username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  placeholder={t('auth.enterUsername')}
+                  placeholder="superadmin atau email anda"
                   disabled={loading}
                   className="flex-1 px-4 py-3 text-sm bg-blue-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-800 focus:outline-none transition-colors"
                 />
