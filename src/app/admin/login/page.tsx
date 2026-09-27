@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, Loader2, Shield, Smartphone, User, Lock, Clock, LogIn, ArrowLeft, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Shield, Smartphone, User, Lock, Clock, LogIn, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 
 type Step = 'credentials' | 'twoFactor';
@@ -32,6 +32,21 @@ function LoginForm() {
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [footerText, setFooterText] = useState('');
   const [brandLoaded, setBrandLoaded] = useState(false);
+
+  // ── Captcha State ────────────────────────────────────────────────────
+  const [captchaNum1, setCaptchaNum1] = useState(4);
+  const [captchaNum2, setCaptchaNum2] = useState(3);
+  const [captchaInput, setCaptchaInput] = useState('');
+
+  const refreshCaptcha = () => {
+    setCaptchaNum1(Math.floor(Math.random() * 7) + 2);
+    setCaptchaNum2(Math.floor(Math.random() * 8) + 1);
+    setCaptchaInput('');
+  };
+
+  useEffect(() => {
+    refreshCaptcha();
+  }, []);
 
   // ── Form data ─────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -106,8 +121,16 @@ function LoginForm() {
   // ── Step 1: Check credentials + 2FA requirement ───────────────────────
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    // Verify Math Captcha
+    if (parseInt(captchaInput.trim(), 10) !== (captchaNum1 + captchaNum2)) {
+      setError('Hasil verifikasi keamanan (Captcha) salah. Silakan coba lagi.');
+      refreshCaptcha();
+      return;
+    }
+
+    setLoading(true);
 
     try {
       // Use pre-login API because NextAuth v4 sanitizes authorize() errors
@@ -326,6 +349,35 @@ function LoginForm() {
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 transition-colors" disabled={loading}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Math Security Captcha */}
+              <div className="flex items-center justify-between p-2.5 bg-blue-50/70 dark:bg-slate-900/60 border border-gray-300 dark:border-slate-600 rounded-lg text-xs">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    Berapa {captchaNum1} + {captchaNum2} =
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    required
+                    value={captchaInput}
+                    onChange={(e) => setCaptchaInput(e.target.value)}
+                    placeholder="Hasil"
+                    disabled={loading}
+                    className="w-16 px-2 py-1 text-xs text-center font-bold bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={refreshCaptcha}
+                    title="Ganti Pertanyaan"
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

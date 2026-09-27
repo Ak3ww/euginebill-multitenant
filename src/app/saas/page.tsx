@@ -353,7 +353,7 @@ export default function SaaSLandingPage() {
           <strong>Rilis v2.40:</strong> Integrasi TR-069 GenieACS Multi-Vendor & QRIS Dinamis Otomatis kini tersedia!
         </span>
         <Link
-          href="/free-trial"
+          href="/register?plan=starter"
           className="underline font-semibold hover:text-sky-200 transition-colors ml-1 hidden sm:inline"
         >
           Coba Gratis 7 Hari Sekarang
@@ -385,6 +385,9 @@ export default function SaaSLandingPage() {
             <a href="#features" className="hover:text-[#002c60] transition-colors">
               Fitur Utama
             </a>
+            <a href="#whitelabel" className="hover:text-[#002c60] transition-colors">
+              Whitelabel & Add-ons
+            </a>
             <a href="#pricing" className="hover:text-[#002c60] transition-colors">
               Pilihan Paket & Harga
             </a>
@@ -403,7 +406,7 @@ export default function SaaSLandingPage() {
                 Login Master SaaS
               </Button>
             </Link>
-            <Link href="/free-trial">
+            <Link href="/register?plan=starter">
               <Button
                 size="sm"
                 className="bg-[#002c60] hover:bg-[#1b437c] text-white text-xs font-semibold px-4 shadow-sm shadow-blue-950/20"
@@ -440,7 +443,7 @@ export default function SaaSLandingPage() {
 
             {/* Hero Action Buttons */}
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link href="/free-trial" className="w-full sm:w-auto">
+              <Link href="/register?plan=starter" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   className="w-full sm:w-auto bg-[#002c60] hover:bg-[#1b437c] text-white font-semibold px-8 py-6 text-base shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.99]"
@@ -541,6 +544,55 @@ export default function SaaSLandingPage() {
         </div>
       </section>
 
+      {/* Whitelabel & Add-ons Section */}
+      <section id="whitelabel" className="py-16 sm:py-24 bg-gradient-to-b from-slate-900 to-[#002c60] text-white border-y border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center max-w-3xl mx-auto space-y-3">
+            <Badge variant="outline" className="text-sky-300 border-sky-400/40 bg-sky-950/50 text-xs px-3 py-1 font-bold">
+              Whitelabel & Custom Brand Add-on
+            </Badge>
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
+              Tingkatkan Brand Awareness Bisnis ISP Anda
+            </h2>
+            <p className="text-sm sm:text-base text-sky-100/80 leading-relaxed">
+              Ubah portal pelanggan, faktur PDF, bot WhatsApp, dan aplikasi PWA agar secara visual mencerminkan 100% identitas merek ISP Anda dengan domain mandiri.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-sky-400/40 transition-all space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center font-bold">
+                <Globe className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">Custom Domain Sendiri</h3>
+              <p className="text-xs text-sky-100/70 leading-relaxed">
+                Gunakan domain khusus ISP Anda (misal: <code className="text-sky-300 font-mono">billing.ispanda.co.id</code>) lengkap dengan sertifikat SSL otomatis.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-sky-400/40 transition-all space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center font-bold">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">Kustomisasi Logo & Identitas</h3>
+              <p className="text-xs text-sky-100/70 leading-relaxed">
+                Pasang logo resmi ISP, warna tema, favicon, kop surat faktur, dan template cetak thermal voucher tanpa watermark pihak ketiga.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-sky-400/40 transition-all space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center font-bold">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">Gratis di Paket Enterprise</h3>
+              <p className="text-xs text-sky-100/70 leading-relaxed">
+                Fitur Whitelabel sudah termasuk secara gratis di Paket Enterprise atau dapat diaktifkan sebagai Add-on bulanan untuk paket lainnya.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing Section */}
       <section id="pricing" className="py-16 sm:py-24 bg-[#f9f9fe]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -632,7 +684,7 @@ export default function SaaSLandingPage() {
                   </CardContent>
 
                   <CardFooter className="p-6 pt-2">
-                    <Link href="/free-trial" className="w-full">
+                    <Link href={`/register?plan=${plan.id}`} className="w-full">
                       <Button
                         className={`w-full py-5 font-semibold text-xs transition-all ${
                           plan.isPopular

@@ -157,6 +157,7 @@ export default async function proxy(req: NextRequest) {
     pathname.startsWith('/isolated') || 
     pathname.startsWith('/uploads') ||
     pathname.startsWith('/setup') ||
+    pathname.startsWith('/register') ||
     pathname.startsWith('/free-trial') ||
     pathname.startsWith('/trial') ||
     pathname.startsWith('/docs');

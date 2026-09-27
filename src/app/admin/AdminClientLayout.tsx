@@ -59,6 +59,7 @@ import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 import { useTheme } from '@/hooks/useTheme';
 import { CyberToastProvider, useToast } from '@/components/cyberpunk/CyberToast';
 import { registerGlobalToast, registerGlobalConfirm } from '@/lib/sweetalert';
+import { TenantLicenseBanner } from '@/components/saas/TenantLicenseBanner';
 import { formatInTimeZone } from 'date-fns-tz';
 import { id as localeId } from 'date-fns/locale';
 
@@ -1172,6 +1173,9 @@ function AdminLayoutContent({
 
       {/* Main */}
       <div className="lg:pl-64 min-h-screen flex flex-col relative z-10 transition-all duration-300">
+        {/* SaaS Tenant License / Trial Banner */}
+        <TenantLicenseBanner />
+
         {/* Header - optimized for mobile */}
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-gray-200 dark:border-primary/15 shadow-theme-sm safe-area-inset-top">
           {/* Top neon line — dark mode only */}
