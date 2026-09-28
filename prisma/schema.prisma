@@ -137,7 +137,7 @@ model company {
   fixedBillingDate             Int?     @default(6) // Tanggal jatuh tempo tetap per bulan
   enableProrate                Boolean  @default(true)
   shiftBillingDateIfLate       Boolean  @default(false)
-  isolateProfileName           String?  // Nama profile MikroTik untuk isolasi jika radiusEnabled = false
+  isolateProfileName           String?  @default("isolir") // Nama profile MikroTik untuk isolasi jika radiusEnabled = false
   referralRewardBoth           Boolean? @default(false) // Also reward the referred customer
   referralReferredAmount       Int?     @default(0) // Reward amount for referred customer
   psbWaGroupId                 String?  @db.VarChar(191) // WhatsApp Group ID for PSB daily reports

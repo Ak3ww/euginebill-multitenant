@@ -592,23 +592,43 @@ export async function sendPendingIsolationNotifications(): Promise<{
       },
     });
 
+    const reminderSettings = await prisma.whatsapp_reminder_settings.findFirst().catch(() => null);
+    const configuredBatchSize = typeof reminderSettings?.batchSize === 'number' && reminderSettings.batchSize > 0
+      ? reminderSettings.batchSize
+      : 10;
+    const configuredBatchDelaySec = typeof reminderSettings?.batchDelay === 'number' && reminderSettings.batchDelay > 0
+      ? reminderSettings.batchDelay
+      : 120;
+
+    const activeUsers = isolatedUsers.filter(u => u.autoIsolationEnabled !== false);
     let sent = 0;
     let deferred = 0;
-    let skipped = 0;
+    let skipped = isolatedUsers.length - activeUsers.length;
 
-    for (const user of isolatedUsers) {
-      if (user.autoIsolationEnabled === false) {
-        skipped++;
-        continue;
+    // Process in strict batches with rate limiting
+    for (let bIdx = 0; bIdx < activeUsers.length; bIdx += configuredBatchSize) {
+      const batch = activeUsers.slice(bIdx, bIdx + configuredBatchSize);
+
+      for (let i = 0; i < batch.length; i++) {
+        const user = batch[i];
+        try {
+          const res = await sendIsolationNotification(user);
+          if (res && res.success && !res.skipped && !res.deferred) sent++;
+          else if (res && res.deferred) deferred++;
+          else skipped++;
+        } catch (e: any) {
+          console.error(`[Pending Isolation WA] Error for ${user.username}:`, e.message);
+          skipped++;
+        }
+
+        if (i < batch.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
-      try {
-        const res = await sendIsolationNotification(user);
-        if (res && res.success && !res.skipped && !res.deferred) sent++;
-        else if (res && res.deferred) deferred++;
-        else skipped++;
-      } catch (e: any) {
-        console.error(`[Pending Isolation WA] Error for ${user.username}:`, e.message);
-        skipped++;
+
+      if (bIdx + configuredBatchSize < activeUsers.length) {
+        console.log(`[Pending Isolation WA] Jeda batch ${Math.floor(bIdx / configuredBatchSize) + 1}: Menunggu ${configuredBatchDelaySec}s sebelum batch berikutnya...`);
+        await new Promise(r => setTimeout(r, configuredBatchDelaySec * 1000));
       }
     }
 
