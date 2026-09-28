@@ -622,4 +622,109 @@ export class PPPSecretService {
       return false
     }
   }
+
+  /**
+   * Syncs a PPPoE profile directly to /ppp/profile on a MikroTik router.
+   */
+  static async syncProfileToRouter(
+    routerIdOrRouter: string | any,
+    profile: {
+      name: string
+      rateLimit?: string | null
+      localAddress?: string | null
+      ipPoolName?: string | null
+    }
+  ): Promise<{ success: boolean; message: string }> {
+    let router = typeof routerIdOrRouter === 'string'
+      ? await prisma.router.findUnique({ where: { id: routerIdOrRouter }, include: { vpnClient: true } })
+      : routerIdOrRouter
+
+    if (!router) {
+      return { success: false, message: 'Router not found' }
+    }
+
+    let conn: MikroTikConnection | null = null
+    try {
+      const res = await this.connectToRouter(router, 3500)
+      conn = res.conn
+
+      const profileName = profile.name.trim()
+      const rateLimit = profile.rateLimit || undefined
+      const localAddress = profile.localAddress || undefined
+      const remoteAddress = profile.ipPoolName || undefined
+
+      const params: string[] = [
+        `=name=${profileName}`,
+        '=use-mpls=no',
+        '=use-compression=no',
+        '=use-encryption=no',
+        '=comment=EugineBill - PPPoE Profile',
+      ]
+      if (rateLimit) params.push(`=rate-limit=${rateLimit}`)
+      if (localAddress) params.push(`=local-address=${localAddress}`)
+      if (remoteAddress) params.push(`=remote-address=${remoteAddress}`)
+
+      // Check if profile exists on router
+      const existing = await conn.execute(
+        '/ppp/profile/print',
+        [`?name=${profileName}`],
+        8000
+      )
+
+      if (Array.isArray(existing) && existing.length > 0) {
+        const id = existing[0]['.id']
+        const setParams = [`=.id=${id}`]
+        if (rateLimit) setParams.push(`=rate-limit=${rateLimit}`)
+        if (localAddress) setParams.push(`=local-address=${localAddress}`)
+        if (remoteAddress) setParams.push(`=remote-address=${remoteAddress}`)
+        setParams.push('=comment=EugineBill - PPPoE Profile')
+
+        await conn.execute('/ppp/profile/set', setParams, 8000)
+        console.log(`[PPPSecretService] Updated /ppp/profile '${profileName}' on router ${router.name}`)
+      } else {
+        await conn.execute('/ppp/profile/add', params, 8000)
+        console.log(`[PPPSecretService] Added /ppp/profile '${profileName}' on router ${router.name}`)
+      }
+
+      await conn.disconnect()
+      return { success: true, message: `Profile '${profileName}' berhasil disinkronkan ke router ${router.name}` }
+    } catch (err: any) {
+      console.error(`[PPPSecretService] Failed to sync profile '${profile.name}' to router:`, err.message || err)
+      if (conn) {
+        try { await conn.disconnect() } catch {}
+      }
+      return { success: false, message: err.message || 'Gagal sinkron profile ke router' }
+    }
+  }
+
+  /**
+   * Syncs a PPPoE profile to all active routers or a specific router.
+   */
+  static async syncProfileToAllRouters(
+    profile: {
+      name: string
+      rateLimit?: string | null
+      localAddress?: string | null
+      ipPoolName?: string | null
+    },
+    targetRouterId?: string | null
+  ): Promise<{ syncedCount: number; errors: string[] }> {
+    const routers = targetRouterId
+      ? await prisma.router.findMany({ where: { id: targetRouterId, isActive: true }, include: { vpnClient: true } })
+      : await prisma.router.findMany({ where: { isActive: true }, include: { vpnClient: true } })
+
+    let syncedCount = 0
+    const errors: string[] = []
+
+    for (const r of routers) {
+      const res = await this.syncProfileToRouter(r, profile)
+      if (res.success) {
+        syncedCount++
+      } else {
+        errors.push(`${r.name}: ${res.message}`)
+      }
+    }
+
+    return { syncedCount, errors }
+  }
 }

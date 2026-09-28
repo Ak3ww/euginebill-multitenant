@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
+import { prisma } from '@/server/db/client';
 import { ok, created, badRequest, unauthorized, notFound, conflict, serverError } from '@/lib/api-response';
 import {
   listPppoeUsers,
@@ -34,9 +35,35 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { profileId, name, phone, pppoeCustomerId, noPppoeAccount } = body;
-    if (!profileId) {
-      return badRequest('Missing required field: profileId');
+    const { name, phone, pppoeCustomerId, noPppoeAccount } = body;
+
+    let targetProfileId = body.profileId;
+    if (!targetProfileId) {
+      const searchName = body.profileName || body.groupName;
+      let matchedProfile = searchName
+        ? await prisma.pppoeProfile.findFirst({
+            where: {
+              OR: [
+                { id: searchName },
+                { name: searchName },
+                { groupName: searchName },
+              ],
+            },
+          })
+        : null;
+
+      if (!matchedProfile) {
+        matchedProfile = await prisma.pppoeProfile.findFirst({ where: { isActive: true } });
+      }
+
+      if (matchedProfile) {
+        targetProfileId = matchedProfile.id;
+        body.profileId = matchedProfile.id;
+      }
+    }
+
+    if (!targetProfileId) {
+      return badRequest('Paket internet (profileId) belum dipilih dan belum ada paket di database');
     }
     if (!noPppoeAccount && (!body.username || !body.password)) {
       return badRequest('Username dan password wajib diisi untuk akun PPPoE');

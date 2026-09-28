@@ -513,6 +513,10 @@ export default function UnifiedSetupWizardPage() {
 
   // Additional Wizard Steps State (Steps 3, 8, 9, 10, 11)
   const [copiedIsolirScript, setCopiedIsolirScript] = useState(false);
+  const [pushingIsolation, setPushingIsolation] = useState(false);
+  const [verifyingIsolation, setVerifyingIsolation] = useState(false);
+  const [isolationVerificationResult, setIsolationVerificationResult] = useState<any | null>(null);
+  const [isolationPushResult, setIsolationPushResult] = useState<any | null>(null);
   const [radiusForm, setRadiusForm] = useState({
     radiusEnabled: false,
     radiusSecret: 'secret123',
@@ -1640,6 +1644,74 @@ export default function UnifiedSetupWizardPage() {
     }
   };
 
+  const handlePushIsolationToRouter = async () => {
+    const targetRouterId = savedRouterId || (routersList.length > 0 ? routersList[0].id : null);
+    if (!targetRouterId) {
+      showError('Belum ada router yang dipilih atau terdaftar di sistem. Harap tambahkan router pada Langkah 3.');
+      return;
+    }
+
+    setPushingIsolation(true);
+    setIsolationPushResult(null);
+    try {
+      const res = await fetch('/api/settings/isolation/push-router', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          routerId: targetRouterId,
+          settings: isolationForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsolationPushResult(data);
+        showSuccess(data.message || 'Sistem isolasi berhasil dipasang otomatis ke router!');
+        // Auto verify status
+        await handleVerifyIsolationOnRouter();
+      } else {
+        showError(data.error || 'Gagal memasang konfigurasi isolasi ke router.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Terjadi kesalahan jaringan.');
+    } finally {
+      setPushingIsolation(false);
+    }
+  };
+
+  const handleVerifyIsolationOnRouter = async () => {
+    const targetRouterId = savedRouterId || (routersList.length > 0 ? routersList[0].id : null);
+    if (!targetRouterId) {
+      showError('Belum ada router yang dipilih atau terdaftar di sistem.');
+      return;
+    }
+
+    setVerifyingIsolation(true);
+    try {
+      const res = await fetch('/api/settings/isolation/verify-router', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routerId: targetRouterId }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsolationVerificationResult(data.data);
+        if (data.data.isFullyConfigured) {
+          showSuccess(`Verifikasi berhasil! Seluruh aturan isolasi telah aktif di router ${data.data.routerName}.`);
+        } else {
+          showError(`Status isolir diperbarui. Beberapa aturan belum terpasang di router ${data.data.routerName}. Klik "Pasang Otomatis ke Router" untuk melengkapi.`);
+        }
+      } else {
+        showError(data.error || 'Gagal memverifikasi router.');
+      }
+    } catch (err: any) {
+      showError(err.message || 'Gagal memverifikasi status router.');
+    } finally {
+      setVerifyingIsolation(false);
+    }
+  };
+
   // Step 5: Fetch Router Resources for PPPoE Profile
   useEffect(() => {
     if (currentStep === 5 && savedRouterId) {
@@ -1703,10 +1775,11 @@ export default function UnifiedSetupWizardPage() {
       }
       const data = await res.json();
       setCreatedProfile(data.profile || data);
+      showSuccess(`Paket PPPoE '${profileForm.name}' berhasil disimpan dan disinkronkan ke router!`);
       markStepCompleted(5);
       setCurrentStep(6);
     } catch (err: any) {
-      alert(err.message || 'Gagal menyimpan paket');
+      showError(err.message || 'Gagal menyimpan paket');
     } finally {
       setIsSavingProfile(false);
     }
@@ -1716,6 +1789,9 @@ export default function UnifiedSetupWizardPage() {
   const handleSaveCustomer = async () => {
     setIsSavingCustomer(true);
     try {
+      const resolvedProfileId = createdProfile?.id;
+      const resolvedProfileName = createdProfile?.name || profileForm.name;
+
       const res = await fetch('/api/pppoe/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1724,18 +1800,23 @@ export default function UnifiedSetupWizardPage() {
           phone: customerForm.phone,
           username: customerForm.username,
           password: customerForm.password,
-          profileName: createdProfile?.name || profileForm.name,
+          profileId: resolvedProfileId,
+          profileName: resolvedProfileName,
           routerId: savedRouterId || undefined,
         }),
       });
 
-      if (!res.ok) throw new Error('Gagal membuat akun pelanggan');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Gagal membuat akun pelanggan');
+      }
+
       setCreatedCustomer(data.user || data);
+      showSuccess(`Akun pelanggan trial '${customerForm.username}' berhasil dibuat!`);
       markStepCompleted(6);
       setCurrentStep(7);
     } catch (err: any) {
-      alert(err.message || 'Gagal membuat pelanggan');
+      showError(err.message || 'Gagal membuat pelanggan');
     } finally {
       setIsSavingCustomer(false);
     }
@@ -4161,16 +4242,26 @@ export default function UnifiedSetupWizardPage() {
             {currentStep === 4 && (
               <Card className="border-border shadow-xs bg-card">
                 <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Shield className="w-5 h-5" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle>Pengaturan Sistem Isolasi Pelanggan</CardTitle>
+                        <CardDescription>
+                          Otomasi isolir tunggakan, IP pool isolir, rate limit, dan whitelist payment gateway.
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle>Pengaturan Sistem Isolasi Pelanggan</CardTitle>
-                      <CardDescription>
-                        Konfigurasi aturan pemblokiran otomatis, IP pool isolir, rate limit, dan whitelist payment gateway.
-                      </CardDescription>
-                    </div>
+
+                    {/* Quick router badge */}
+                    {savedRouterId && (
+                      <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20 gap-1.5 hidden sm:flex">
+                        <Server className="w-3.5 h-3.5" />
+                        <span>Router Terhubung</span>
+                      </Badge>
+                    )}
                   </div>
                 </CardHeader>
 
@@ -4178,7 +4269,7 @@ export default function UnifiedSetupWizardPage() {
                   {/* General Isolation Settings Form */}
                   <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
                     <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                      1. Pengaturan Umum & Jaringan Isolir
+                      1. Parameter Jaringan & Auto Isolasi
                     </div>
 
                     <div className="flex items-center justify-between p-3 bg-card rounded-lg border border-border">
@@ -4258,11 +4349,129 @@ export default function UnifiedSetupWizardPage() {
                     </div>
                   </div>
 
-                  {/* Integrated RouterOS Script Generator Section */}
+                  {/* Section 2: 1-Click Push & Live Verification */}
+                  <div className="space-y-4 border border-border rounded-xl p-4 bg-muted/20">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-2">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          2. Pemasangan Otomatis & Uji Status Router
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Terapkan seluruh aturan isolir (Pool, Profile, Whitelist, NAT Redirect, Filter) ke MikroTik via API.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleVerifyIsolationOnRouter}
+                          disabled={verifyingIsolation || pushingIsolation}
+                          className="text-xs gap-1.5 h-8 border-primary/30 text-primary hover:bg-primary/10"
+                        >
+                          {verifyingIsolation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5 text-primary" />}
+                          <span>{verifyingIsolation ? 'Memeriksa...' : 'Uji Status Isolir'}</span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handlePushIsolationToRouter}
+                          disabled={pushingIsolation || verifyingIsolation}
+                          className="text-xs gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          {pushingIsolation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          <span>{pushingIsolation ? 'Memasang ke Router...' : 'Pasang Otomatis ke Router'}</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Verification Diagnostic Results */}
+                    {isolationVerificationResult && (
+                      <div className="space-y-3 pt-1">
+                        <div
+                          className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+                            isolationVerificationResult.isFullyConfigured
+                              ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                              : 'bg-amber-50 text-amber-900 border-amber-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isolationVerificationResult.isFullyConfigured ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                            )}
+                            <div>
+                              <p className="font-bold text-xs">
+                                {isolationVerificationResult.isFullyConfigured
+                                  ? `Sistem Isolasi Lengkap & Aktif di ${isolationVerificationResult.routerName}`
+                                  : `Status Sistem Isolasi pada ${isolationVerificationResult.routerName}`}
+                              </p>
+                              <p className="text-[11px] opacity-90 mt-0.5">
+                                {isolationVerificationResult.isFullyConfigured
+                                  ? 'Seluruh aturan pool, profile, whitelist payment gateway, filter drop, dan NAT redirect sudah terpasang rapi.'
+                                  : 'Beberapa aturan belum lengkap. Klik "Pasang Otomatis ke Router" untuk menginstal seluruh aturan sekaligus.'}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] uppercase font-bold shrink-0 ${
+                              isolationVerificationResult.isFullyConfigured
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-400'
+                                : 'bg-amber-100 text-amber-800 border-amber-400'
+                            }`}
+                          >
+                            {isolationVerificationResult.isFullyConfigured ? '100% Terpasang' : 'Perlu Dilengkapi'}
+                          </Badge>
+                        </div>
+
+                        {/* Checklist Items */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          {isolationVerificationResult.items?.map((item: any) => (
+                            <div
+                              key={item.key}
+                              className="p-3 bg-card rounded-lg border border-border flex items-start gap-2.5"
+                            >
+                              {item.status === 'ok' ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                              ) : item.status === 'warning' ? (
+                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-bold text-foreground text-xs">{item.label}</span>
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-[9px] uppercase font-mono px-1.5 py-0 ${
+                                      item.status === 'ok'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : item.status === 'warning'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
+                                    }`}
+                                  >
+                                    {item.status === 'ok' ? 'OK' : item.status === 'warning' ? 'Warning' : 'Missing'}
+                                  </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.message}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 3: Integrated RouterOS Script Generator */}
                   <div className="space-y-4 pt-2">
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">
-                        2. Skrip Generator RouterOS MikroTik
+                        3. Skrip Manual RouterOS MikroTik (Opsional)
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex rounded-lg bg-muted p-0.5 text-xs">
@@ -4311,14 +4520,64 @@ export default function UnifiedSetupWizardPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-bold text-foreground">
-                          Skrip Otomatis Berdasarkan Pengaturan Anda (ROS Version: {isolationRosVersion.toUpperCase()})
+                          Skrip MikroTik dengan Prefix Komentar Standar (EugineBill - ...)
                         </Label>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const fullScript = `# ========================================================\n# EUGINEBILL ISOLIR SCRIPT (${isolationRosVersion.toUpperCase()} - ${isolationAuthMode.toUpperCase()})\n# Target VPS: ${isolationForm.isolationServerIp}\n# ========================================================\n\n/ip pool\nadd name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool Isolir"\n\n/ppp profile\nadd name=isolir local-address=192.168.200.1 remote-address=pool-isolir address-list=isolir rate-limit=${isolationForm.isolationRateLimit} comment="EugineBill - Profile Isolir"\n\n/ip firewall address-list\nadd list=payment-gateways address=api.midtrans.com comment="Midtrans API"\nadd list=payment-gateways address=app.midtrans.com comment="Midtrans Snap"\nadd list=payment-gateways address=api.xendit.co comment="Xendit API"\nadd list=payment-gateways address=checkout.xendit.co comment="Xendit Checkout"\nadd list=payment-gateways address=passport.duitku.com comment="Duitku API"\nadd list=payment-gateways address=tripay.co.id comment="Tripay"\nadd list=payment-gateways address=qrin.web.id comment="QRIN Web Gateway"\nadd list=payment-gateways address=api.qrin.web.id comment="QRIN API Gateway"\nadd list=payment-gateways address=api.dana.id comment="DANA API"\nadd list=payment-gateways address=gopay.co.id comment="GoPay"\nadd list=payment-gateways address=qris.id comment="QRIS Hub"\n\n/ip firewall filter\nadd chain=forward src-address-list=isolir connection-state=established,related action=accept comment="Allow Established Isolir"\nadd chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="Allow DNS Isolir"\nadd chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="Allow DNS TCP Isolir"\nadd chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="Allow Billing Server Access"\nadd chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="Allow Payment Gateways"\nadd chain=forward src-address-list=isolir action=drop comment="Drop Other Internet Traffic Isolir"\n\n/ip firewall nat\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="Redirect HTTP to Billing Landing Page"\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="Redirect HTTPS to Billing Landing Page"\n`;
+                            const fullScript = `# ==============================================================================
+# EUGINEBILL RADIUS - MIKROTIK ISOLATION SYSTEM SETUP
+# Mode: ${isolationAuthMode.toUpperCase()} Mode
+# Target OS: RouterOS ${isolationRosVersion.toUpperCase()}
+# IP Billing Server: ${isolationForm.isolationServerIp}
+# ==============================================================================
+
+# 1. IP POOL ISOLIR
+/ip pool
+add name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool untuk user yang diisolir"
+
+# 2. PPP PROFILE ISOLIR
+/ppp profile
+add name=isolir \\
+    local-address=192.168.200.1 \\
+    remote-address=pool-isolir \\
+    address-list=isolir \\
+    rate-limit=${isolationForm.isolationRateLimit} \\
+    use-mpls=no use-compression=no use-encryption=no \\
+    comment="EugineBill - Profile untuk user yang diisolir"
+
+# 3. FIREWALL ADDRESS LIST - PAYMENT GATEWAYS
+/ip firewall address-list
+add list=payment-gateways address=api.midtrans.com comment="EugineBill - Midtrans API"
+add list=payment-gateways address=app.midtrans.com comment="EugineBill - Midtrans Snap"
+add list=payment-gateways address=api.xendit.co comment="EugineBill - Xendit API"
+add list=payment-gateways address=checkout.xendit.co comment="EugineBill - Xendit Checkout"
+add list=payment-gateways address=passport.duitku.com comment="EugineBill - Duitku API"
+add list=payment-gateways address=tripay.co.id comment="EugineBill - Tripay"
+add list=payment-gateways address=qrin.web.id comment="EugineBill - QRIN Web Gateway"
+add list=payment-gateways address=api.qrin.web.id comment="EugineBill - QRIN API Gateway"
+add list=payment-gateways address=api.dana.id comment="EugineBill - DANA API"
+add list=payment-gateways address=gopay.co.id comment="EugineBill - GoPay"
+add list=payment-gateways address=qris.id comment="EugineBill - QRIS Hub"
+
+# 4. FIREWALL FILTER - ISOLIR RULES
+/ip firewall filter
+add chain=forward src-address-list=isolir connection-state=established,related action=accept comment="EugineBill - Allow established/related isolir"
+add chain=forward dst-address-list=isolir connection-state=established,related action=accept comment="EugineBill - Allow return traffic isolir"
+add chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="EugineBill - Allow DNS isolir"
+add chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="EugineBill - Allow DNS TCP isolir"
+add chain=forward src-address-list=isolir protocol=icmp action=accept comment="EugineBill - Allow ping isolir"
+add chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="EugineBill - Allow billing server access"
+add chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="EugineBill - Allow payment gateway access"
+add chain=forward src-address-list=isolir action=drop comment="EugineBill - Drop other internet traffic for isolir"
+
+# 5. FIREWALL NAT - REDIRECT TO BILLING SERVER
+/ip firewall nat
+add chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="EugineBill - Redirect HTTP to isolation landing page"
+add chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="EugineBill - Redirect HTTPS to isolation landing page"
+`;
                             copyToClipboard(fullScript);
                             setCopiedIsolirScript(true);
                             setTimeout(() => setCopiedIsolirScript(false), 2000);
@@ -4331,8 +4590,58 @@ export default function UnifiedSetupWizardPage() {
                       </div>
                       <textarea
                         readOnly
-                        rows={8}
-                        value={`# ========================================================\n# EUGINEBILL ISOLIR SCRIPT (${isolationRosVersion.toUpperCase()} - ${isolationAuthMode.toUpperCase()})\n# Target VPS: ${isolationForm.isolationServerIp}\n# ========================================================\n\n/ip pool\nadd name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool Isolir"\n\n/ppp profile\nadd name=isolir local-address=192.168.200.1 remote-address=pool-isolir address-list=isolir rate-limit=${isolationForm.isolationRateLimit} comment="EugineBill - Profile Isolir"\n\n/ip firewall address-list\nadd list=payment-gateways address=api.midtrans.com comment="Midtrans API"\nadd list=payment-gateways address=app.midtrans.com comment="Midtrans Snap"\nadd list=payment-gateways address=api.xendit.co comment="Xendit API"\nadd list=payment-gateways address=checkout.xendit.co comment="Xendit Checkout"\nadd list=payment-gateways address=passport.duitku.com comment="Duitku API"\nadd list=payment-gateways address=tripay.co.id comment="Tripay"\nadd list=payment-gateways address=qrin.web.id comment="QRIN Web Gateway"\nadd list=payment-gateways address=api.qrin.web.id comment="QRIN API Gateway"\nadd list=payment-gateways address=api.dana.id comment="DANA API"\nadd list=payment-gateways address=gopay.co.id comment="GoPay"\nadd list=payment-gateways address=qris.id comment="QRIS Hub"\n\n/ip firewall filter\nadd chain=forward src-address-list=isolir connection-state=established,related action=accept comment="Allow Established Isolir"\nadd chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="Allow DNS Isolir"\nadd chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="Allow DNS TCP Isolir"\nadd chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="Allow Billing Server Access"\nadd chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="Allow Payment Gateways"\nadd chain=forward src-address-list=isolir action=drop comment="Drop Other Internet Traffic Isolir"\n\n/ip firewall nat\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="Redirect HTTP to Billing Landing Page"\nadd chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="Redirect HTTPS to Billing Landing Page"\n`}
+                        rows={9}
+                        value={`# ==============================================================================
+# EUGINEBILL RADIUS - MIKROTIK ISOLATION SYSTEM SETUP
+# Mode: ${isolationAuthMode.toUpperCase()} Mode
+# Target OS: RouterOS ${isolationRosVersion.toUpperCase()}
+# IP Billing Server: ${isolationForm.isolationServerIp}
+# ==============================================================================
+
+# 1. IP POOL ISOLIR
+/ip pool
+add name=pool-isolir ranges=192.168.200.100-192.168.200.200 comment="EugineBill - IP Pool untuk user yang diisolir"
+
+# 2. PPP PROFILE ISOLIR
+/ppp profile
+add name=isolir \\
+    local-address=192.168.200.1 \\
+    remote-address=pool-isolir \\
+    address-list=isolir \\
+    rate-limit=${isolationForm.isolationRateLimit} \\
+    use-mpls=no use-compression=no use-encryption=no \\
+    comment="EugineBill - Profile untuk user yang diisolir"
+
+# 3. FIREWALL ADDRESS LIST - PAYMENT GATEWAYS
+/ip firewall address-list
+add list=payment-gateways address=api.midtrans.com comment="EugineBill - Midtrans API"
+add list=payment-gateways address=app.midtrans.com comment="EugineBill - Midtrans Snap"
+add list=payment-gateways address=api.xendit.co comment="EugineBill - Xendit API"
+add list=payment-gateways address=checkout.xendit.co comment="EugineBill - Xendit Checkout"
+add list=payment-gateways address=passport.duitku.com comment="EugineBill - Duitku API"
+add list=payment-gateways address=tripay.co.id comment="EugineBill - Tripay"
+add list=payment-gateways address=qrin.web.id comment="EugineBill - QRIN Web Gateway"
+add list=payment-gateways address=api.qrin.web.id comment="EugineBill - QRIN API Gateway"
+add list=payment-gateways address=api.dana.id comment="EugineBill - DANA API"
+add list=payment-gateways address=gopay.co.id comment="EugineBill - GoPay"
+add list=payment-gateways address=qris.id comment="EugineBill - QRIS Hub"
+
+# 4. FIREWALL FILTER - ISOLIR RULES
+/ip firewall filter
+add chain=forward src-address-list=isolir connection-state=established,related action=accept comment="EugineBill - Allow established/related isolir"
+add chain=forward dst-address-list=isolir connection-state=established,related action=accept comment="EugineBill - Allow return traffic isolir"
+add chain=forward src-address-list=isolir protocol=udp dst-port=53 action=accept comment="EugineBill - Allow DNS isolir"
+add chain=forward src-address-list=isolir protocol=tcp dst-port=53 action=accept comment="EugineBill - Allow DNS TCP isolir"
+add chain=forward src-address-list=isolir protocol=icmp action=accept comment="EugineBill - Allow ping isolir"
+add chain=forward src-address-list=isolir dst-address=${isolationForm.isolationServerIp} action=accept comment="EugineBill - Allow billing server access"
+add chain=forward src-address-list=isolir dst-address-list=payment-gateways action=accept comment="EugineBill - Allow payment gateway access"
+add chain=forward src-address-list=isolir action=drop comment="EugineBill - Drop other internet traffic for isolir"
+
+# 5. FIREWALL NAT - REDIRECT TO BILLING SERVER
+/ip firewall nat
+add chain=dstnat src-address-list=isolir protocol=tcp dst-port=80 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=80 comment="EugineBill - Redirect HTTP to isolation landing page"
+add chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!${isolationForm.isolationServerIp} dst-address-list=!payment-gateways action=dst-nat to-addresses=${isolationForm.isolationServerIp} to-ports=443 comment="EugineBill - Redirect HTTPS to isolation landing page"
+`}
                         className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-muted/50 text-foreground focus:outline-none"
                       />
                     </div>

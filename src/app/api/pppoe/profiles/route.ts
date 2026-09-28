@@ -155,6 +155,25 @@ export async function POST(request: NextRequest) {
     })();
   }
 
+    // Sync to MikroTik router(s) in background
+    void (async () => {
+      try {
+        const { PPPSecretService } = await import('@/server/services/mikrotik/ppp-secret.service');
+        const finalRateLimit = rateLimit || `${downloadSpeed}M/${uploadSpeed}M`;
+        await PPPSecretService.syncProfileToAllRouters(
+          {
+            name: finalGroupName,
+            rateLimit: finalRateLimit,
+            localAddress: finalLocalAddress,
+            ipPoolName: finalIpPoolName,
+          },
+          finalLastRouterId
+        );
+      } catch (mtErr) {
+        console.error('[BG] MikroTik profile sync error (create):', mtErr);
+      }
+    })();
+
     return NextResponse.json({
       success: true,
       profile: { ...profile, syncedToRadius: true },
@@ -365,6 +384,30 @@ export async function PUT(request: NextRequest) {
         }
       })();
     }
+
+    // Sync to MikroTik router(s) in background
+    void (async () => {
+      try {
+        const { PPPSecretService } = await import('@/server/services/mikrotik/ppp-secret.service');
+        const updatedGroupName = (typeof groupName === 'string' && groupName.trim()) ? groupName.trim() : profile.groupName;
+        const updatedRateLimit = (parsedFromRateLimit || bodyRateLimit) ? (bodyRateLimit || `${downloadSpeed}M/${uploadSpeed}M`) : profile.rateLimit;
+        const updatedLocalAddress = localAddress !== undefined ? localAddress : profile.localAddress;
+        const updatedIpPoolName = ipPoolName !== undefined ? ipPoolName : profile.ipPoolName;
+        const updatedLastRouterId = lastRouterId !== undefined ? lastRouterId : profile.lastRouterId;
+
+        await PPPSecretService.syncProfileToAllRouters(
+          {
+            name: updatedGroupName,
+            rateLimit: updatedRateLimit,
+            localAddress: updatedLocalAddress,
+            ipPoolName: updatedIpPoolName,
+          },
+          updatedLastRouterId
+        );
+      } catch (mtErr) {
+        console.error('[BG] MikroTik profile sync error (update):', mtErr);
+      }
+    })();
 
     return NextResponse.json({ success: true, profile });
   } catch (error) {
