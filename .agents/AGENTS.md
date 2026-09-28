@@ -85,9 +85,11 @@ For ALL customer-facing UI development (customer portal, payment pages, public l
    - Gunakan format waktu universal `timeout=3s` dan `interim-update=00:05:00` pada konfigurasi RADIUS agar didukung oleh kernel ROS 6 dan ROS 7.
    - Aturan firewall input untuk port API (`apiPort` dinamis sesuai konfigurasi router yang diisi admin, default 8728 / 8729 API-SSL), Winbox (`winboxPort` dinamis, default 8291), dan interface VPN tunnel WAJIB selalu dipasang dengan `place-before=0` di urutan teratas agar koneksi Winbox dan API tidak pernah terblokir oleh rule drop di bawahnya.
 
-## Live Production Database & Context Verification Standard
-1. **Never Assume or Claim General Knowledge**: Dilarang keras mengklaim sudah mengetahui isi database live, konfigurasi server, atau template pesan (WhatsApp, Isolir, Email) secara general atau berdasarkan asumsi semata. SELALU BERTANYA secara eksplisit kepada user jika tidak mengerti konteks atau membutuhkan data/parameter live yang sebenarnya!
-2. **Explicit User Prompting for Live Data**: Ketika user meminta sinkronisasi template atau data dari database VPS server utama, agen WAJIB secara eksplisit menanyakan export data/query SQL atau meminta teks template live langsung dari user sebelum menjadikannya source of truth untuk seed.
+## Mandatory Clarification & Anti-Assumption Standard (Sistem Billing & Data)
+1. **Strictly Never Assume or Jump to Conclusions**: Dilarang keras menarik kesimpulan sendiri, berasumsi tentang kebutuhan fitur, alur kerja bisnis, konfigurasi server, atau isi database live tanpa konfirmasi.
+2. **Always Ask Explicitly When in Doubt**: Agen WAJIB SELALU BERTANYA secara proaktif dan eksplisit kepada user jika ada instruksi yang ambigu, kebutuhan sistem billing yang belum jelas, atau membutuhkan data live yang sebenarnya, daripada berasumsi sendiri.
+3. **Explicit User Prompting for Live Data**: Ketika user meminta sinkronisasi template atau data dari database VPS server utama, agen WAJIB secara eksplisit menanyakan export data/query SQL atau meminta teks template live langsung dari user sebelum menjadikannya source of truth untuk seed.
+
 
 
 
