@@ -4,6 +4,27 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.90] — 2026-09-28
+
+### Setup Wizard Step 11 Technician Provisioning & Portal Login Resolution (`src/app/setup/page.tsx`, `src/app/api/technician/auth/login/route.ts`, `src/app/api/technician/auth/session/route.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Kegagalan Pembuatan Teknisi di Setup Wizard (Step 11)**: Pada langkah setup wizard ke-11, form pembuatan teknisi lapangan memanggil endpoint `POST /api/users` yang mengembalikan HTTP 404 (endpoint tidak ada), sehingga pendaftaran akun teknisi baru gagal.
+  2. **Kendala Login Portal Teknisi**: Teknisi yang didaftarkan melalui Setup Wizard maupun menu `/admin/technicians` terkendala saat login di `/technician/login` karena variasi format nomor HP (`0812...`, `62812...`, `+62...`), perbedaan case sensitivitas username, serta payload session yang belum menyertakan `username`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Endpoint Realignment pada Setup Wizard (`src/app/setup/page.tsx`)**: Mengalihkan target request `handleSaveTechnician` ke `POST /api/admin/technicians` dengan payload terstruktur (`name`, `username`, `password`, `phoneNumber`, `isActive: true`, `requireOtp: false`).
+  2. **Robust Multi-Identifier Login Matching (`src/app/api/technician/auth/login/route.ts`)**: Menambahkan sanitasi string dan normalisasi nomor WhatsApp / HP ke berbagai permutasi (`08xx`, `628xx`, `+628xx`, clean digits, lowercase username) sehingga teknisi dapat login menggunakan username, no HP lokal, maupun no WhatsApp internasional.
+  3. **Technician Session Payload Enhancement (`src/app/api/technician/auth/session/route.ts`)**: Menyertakan field `username` pada query Prisma saat validasi JWT token session teknisi.
+  4. **100% Code & Script Parity**: Menerapkan pembaruan secara identik pada `euginebillv2` (Single-Tenant) dan `euginebill-multitenant` (Multi-Tenant).
+
+- **Files**:
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/api/technician/auth/login/route.ts`
+  - Modified: `src/app/api/technician/auth/session/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.89] — 2026-09-28
 
 ### Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution (`src/app/setup/page.tsx`, `src/server/services/mikrotik/*`, `src/app/api/settings/isolation/*`)

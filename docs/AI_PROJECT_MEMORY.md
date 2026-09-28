@@ -20,6 +20,17 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 28, 2026 — v2.40.90: Setup Wizard Step 11 Technician Provisioning & Portal Login Resolution)
+
+- **Hard Invariant: Technician Provisioning Endpoint (`src/app/setup/page.tsx`, `src/app/api/admin/technicians/route.ts`)**:
+  - Pendaftaran akun teknisi di Setup Wizard (Step 11) wajib menargetkan `POST /api/admin/technicians` dengan payload `{ name, username, password, phoneNumber, isActive: true, requireOtp: false }`. Dilarang memanggil `/api/users` yang non-existent.
+  - Tabel entitas teknisi disimpan di model Prisma `technician` (bukan `adminUser`), meskipun fallback backward-compatibility login ke `adminUser` dengan `role: 'TECHNICIAN'` tetap didukung.
+- **Hard Invariant: Multi-Permutation Technician Login Matching (`src/app/api/technician/auth/login/route.ts`, `src/app/api/technician/auth/session/route.ts`)**:
+  - Login teknisi (`POST /api/technician/auth/login`) mendukung input identifikasi fleksibel: `username`, no HP lokal `08xx`, no HP internasional `628xx`, `+628xx`, string digit murni, serta lowercase.
+  - Endpoint session teknisi (`GET /api/technician/auth/session`) menyertakan field `username` pada Prisma query result saat memvalidasi JWT `technician-token`.
+- **Hard Invariant: Universal Code & Script Parity Across Editions**:
+  - Seluruh script MikroTik dan endpoint auth wajib memiliki 100% kesamaan struktural antara `euginebillv2` dan `euginebill-multitenant`.
+
 ### Recent Patch Log (September 28, 2026 — v2.40.89: Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution)
 
 - **Hard Invariant: Isolation Rule Standard & Prefix Uniformity (`src/server/services/mikrotik/isolation-sync.service.ts`)**:

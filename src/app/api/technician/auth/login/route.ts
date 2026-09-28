@@ -22,14 +22,26 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanInput = username.trim();
+    const digitsOnly = cleanInput.replace(/\D/g, '');
+    const phone62 = digitsOnly ? (digitsOnly.startsWith('62') ? digitsOnly : digitsOnly.startsWith('0') ? '62' + digitsOnly.substring(1) : '62' + digitsOnly) : '';
+    const phone0 = digitsOnly ? (digitsOnly.startsWith('62') ? '0' + digitsOnly.substring(2) : digitsOnly.startsWith('0') ? digitsOnly : '0' + digitsOnly) : '';
 
-    // 1. Try finding in `technician` table by username OR phoneNumber
+    const possibleIdentifiers = Array.from(new Set([
+      cleanInput,
+      cleanInput.toLowerCase(),
+      digitsOnly,
+      phone62,
+      phone0,
+      phone62 ? `+${phone62}` : '',
+    ].filter(Boolean)));
+
+    // 1. Try finding in `technician` table by username OR phoneNumber OR email
     const tech = await prisma.technician.findFirst({
       where: {
         OR: [
-          { username: cleanInput },
-          { phoneNumber: cleanInput },
-          { phoneNumber: cleanInput.replace(/^0/, '62') },
+          { username: { in: possibleIdentifiers } },
+          { phoneNumber: { in: possibleIdentifiers } },
+          { email: cleanInput },
         ]
       }
     });
@@ -103,8 +115,19 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Fallback to `adminUser` table with role TECHNICIAN
-    const adminUser = await prisma.adminUser.findUnique({
-      where: { username: cleanInput },
+    const adminUser = await prisma.adminUser.findFirst({
+      where: {
+        AND: [
+          { role: 'TECHNICIAN' },
+          {
+            OR: [
+              { username: { in: possibleIdentifiers } },
+              { phone: { in: possibleIdentifiers } },
+              { email: cleanInput },
+            ]
+          }
+        ]
+      },
     });
 
     if (adminUser && adminUser.role === 'TECHNICIAN') {

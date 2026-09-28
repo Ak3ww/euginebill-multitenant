@@ -2043,15 +2043,16 @@ export default function UnifiedSetupWizardPage() {
   const handleSaveTechnician = async () => {
     setIsSavingTech(true);
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('/api/admin/technicians', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: techForm.name,
           username: techForm.username,
           password: techForm.password,
-          phone: techForm.phone,
-          role: 'TECHNICIAN',
+          phoneNumber: techForm.phone,
+          isActive: true,
+          requireOtp: false,
         }),
       });
 
