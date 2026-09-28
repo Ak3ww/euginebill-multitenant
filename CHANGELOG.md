@@ -4,6 +4,43 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.89] — 2026-09-28
+
+### Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution (`src/app/setup/page.tsx`, `src/server/services/mikrotik/*`, `src/app/api/settings/isolation/*`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Paket PPPoE Tidak Tersinkron ke Router**: Pada wizard Step 5 dan CRUD profil paket, paket tersimpan di database MySQL namun belum secara otomatis dipasang ke `/ppp/profile` MikroTik RouterOS API.
+  2. **Error Pembuatan Akun Pelanggan Trial (Step 6)**: Terjadi error `"Gagal membuat akun pelanggan"` karena `profileId` tidak disertakan dalam payload, dan API menolak request tanpa fallback resolusi nama paket.
+  3. **Verifikasi & Diagnostik Sistem Isolasi (Step 4)**: Pengguna membutuhkan verifikasi langsung apakah aturan firewall isolir sudah aktif di router client, tombol 1-click push tanpa perlu copy-paste terminal secara manual, serta standardisasi prefix komentar `EugineBill - ` pada seluruh rule.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Isolation Synchronization & Diagnostic Service (`src/server/services/mikrotik/isolation-sync.service.ts`)**:
+     - `pushIsolationToRouter`: Pemasangan otomatis IP pool `pool-isolir`, PPP profile `isolir`, address-list whitelist payment gateways, firewall filter rules, dan DST-NAT redirect port 80/443 dengan komentar seragam berprefix `EugineBill - `.
+     - `verifyIsolationOnRouter`: Endpoint diagnostik realtime yang memvalidasi 5 komponen isolir dan mengembalikan checklist status `ok`, `warning`, atau `missing`.
+  2. **API Endpoints (`src/app/api/settings/isolation/push-router`, `src/app/api/settings/isolation/verify-router`)**:
+     - Menyediakan gateway REST API untuk integrasi 1-click push dan live verification dari antarmuka Wizard & Admin Settings.
+  3. **Auto-Sync RouterOS PPP Profile (`src/server/services/mikrotik/ppp-secret.service.ts` & `src/app/api/pppoe/profiles/route.ts`)**:
+     - Menambahkan fungsi `syncProfileToRouter` dan `syncProfileToAllRouters` pada `PPPSecretService`.
+     - Otomatis mengeksekusi `/ppp/profile/add` atau `/ppp/profile/set` ke router MikroTik saat paket PPPoE baru dibuat (POST) atau diupdate (PUT).
+  4. **Robust Customer Profile Resolution (`src/app/api/pppoe/users/route.ts` & `src/server/services/pppoe.service.ts`)**:
+     - Menambahkan intelligent profile resolution: Jika `profileId` tidak dikirim, sistem secara otomatis mencocokkan `profileName`, `groupName`, atau mengambil profil aktif pertama.
+     - Memperbaiki payload `handleSaveCustomer` di `src/app/setup/page.tsx` dengan menyertakan `profileId` dan `profileName`.
+  5. **Enhanced Step 4 UI (`src/app/setup/page.tsx`)**:
+     - Action bar ganda: Tombol **"Pasang Otomatis ke Router"** dan **"Uji Status Isolir"**.
+     - Diagnostic status banner dan 5 checklist cards interaktif.
+     - Generator script RouterOS dengan prefix komentar `EugineBill - ` yang identik 100% dengan aturan API.
+
+- **Files**:
+  - Added: `src/server/services/mikrotik/isolation-sync.service.ts`
+  - Added: `src/app/api/settings/isolation/push-router/route.ts`
+  - Added: `src/app/api/settings/isolation/verify-router/route.ts`
+  - Modified: `src/server/services/mikrotik/ppp-secret.service.ts`
+  - Modified: `src/app/api/pppoe/profiles/route.ts`
+  - Modified: `src/app/api/pppoe/users/route.ts`
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.88] — 2026-09-26
 
 ### SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning (`src/app/saas/page.tsx`, `src/app/api/saas/*`)

@@ -10,15 +10,27 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.88
+- **Version**: 2.40.89
 - **Status**: Commercial Turnkey & Multi-Tenant SaaS Release (Ready to Rent / Sell as Managed Single-Tenant VPS or Cloud Multi-Tenant)
-- **Last Updated**: September 26, 2026
+- **Last Updated**: September 28, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (September 28, 2026 — v2.40.89: Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution)
+
+- **Hard Invariant: Isolation Rule Standard & Prefix Uniformity (`src/server/services/mikrotik/isolation-sync.service.ts`)**:
+  - Seluruh komentar aturan firewall isolir (`/ip pool`, `/ppp profile`, `/ip firewall address-list`, `/ip firewall nat`, `/ip firewall filter`) WAJIB diawali dengan prefix persis `comment="EugineBill - ..."` agar admin dan script dapat melakukan filter regex atau bulk remove (`/ip firewall filter remove [find comment~"^EugineBill"]`) secara aman tanpa menyentuh aturan firewall existing milik pengguna.
+  - Endpoint `POST /api/settings/isolation/push-router` dan `POST /api/settings/isolation/verify-router` menyediakan sinkronisasi otomatis dan verifikasi diagnostik 5 poin (Pool, Profile, Whitelist, NAT, Filter) langsung ke MikroTik via API.
+
+- **Hard Invariant: Automated RouterOS PPPoE Profile Sync (`src/server/services/mikrotik/ppp-secret.service.ts`, `src/app/api/pppoe/profiles/route.ts`)**:
+  - Setiap pembuatan (`POST`) atau pembaruan (`PUT`) paket PPPoE pada database web billing WAJIB secara otomatis mengeksekusi sinkronisasi `/ppp/profile` ke MikroTik RouterOS API (`PPPSecretService.syncProfileToAllRouters`). Hal ini menjamin profil tarif dan rate-limit langsung ada di MikroTik saat secret pelanggan dibuat.
+
+- **Hard Invariant: Intelligent Customer Profile Resolution (`src/app/api/pppoe/users/route.ts`, `src/app/setup/page.tsx`)**:
+  - Pembuatan akun pelanggan PPPoE (`POST /api/pppoe/users`) mendukung resolusi cerdas `profileId` melalui fallback nama paket (`profileName`), nama grup (`groupName`), atau profil aktif pertama jika client tidak menyertakan `profileId` secara eksplisit.
 
 ### Recent Patch Log (September 26, 2026 — v2.40.88: SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning)
 
