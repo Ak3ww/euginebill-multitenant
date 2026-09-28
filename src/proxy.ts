@@ -180,7 +180,6 @@ export default async function proxy(req: NextRequest) {
         if (!pathname.startsWith('/saas-admin') && !pathname.startsWith('/saas')) {
           const url = req.nextUrl.clone();
           url.pathname = '/saas-admin' + (pathname === '/' ? '' : pathname);
-          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url);
           return applySecurityHeaders(rewriteRes, undefined, isHttps);
         }
@@ -193,7 +192,6 @@ export default async function proxy(req: NextRequest) {
         if (!pathname.startsWith(targetBase)) {
           const url = req.nextUrl.clone();
           url.pathname = targetBase + (pathname === '/' ? '' : pathname);
-          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url);
           return applySecurityHeaders(rewriteRes, undefined, isHttps);
         }
@@ -210,23 +208,20 @@ export default async function proxy(req: NextRequest) {
       requestHeaders.set('x-tenant-slug', subdomain);
 
       if (!isSystem && !isStaticFile && !isStandaloneRoute) {
-        // If root path is accessed on tenant subdomain, route to /admin (or /admin/login)
+        // If root path is accessed on tenant subdomain, route to /admin
         if (pathname === '/') {
           const url = req.nextUrl.clone();
           url.pathname = '/admin';
-          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url, {
             request: { headers: requestHeaders },
           });
           return applySecurityHeaders(rewriteRes, detectedTenantSlug, isHttps);
         } else {
-          // Pass x-tenant-slug header through rewrite
-          const url = req.nextUrl.clone();
-          url.protocol = targetProtocol;
-          const rewriteRes = NextResponse.rewrite(url, {
+          // Pass x-tenant-slug header through to the requested route
+          const nextRes = NextResponse.next({
             request: { headers: requestHeaders },
           });
-          return applySecurityHeaders(rewriteRes, detectedTenantSlug, isHttps);
+          return applySecurityHeaders(nextRes, detectedTenantSlug, isHttps);
         }
       }
     }
