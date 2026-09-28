@@ -4,7 +4,30 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.91] — 2026-09-28
+
+### Live Production WhatsApp & Isolation Template Seeding Sync and Strict Verification Rule (`prisma/seeds/whatsapp-templates.ts`, `prisma/seeds/isolation-templates.ts`, `src/server/services/saas/provisioning.service.ts`, `.agents/AGENTS.md`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Discrepancy Template WhatsApp & Isolir**: Template WhatsApp dan Isolir pada file seed lokal sebelumnya berbeda dengan template yang aktif digunakan pada live production database VPS server utama (`EugineBill_radius`).
+  2. **Audit Template Live**: Membutuhkan sinkronisasi 100% dari 33 template notifikasi WhatsApp (termasuk tagihan, pembayaran, tiket, reminder, isolir, maintenance, promo) dan 3 template isolir (`isolation-wa-default`, `isolation-email-default`, `isolation-html-default`) yang memuat link aplikasi pelanggan dan link WhatsApp Channel resmi.
+  3. **Penetapan Aturan AI /learn**: Memastikan agen AI tidak pernah berasumsi atau mengarang template database tanpa verifikasi langsung ke database VPS live atau arahan user.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Live Production Database Extraction & Seeding Parity**: Mengekstrak seluruh data template dari tabel `whatsapp_templates` dan `isolation_templates` pada database VPS utama (`EugineBill_radius`) dan menyinkronkannya ke `prisma/seeds/whatsapp-templates.ts` dan `prisma/seeds/isolation-templates.ts` di kedua repositori (`euginebillv2` dan `euginebill-multitenant`).
+  2. **Multi-Tenant SaaS Auto-Provisioning Baseline (`src/server/services/saas/provisioning.service.ts`)**: Memperbarui service provisioner SaaS agar setiap tenant baru langsung mendapatkan 33 template WhatsApp resmi, 3 template isolir, master permission matrix, master katalog inventaris, template dokumen SPK/BA, dan aturan penomoran otomatis.
+  3. **Standard Rule Addition (`.agents/AGENTS.md`)**: Menambahkan aturan *Live Production Database & Template Verification Standard* untuk menjaga kepatuhan dan integritas data operasional ISP.
+
+- **Files**:
+  - Modified: `prisma/seeds/whatsapp-templates.ts`
+  - Modified: `prisma/seeds/isolation-templates.ts`
+  - Modified: `src/server/services/saas/provisioning.service.ts`
+  - Modified: `.agents/AGENTS.md`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.90] — 2026-09-28
+
 
 ### Setup Wizard Step 11 Technician Provisioning & Portal Login Resolution (`src/app/setup/page.tsx`, `src/app/api/technician/auth/login/route.ts`, `src/app/api/technician/auth/session/route.ts`)
 

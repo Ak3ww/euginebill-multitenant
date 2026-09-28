@@ -85,4 +85,9 @@ For ALL customer-facing UI development (customer portal, payment pages, public l
    - Gunakan format waktu universal `timeout=3s` dan `interim-update=00:05:00` pada konfigurasi RADIUS agar didukung oleh kernel ROS 6 dan ROS 7.
    - Aturan firewall input untuk port API (`8728, 8729`, `8291`) dan interface VPN tunnel WAJIB selalu dipasang dengan `place-before=0` di urutan teratas agar koneksi Winbox dan API tidak pernah terblokir oleh rule drop di bawahnya.
 
+## Live Production Database & Template Verification Standard
+1. **Never Assume Production Templates**: Dilarang berasumsi atau mengklaim sudah mengetahui template pesan (WhatsApp, Isolir, Email) dari database live server utama hanya berdasarkan file seed lokal lama.
+2. **Explicit User Prompting for Live Data**: Ketika user meminta sinkronisasi template atau data dari database VPS server utama, agen WAJIB secara eksplisit menanyakan export data/query SQL atau meminta teks template live langsung dari user sebelum menjadikannya source of truth untuk seed.
+
+
 

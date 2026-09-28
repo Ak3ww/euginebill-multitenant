@@ -3,104 +3,179 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
- * Complete WhatsApp Templates for all flows
- * Total: 30 templates
+ * Complete WhatsApp Templates from Live Production Database (EugineBill_radius)
+ * Total: 33 templates with synchronized channel link & application variables.
  */
 export const whatsappTemplates = [
-  // =============================================
-  // REGISTRATION & ONBOARDING (2)
-  // =============================================
   {
-    id: 'wa-registration-confirmation',
-    type: 'registration-confirmation',
-    name: 'Konfirmasi Pendaftaran',
-    message: `✅ *Konfirmasi Pendaftaran*
+    id: 'wa-invoice-created',
+    type: 'invoice-created',
+    name: 'Notifikasi Invoice Baru',
+    message: `📄 *INVOICE PEMBAYARAN INTERNET*
 
-Halo *{{customerName}}*,
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+• *Paket:* {{profileName}}
 
-Terima kasih telah mendaftar! Kami telah menerima pendaftaran Anda dengan detail berikut:
+⚠️ _Mohon lakukan pembayaran sebelum *{{expiredAt}}* agar layanan internet tetap aktif dan lancar._
 
-📋 *Detail Pendaftaran:*
-• Nama: {{customerName}}
-• Telepon: {{phone}}
-• Paket: {{profileName}}
-• Alamat: {{address}}
+-----------------------------------------
+*Cara Bayar Instan (Otomatis Lunas):*
+1. Klik link: {{paymentLink}}
+2. Pilih metode pembayaran (QRIS, VA, atau E-Wallet).
 
-📌 *Status:* Pendaftaran Anda sedang diproses oleh tim kami.
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-Anda akan menerima notifikasi lebih lanjut setelah pendaftaran disetujui.
-
-Jika ada pertanyaan, silakan hubungi kami di *{{companyPhone}}*
-
-_{{companyName}}_`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
   {
-    id: 'wa-registration-approval',
-    type: 'registration-approval',
-    name: 'Persetujuan Pendaftaran',
-    message: `🎉 Halo {{customerName}},
+    id: 'wa-voucher-payment-link',
+    type: 'voucher-payment-link',
+    name: 'Link Pembayaran Voucher (Auto)',
+    message: `💳 *LINK PEMBAYARAN VOUCHER*
 
-Selamat! Pendaftaran Anda telah *DISETUJUI*!
+Yth. Bapak/Ibu *{{customerName}}*
+• *No. HP:* {{phone}}
+• *Paket:* {{profileName}}
 
-━━━━━━━━━━━━━━━━━━━━━━
-*📱 INFORMASI AKUN ANDA*
-━━━━━━━━━━━━━━━━━━━━━━
-🆔 ID Pelanggan: {{customerId}}
-👤 Username: {{username}}
-🔐 Password: {{password}}
-📦 Paket: {{profileName}}
-💳 Tipe: {{subscriptionType}}
+📌 _Satu langkah lagi untuk mengaktifkan voucher Anda. Silakan selesaikan pembayaran melalui tautan berikut:_
 
-━━━━━━━━━━━━━━━━━━━━━━
-*💰 INVOICE INSTALASI*
-━━━━━━━━━━━━━━━━━━━━━━
-🧾 No. Invoice: {{invoiceNumber}}
-💵 Biaya Instalasi: {{installationFee}}
-📅 Jatuh Tempo: {{dueDate}}
-
-🔗 *Link Pembayaran:*
+-----------------------------------------
+*Link Pembayaran:*
 {{paymentLink}}
 
-{{bankAccounts}}
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-Segera lakukan pembayaran untuk aktivasi layanan Anda.
-
-Terima kasih! 🙏
-_{{companyName}}_`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
-
-  // =============================================
-  // INVOICE & PAYMENT (7)
-  // =============================================
   {
-    id: 'wa-installation-invoice',
-    type: 'installation-invoice',
-    name: 'Invoice Instalasi',
-    message: `🧾 *Invoice Instalasi*
+    id: 'wa-maintenance-outage',
+    type: 'maintenance-outage',
+    name: 'Informasi Gangguan',
+    message: `⚠️ *INFORMASI GANGGUAN JARINGAN*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Wilayah:* {{address}}
+
+📢 _Saat ini sedang terjadi gangguan jaringan di wilayah Anda. Tim teknisi kami sedang dalam proses penanganan di lapangan._
+
+📌 _Kami memohon maaf atas ketidaknyamanan ini dan berupaya agar koneksi kembali normal secepatnya._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-maintenance-resolved',
+    type: 'maintenance-resolved',
+    name: 'Perbaikan Selesai',
+    message: `✅ *PERBAIKAN JARINGAN SELESAI*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Paket:* {{profileName}}
+
+🎉 _Penanganan gangguan jaringan telah selesai dilaksanakan. Layanan internet Anda saat ini sudah kembali normal._
+
+📌 _Jika koneksi belum terhubung, mohon coba restart (matikan dan nyalakan kembali) perangkat router Anda selama 1-2 menit._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Masih ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-invoice-overdue',
+    type: 'invoice-overdue',
+    name: 'Invoice Overdue Reminder',
+    message: `⚠️ *PERINGATAN PENANGGUHAN LAYANAN*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+
+🚨 _Layanan Anda saat ini diisolir/ditangguhkan sementara karena melewati batas waktu pembayaran._
+
+-----------------------------------------
+*Aktifkan Kembali Sekarang (Otomatis Aktif):*
+1. Klik link: {{paymentLink}}
+2. Selesaikan pembayaran.
+
+_Sistem akan mengaktifkan koneksi Anda secara otomatis dalam 1 detik setelah pembayaran berhasil._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-manual-extension',
+    type: 'manual-extension',
+    name: 'Perpanjangan Manual',
+    message: `🔄 *PERPANJANGAN OTOMATIS BERHASIL*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Paket:* {{profileName}}
+• *Masa Aktif Baru:* s/d {{expiredAt}}
+
+🎉 _Paket internet Anda telah berhasil diperpanjang secara otomatis. Terima kasih telah setia memilih {{companyName}}._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-account-info',
+    type: 'account-info',
+    name: 'Informasi Akun Pelanggan',
+    message: `📋 *Informasi Akun*
 
 Halo {{customerName}},
 
 ━━━━━━━━━━━━━━━━━━━━━━
-*📋 DETAIL INVOICE*
+*📱 DETAIL AKUN ANDA*
 ━━━━━━━━━━━━━━━━━━━━━━
-📌 No. Invoice: {{invoiceNumber}}
-👤 Nama: {{customerName}}
+🆔 ID Pelanggan: {{customerId}}
+👤 Username: {{username}}
 📦 Paket: {{profileName}}
+📍 Area: {{area}}
+📅 Masa Aktif: {{expiredAt}}
 
-💰 Total Tagihan: {{amount}}
-📅 Jatuh Tempo: {{dueDate}}
+📞 {{companyPhone}}
+📧 {{companyEmail}}
 
-🔗 *Bayar Sekarang:*
-{{paymentLink}}
-
-{{bankAccounts}}
-
-Terima kasih! 🙏
-
-{{companyName}}
-☎️ {{companyPhone}}`,
+_{{companyName}}_`,
     isActive: true,
   },
   {
@@ -130,230 +205,27 @@ Selamat menikmati layanan internet dari kami! 🌐
     isActive: true,
   },
   {
-    id: 'wa-invoice-reminder',
-    type: 'invoice-reminder',
-    name: 'Pengingat Invoice',
-    message: `⏰ *Pengingat Pembayaran*
+    id: 'wa-auto-renewal-success',
+    type: 'auto-renewal-success',
+    name: 'Auto Renewal Berhasil',
+    message: `🔄 *PERPANJANGAN OTOMATIS BERHASIL*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Paket:* {{profileName}}
+• *Masa Aktif Baru:* s/d {{expiredAt}}
 
-Ini adalah pengingat untuk invoice Anda yang akan segera jatuh tempo.
+🎉 _Paket internet Anda telah berhasil diperpanjang secara otomatis. Terima kasih telah setia memilih {{companyName}}._
 
-━━━━━━━━━━━━━━━━━━━━━━
-*📋 Detail Invoice*
-━━━━━━━━━━━━━━━━━━━━━━
-🧾 No. Invoice: {{invoiceNumber}}
-� Username: {{username}}
-📦 Paket: {{profileName}}
-📍 Area: {{area}}
-💰 Jumlah: {{amount}}
-📅 Jatuh Tempo: {{dueDate}}
-⏱️ Sisa Waktu: {{daysRemaining}} hari
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-🔗 *Bayar Sekarang:*
-{{paymentLink}}
-
-{{bankAccounts}}
-
-Jangan sampai layanan Anda terganggu! Segera lakukan pembayaran.
-
-{{companyName}}
-☎️ {{companyPhone}}`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
-  {
-    id: 'wa-payment-success',
-    type: 'payment-success',
-    name: 'Pembayaran Berhasil',
-    message: `✅ *PEMBAYARAN BERHASIL*
-
-Halo {{customerName}},
-
-Terima kasih! Pembayaran Anda telah berhasil dikonfirmasi.
-
-━━━━━━━━━━━━━━━━━━━━━━
-📋 *Detail Pembayaran*
-━━━━━━━━━━━━━━━━━━━━━━
-🆔 ID Pelanggan: {{customerId}}
-📌 Invoice: {{invoiceNumber}}
-💰 Jumlah: {{amount}}
-👤 Username: {{username}}
-📦 Paket: {{profileName}}
-📅 Aktif hingga: {{expiredDate}}
-
-🎉 Akun Anda sekarang aktif. Terima kasih!
-
-{{companyName}}
-☎️ {{companyPhone}}`,
-    isActive: true,
-  },
-  {
-    id: 'wa-payment_receipt',
-    type: 'payment_receipt',
-    name: 'Bukti Pembayaran',
-    message: `✅ *PEMBAYARAN DIKONFIRMASI*
-
-Halo {{customerName}},
-
-Terima kasih! Pembayaran Anda telah kami konfirmasi.
-
-━━━━━━━━━━━━━━━━━━━━━━
-📋 *Detail*
-━━━━━━━━━━━━━━━━━━━━━━
-📌 Invoice: {{invoiceNumber}}
-💰 Jumlah: {{amount}}
-✅ Status: LUNAS
-📅 Aktif hingga: {{expiredDate}}
-
-Layanan Anda telah diperpanjang.
-
-Terima kasih telah menjadi pelanggan setia kami! 🙏
-
-{{companyName}}
-☎️ {{companyPhone}}`,
-    isActive: true,
-  },
-  {
-    id: 'wa-manual-payment-approval',
-    type: 'manual-payment-approval',
-    name: 'Pembayaran Manual Disetujui',
-    message: `🎉 *Pembayaran Disetujui*
-
-Halo *{{customerName}}*,
-
-Pembayaran manual Anda telah *DISETUJUI* oleh admin kami.
-
-📋 *Detail:*
-• ID Pelanggan: {{customerId}}
-• Invoice: {{invoiceNumber}}
-• Jumlah: {{amount}}
-• Username: {{customerUsername}}
-• Paket: {{profileName}}
-• Area: {{area}}
-• Masa aktif hingga: {{expiredDate}}
-
-✅ Akun Anda sekarang sudah aktif dan dapat digunakan.
-
-Terima kasih telah melakukan pembayaran.
-
-_{{companyName}}_`,
-    isActive: true,
-  },
-  {
-    id: 'wa-manual-payment-rejection',
-    type: 'manual-payment-rejection',
-    name: 'Pembayaran Manual Ditolak',
-    message: `❌ *Pembayaran Ditolak*
-
-Halo *{{customerName}}*,
-
-Mohon maaf, pembayaran manual Anda *DITOLAK* oleh admin kami.
-
-📋 *Detail:*
-• ID Pelanggan: {{customerId}}
-• Username: {{customerUsername}}
-• Invoice: {{invoiceNumber}}
-• Jumlah: {{amount}}
-
-💬 *Alasan:*
-{{rejectionReason}}
-
-🔗 Upload ulang: {{paymentLink}}
-
-{{bankAccounts}}
-
-📞 Contact: {{companyPhone}}
-
-_{{companyName}}_`,
-    isActive: true,
-  },
-
-  // =============================================
-  // VOUCHER (2)
-  // =============================================
-  {
-    id: 'wa-voucher-purchase',
-    type: 'voucher-purchase',
-    name: 'Pembelian Voucher',
-    message: `🎫 *Voucher Internet Anda*
-
-Halo *{{customerName}}*,
-
-Terima kasih telah membeli voucher internet! Berikut adalah detail voucher Anda:
-
-━━━━━━━━━━━━━━━━━━
-🎟️ *KODE VOUCHER:*
-*{{voucherCodes}}*
-━━━━━━━━━━━━━━━━━━
-
-📋 *Detail Pembelian:*
-━━━━━━━━━━━━━━━━━━
-👤 Nama: *{{customerName}}*
-📱 No. HP: *{{phone}}*
-📦 Paket: *{{profileName}}*
-⏱️ Durasi: *{{duration}}*
-💰 Harga: *Rp {{price}}*
-🔢 Jumlah: *{{quantity}}* voucher
-💵 Total: *Rp {{totalAmount}}*
-📅 Tanggal: *{{purchaseDate}}*
-⏰ Berlaku s/d: *{{expiryDate}}*
-━━━━━━━━━━━━━━━━━━
-
-📝 *Cara Menggunakan:*
-1. Hubungkan perangkat ke WiFi *{{companyName}}*
-2. Buka browser, tunggu halaman login muncul
-3. Masukkan kode voucher di atas
-4. Klik "Login" dan mulai browsing! 🌐
-
-⚠️ *PENTING:*
-- Simpan kode voucher dengan baik
-- Jangan bagikan ke orang lain
-- Kode hanya bisa digunakan 1x
-- Voucher tidak bisa dikembalikan
-
-📞 Butuh bantuan? Hubungi: {{companyPhone}}
-
-Terima kasih telah berlangganan!
-_{{companyName}}_ 🙏
-
-Selamat berselancar! 🚀`,
-    isActive: true,
-  },
-  {
-    id: 'wa-voucher-purchase-success',
-    type: 'voucher-purchase-success',
-    name: 'E-Voucher Purchase Success',
-    message: `🎫 Halo {{customerName}},
-
-Terima kasih telah membeli E-Voucher!
-
-━━━━━━━━━━━━━━━━━━━━━━
-*📋 DETAIL PESANAN*
-━━━━━━━━━━━━━━━━━━━━━━
-🔢 Nomor Order: {{orderNumber}}
-📦 Paket: {{profileName}}
-🎟️ Jumlah: {{quantity}} voucher
-⏱️ Masa Berlaku: {{validity}}
-
-━━━━━━━━━━━━━━━━━━━━━━
-*🎟️ KODE VOUCHER ANDA*
-━━━━━━━━━━━━━━━━━━━━━━
-{{voucherCodes}}
-
-📝 *Cara Pakai:*
-1. Hubungkan ke WiFi kami
-2. Buka browser
-3. Masukkan kode voucher
-4. Nikmati internet! 🌐
-
-{{companyName}}
-📞 {{companyPhone}}`,
-    isActive: true,
-  },
-
-  // =============================================
-  // AUTO RENEWAL (2)
-  // =============================================
   {
     id: 'wa-auto-renewal-warning',
     type: 'auto-renewal-warning',
@@ -389,171 +261,100 @@ _{{companyName}}_`,
     isActive: true,
   },
   {
-    id: 'wa-auto-renewal-success',
-    type: 'auto-renewal-success',
-    name: 'Auto Renewal Berhasil',
-    message: `✅ *AUTO RENEWAL BERHASIL*
-
-Halo {{customerName}},
-
-Layanan Anda telah diperpanjang otomatis!
-
-━━━━━━━━━━━━━━━━━━━━━━
-*📋 DETAIL RENEWAL*
-━━━━━━━━━━━━━━━━━━━━━━
-🆔 ID Pelanggan: {{customerId}}
-👤 Username: {{username}}
-📦 Paket: {{profileName}}
-📍 Area: {{area}}
-💰 Biaya: {{amount}}
-💳 Saldo Sekarang: {{newBalance}}
-📅 Aktif hingga: {{expiredDate}}
-
-Terima kasih telah menjadi pelanggan setia kami! 🙏
-
-{{companyName}}
-☎️ {{companyPhone}}`,
-    isActive: true,
-  },
-
-  // =============================================
-  // BROADCAST & MARKETING (4)
-  // =============================================
-  {
     id: 'wa-general-broadcast',
     type: 'general-broadcast',
     name: 'Broadcast Umum ke Pelanggan',
-    message: `📢 *Pengumuman*
+    message: `📢 *PEMBERITAHUAN DARI {{companyName}}*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
 
-{{message}}
+📌 _[Tuliskan pengumuman atau pesan informasi umum di sini]_
 
-Jika ada pertanyaan, hubungi kami di {{companyPhone}}
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-Terima kasih,
-_{{companyName}}_`,
+Ada kendala? Balas chat ini. Terima kasih, *{{companyName}}*.`,
     isActive: true,
   },
   {
-    id: 'wa-promo-offer',
-    type: 'promo-offer',
-    name: 'Promo & Penawaran Khusus',
-    message: `🎁 *PROMO SPESIAL!*
+    id: 'wa-installation-invoice',
+    type: 'installation-invoice',
+    name: 'Invoice Instalasi',
+    message: `📄 *INVOICE PEMBAYARAN INTERNET*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+• *Paket:* {{profileName}}
 
-{{promoTitle}}
+⚠️ _Mohon lakukan pembayaran sebelum *{{expiredAt}}* agar layanan internet tetap aktif dan lancar._
 
-{{promoDescription}}
+-----------------------------------------
+*Cara Bayar Instan (Otomatis Lunas):*
+1. Klik link: {{paymentLink}}
+2. Pilih metode pembayaran (QRIS, VA, atau E-Wallet).
 
-Jangan lewatkan kesempatan ini! Hubungi kami segera.
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-📞 {{companyPhone}}
-
-_{{companyName}}_`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
   {
-    id: 'wa-welcome-message',
-    type: 'welcome-message',
-    name: 'Selamat Datang Pelanggan Baru',
-    message: `🎉 *Selamat Datang!*
+    id: 'wa-invoice-reminder',
+    type: 'invoice-reminder',
+    name: 'Pengingat Invoice',
+    message: `📄 *INVOICE PEMBAYARAN INTERNET*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+• *Paket:* {{profileName}}
 
-Selamat bergabung dengan *{{companyName}}*! Kami senang Anda menjadi bagian dari keluarga kami.
+⚠️ _Mohon lakukan pembayaran sebelum *{{expiredAt}}* agar layanan internet tetap aktif dan lancar._
 
-Nikmati layanan internet berkualitas dari kami. Tim support kami siap membantu Anda 24/7.
+-----------------------------------------
+*Cara Bayar Instan (Otomatis Lunas):*
+1. Klik link: {{paymentLink}}
+2. Pilih metode pembayaran (QRIS, VA, atau E-Wallet).
 
-📞 {{companyPhone}}
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-Terima kasih! 🙏`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
   {
-    id: 'wa-thank-you',
-    type: 'thank-you',
-    name: 'Ucapan Terima Kasih',
-    message: `🙏 *Terima Kasih*
+    id: 'wa-maintenance-info',
+    type: 'maintenance-info',
+    name: 'Pemberitahuan Maintenance',
+    message: `🔧 *PEMBERITAHUAN PEMELIHARAAN JARINGAN (MAINTENANCE)*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Wilayah:* {{address}}
 
-Terima kasih telah menggunakan layanan *{{companyName}}*. Kepuasan Anda adalah prioritas kami.
+📢 _Kami menginformasikan bahwa akan dilakukan pemeliharaan sistem/jaringan berkala untuk meningkatkan kualitas layanan internet Anda._
 
-Salam hangat,
-_{{companyName}}_`,
+📌 _Selama proses pemeliharaan berlangsung, layanan internet Anda mungkin akan mengalami gangguan singkat. Kami berupaya agar pemeliharaan selesai secepatnya._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
     isActive: true,
   },
-
-  // =============================================
-  // CUSTOMER SERVICE (3)
-  // =============================================
-  {
-    id: 'wa-account-info',
-    type: 'account-info',
-    name: 'Informasi Akun Pelanggan',
-    message: `📋 *Informasi Akun*
-
-Halo {{customerName}},
-
-━━━━━━━━━━━━━━━━━━━━━━
-*📱 DETAIL AKUN ANDA*
-━━━━━━━━━━━━━━━━━━━━━━
-🆔 ID Pelanggan: {{customerId}}
-👤 Username: {{username}}
-📦 Paket: {{profileName}}
-� Area: {{area}}
-📅 Masa Aktif: {{expiredAt}}
-
-📞 {{companyPhone}}
-📧 {{companyEmail}}
-
-_{{companyName}}_`,
-    isActive: true,
-  },
-  {
-    id: 'wa-payment-reminder-general',
-    type: 'payment-reminder-general',
-    name: 'Pengingat Pembayaran Umum',
-    message: `📅 *Pengingat Pembayaran*
-
-Halo {{customerName}},
-
-Ini adalah pengingat untuk segera melakukan pembayaran tagihan Anda.
-
-Jangan sampai layanan Anda terganggu. Lakukan pembayaran sebelum jatuh tempo.
-
-{{bankAccounts}}
-
-📞 {{companyPhone}}
-
-_{{companyName}}_`,
-    isActive: true,
-  },
-  {
-    id: 'wa-payment-warning',
-    type: 'payment-warning',
-    name: 'Peringatan Pembayaran Tertunda',
-    message: `⚠️ *PERINGATAN PEMBAYARAN*
-
-Halo {{customerName}},
-
-Pembayaran Anda sudah melewati jatuh tempo.
-
-Segera lakukan pembayaran untuk menghindari pemutusan layanan.
-
-{{bankAccounts}}
-
-📞 {{companyPhone}}
-
-_{{companyName}}_`,
-    isActive: true,
-  },
-
-  // =============================================
-  // ADMIN & INTERNAL (3)
-  // =============================================
   {
     id: 'wa-manual_payment_admin',
     type: 'manual_payment_admin',
@@ -581,18 +382,53 @@ No. Rek: {{senderAccount}}
     isActive: true,
   },
   {
-    id: 'wa-payment-confirmed',
-    type: 'payment-confirmed',
-    name: 'Konfirmasi Pembayaran Diterima',
-    message: `✅ *Pembayaran Diterima*
+    id: 'wa-manual-payment-approval',
+    type: 'manual-payment-approval',
+    name: 'Pembayaran Manual Disetujui',
+    message: `✅ *PEMBAYARAN BERHASIL & LUNAS*
 
-Halo {{customerName}},
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+• *Paket:* {{profileName}}
 
-Pembayaran Anda untuk invoice *{{invoiceNumber}}* telah kami terima dan konfirmasi.
+🎉 *Terima kasih!* Pembayaran Anda telah berhasil dikonfirmasi. Layanan internet Anda aktif dan dapat digunakan kembali.
 
-Layanan Anda sekarang aktif. Terima kasih atas pembayaran tepat waktu!
+-----------------------------------------
+📄 *Unduh Bukti Bayar / Invoice PDF:*
+{{invoicePdfLink}}
 
-_{{companyName}}_`,
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-manual-payment-rejection',
+    type: 'manual-payment-rejection',
+    name: 'Pembayaran Manual Ditolak',
+    message: `❌ *PEMBAYARAN MANUAL DITOLAK*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+
+ Mohon maaf, bukti transfer pembayaran manual Anda *ditolak* oleh admin.
+
+-----------------------------------------
+*Silakan Unggah Ulang Bukti Bayar:*
+{{paymentLink}}
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada pertanyaan? Balas chat ini. 
+Terima kasih, *{{companyName}}*.`,
     isActive: true,
   },
   {
@@ -615,46 +451,43 @@ Hormat kami,
 *{{companyName}}*`,
     isActive: true,
   },
-
-  // =============================================
-  // OTHERS (4)
-  // =============================================
   {
-    id: 'wa-maintenance-info',
-    type: 'maintenance-info',
-    name: 'Pemberitahuan Maintenance',
-    message: `🔧 *Pemberitahuan Maintenance*
+    id: 'wa-payment_receipt',
+    type: 'payment_receipt',
+    name: 'Bukti Pembayaran',
+    message: `✅ *PEMBAYARAN DIKONFIRMASI*
 
 Halo {{customerName}},
 
-Kami akan melakukan maintenance pada jaringan kami.
+Terima kasih! Pembayaran Anda telah kami konfirmasi.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-⏰ Waktu: {{maintenanceTime}}
-⏱️ Estimasi: {{estimatedDuration}}
+📋 *Detail*
 ━━━━━━━━━━━━━━━━━━━━━━
+📌 Invoice: {{invoiceNumber}}
+💰 Jumlah: {{amount}}
+✅ Status: LUNAS
+📅 Aktif hingga: {{expiredDate}}
 
-Mohon maaf atas ketidaknyamanannya. Maintenance ini untuk meningkatkan kualitas layanan.
+Layanan Anda telah diperpanjang.
 
-_{{companyName}}_`,
+Terima kasih telah menjadi pelanggan setia kami! 🙏
+
+{{companyName}}
+☎️ {{companyPhone}}`,
     isActive: true,
   },
   {
-    id: 'wa-upgrade-notification',
-    type: 'upgrade-notification',
-    name: 'Pemberitahuan Upgrade Paket',
-    message: `⬆️ *UPGRADE PAKET*
+    id: 'wa-payment-confirmed',
+    type: 'payment-confirmed',
+    name: 'Konfirmasi Pembayaran Diterima',
+    message: `✅ *Pembayaran Diterima*
 
 Halo {{customerName}},
 
-Paket internet Anda telah berhasil di-upgrade!
+Pembayaran Anda untuk invoice *{{invoiceNumber}}* telah kami terima dan konfirmasi.
 
-━━━━━━━━━━━━━━━━━━━━━━
-📦 Paket Baru: {{newProfileName}}
-🚀 Kecepatan: {{speed}}
-━━━━━━━━━━━━━━━━━━━━━━
-
-Nikmati internet lebih cepat dan lebih stabil!
+Layanan Anda sekarang aktif. Terima kasih atas pembayaran tepat waktu!
 
 _{{companyName}}_`,
     isActive: true,
@@ -684,6 +517,130 @@ _{{companyName}}_`,
     isActive: true,
   },
   {
+    id: 'wa-payment-reminder-general',
+    type: 'payment-reminder-general',
+    name: 'Pengingat Pembayaran Umum',
+    message: `📅 *Pengingat Pembayaran*
+
+Halo {{customerName}},
+
+Ini adalah pengingat untuk segera melakukan pembayaran tagihan Anda.
+
+Jangan sampai layanan Anda terganggu. Lakukan pembayaran sebelum jatuh tempo.
+
+{{bankAccounts}}
+
+📞 {{companyPhone}}
+
+_{{companyName}}_`,
+    isActive: true,
+  },
+  {
+    id: 'wa-payment-success',
+    type: 'payment-success',
+    name: 'Pembayaran Berhasil',
+    message: `✅ *PEMBAYARAN BERHASIL & LUNAS*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *No. Invoice:* {{invoiceNumber}}
+• *Paket:* {{profileName}}
+
+🎉 *Terima kasih!* Pembayaran Anda telah berhasil dikonfirmasi. Layanan internet Anda aktif dan dapat digunakan kembali.
+
+-----------------------------------------
+📄 *Unduh Bukti Bayar / Invoice PDF:*
+{{invoicePdfLink}}
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-payment-warning',
+    type: 'payment-warning',
+    name: 'Peringatan Pembayaran Tertunda',
+    message: `⚠️ *PERINGATAN PEMBAYARAN*
+
+Halo {{customerName}},
+
+Pembayaran Anda sudah melewati jatuh tempo.
+
+Segera lakukan pembayaran untuk menghindari pemutusan layanan.
+
+{{bankAccounts}}
+
+📞 {{companyPhone}}
+
+_{{companyName}}_`,
+    isActive: true,
+  },
+  {
+    id: 'wa-promo-offer',
+    type: 'promo-offer',
+    name: 'Promo & Penawaran Khusus',
+    message: `🎁 *PENAWARAN SPESIAL UNTUK ANDA*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Paket Saat Ini:* {{profileName}}
+
+🎉 _[Tuliskan detail promo, diskon perpanjangan, atau penawaran upgrade paket di sini]_
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Tertarik dengan promo ini? Balas chat ini atau hubungi CS kami. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-registration-approval',
+    type: 'registration-approval',
+    name: 'Persetujuan Pendaftaran',
+    message: `🎉 *PENDAFTARAN DISETUJUI*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Paket Layanan:* {{profileName}}
+
+📌 _Selamat! Pendaftaran Anda telah disetujui. Tim teknisi kami akan segera menghubungi Anda untuk koordinasi jadwal pemasangan._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. Terima kasih, *{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-registration-confirmation',
+    type: 'registration-confirmation',
+    name: 'Konfirmasi Pendaftaran',
+    message: `✅ *KONFIRMASI PENDAFTARAN*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *No. HP:* {{phone}}
+• *Paket:* {{profileName}}
+• *Alamat Pasang:* {{address}}
+
+📌 _Data pendaftaran Anda telah kami terima dan sedang diproses oleh tim. Kami akan menginformasikan kembali untuk jadwal pemasangan di lokasi._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. Terima kasih, *{{companyName}}*.`,
+    isActive: true,
+  },
+  {
     id: 'wa-service-suspension',
     type: 'service-suspension',
     name: 'Peringatan Suspend Layanan',
@@ -707,13 +664,124 @@ Segera lakukan pembayaran untuk menghindari suspend.
 _{{companyName}}_`,
     isActive: true,
   },
+  {
+    id: 'wa-thank-you',
+    type: 'thank-you',
+    name: 'Ucapan Terima Kasih',
+    message: `🙏 *Terima Kasih*
+
+Halo {{customerName}},
+
+Terima kasih telah menggunakan layanan *{{companyName}}*. Kepuasan Anda adalah prioritas kami.
+
+Salam hangat,
+_{{companyName}}_`,
+    isActive: true,
+  },
+  {
+    id: 'wa-upgrade-notification',
+    type: 'upgrade-notification',
+    name: 'Pemberitahuan Upgrade Paket',
+    message: `⬆️ *UPGRADE PAKET*
+
+Halo {{customerName}},
+
+Paket internet Anda telah berhasil di-upgrade!
+
+━━━━━━━━━━━━━━━━━━━━━━
+📦 Paket Baru: {{newProfileName}}
+🚀 Kecepatan: {{speed}}
+━━━━━━━━━━━━━━━━━━━━━━
+
+Nikmati internet lebih cepat dan lebih stabil!
+
+_{{companyName}}_`,
+    isActive: true,
+  },
+  {
+    id: 'wa-voucher-purchase',
+    type: 'voucher-purchase',
+    name: 'Pembelian Voucher',
+    message: `🎫 *PEMBELIAN VOUCHER BERHASIL*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *No. HP:* {{phone}}
+• *Paket:* {{profileName}}
+
+🔑 *KREDENSIAL LOGIN WI-FI:*
+• *Username:* {{username}}
+• *Password:* {{password}}
+
+-----------------------------------------
+*Cara Menggunakan:*
+1. Hubungkan ke Wi-Fi *{{companyName}}*.
+2. Masukkan Username & Password di atas pada halaman login.
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+    isActive: true,
+  },
+  {
+    id: 'wa-voucher-purchase-success',
+    type: 'voucher-purchase-success',
+    name: 'E-Voucher Purchase Success',
+    message: `🎫 Halo {{customerName}},
+
+Terima kasih telah membeli E-Voucher!
+
+━━━━━━━━━━━━━━━━━━━━━━
+*📋 DETAIL PESANAN*
+━━━━━━━━━━━━━━━━━━━━━━
+🔢 Nomor Order: {{orderNumber}}
+📦 Paket: {{profileName}}
+🎟️ Jumlah: {{quantity}} voucher
+⏱️ Masa Berlaku: {{validity}}
+
+━━━━━━━━━━━━━━━━━━━━━━
+*🎟️ KODE VOUCHER ANDA*
+━━━━━━━━━━━━━━━━━━━━━━
+{{voucherCodes}}
+
+📝 *Cara Pakai:*
+1. Hubungkan ke WiFi kami
+2. Buka browser
+3. Masukkan kode voucher
+4. Nikmati internet! 🌐
+
+{{companyName}}
+📞 {{companyPhone}}`,
+    isActive: true,
+  },
+  {
+    id: 'wa-welcome-message',
+    type: 'welcome-message',
+    name: 'Selamat Datang Pelanggan Baru',
+    message: `🎉 *Selamat Datang!*
+
+Halo {{customerName}},
+
+Selamat bergabung dengan *{{companyName}}*! Kami senang Anda menjadi bagian dari keluarga kami.
+
+Nikmati layanan internet berkualitas dari kami. Tim support kami siap membantu Anda 24/7.
+
+📞 {{companyPhone}}
+
+Terima kasih! 🙏`,
+    isActive: true,
+  },
 ];
 
-export async function seedWhatsAppTemplates(force = false) {
+export async function seedWhatsAppTemplates(force = false, client?: PrismaClient) {
+  const db = client || prisma;
   console.log(`🌱 Seeding WhatsApp templates (always updates message content)...`);
   
   for (const template of whatsappTemplates) {
-    await prisma.whatsapp_templates.upsert({
+    await db.whatsapp_templates.upsert({
       where: { type: template.type },
       create: template,
       update: { name: template.name, message: template.message, isActive: template.isActive },

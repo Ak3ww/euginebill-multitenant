@@ -2,72 +2,89 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export async function seedIsolationTemplates() {
-  console.log('🌱 Seeding isolation templates...');
+export async function seedIsolationTemplates(client?: PrismaClient) {
+  const db = client || prisma;
+  console.log('🌱 Seeding isolation templates (from live production database)...');
 
   // WhatsApp Template
-  await prisma.isolationTemplate.upsert({
+  await db.isolationTemplate.upsert({
     where: { id: 'isolation-wa-default' },
-    update: {},
+    update: {
+      name: 'Default WhatsApp Isolation Notice',
+      message: `⚠️ *PERINGATAN PENANGGUHAN LAYANAN*
+
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Masa Aktif Habis:* {{expiredDate}}
+
+🚨 _Akses internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan._
+
+-----------------------------------------
+*Aktifkan Kembali Sekarang (Otomatis Aktif):*
+1. Selesaikan pembayaran melalui link: {{paymentLink}}
+2. Lakukan restart / reconnect router Anda.
+
+_Sistem akan mengaktifkan koneksi Anda secara otomatis setelah pembayaran berhasil._
+
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
+
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
+      variables: {
+        customerName: 'Nama pelanggan',
+        customerId: 'ID Pelanggan',
+        expiredDate: 'Tanggal expired',
+        paymentLink: 'Link pembayaran tagihan',
+        link_download_aplikasi: 'Link download aplikasi Android/PWA',
+        companyName: 'Nama ISP / Perusahaan',
+      },
+      isActive: true,
+    },
     create: {
       id: 'isolation-wa-default',
       type: 'whatsapp',
       name: 'Default WhatsApp Isolation Notice',
-      message: `Halo *{{customerName}}* 👋
+      message: `⚠️ *PERINGATAN PENANGGUHAN LAYANAN*
 
-⚠️ *AKUN ANDA TELAH DIISOLIR*
+Yth. Bapak/Ibu *{{customerName}}*
+• *ID Pelanggan:* {{customerId}}
+• *Masa Aktif Habis:* {{expiredDate}}
 
-Akun internet Anda telah dibatasi karena masa berlangganan telah habis.
+🚨 _Akses internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan._
 
-📋 *Detail Akun:*
-• ID Pelanggan: {{customerId}}
-• Username: {{username}}
-• Expired: {{expiredDate}}
+-----------------------------------------
+*Aktifkan Kembali Sekarang (Otomatis Aktif):*
+1. Selesaikan pembayaran melalui link: {{paymentLink}}
+2. Lakukan restart / reconnect router Anda.
 
-🔒 *Status Saat Ini:*
-✗ Akses internet dibatasi
-✗ Bandwidth terbatas ({{rateLimit}})
-✓ Bisa login PPPoE
+_Sistem akan mengaktifkan koneksi Anda secara otomatis setelah pembayaran berhasil._
 
-💡 *Cara Mengaktifkan Kembali:*
-1. Lakukan pembayaran tagihan
-2. Logout dan login ulang PPPoE
-3. Akses internet akan aktif otomatis
+-----------------------------------------
+📱 *Aplikasi Pelanggan:* {{link_download_aplikasi}}
+📢 *WA Channel Info & Promo:* https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v
 
-🔗 *Link Pembayaran:*
-{{paymentLink}}
-
-Atau scan QR Code berikut:
-{{qrCode}}
-
-Butuh bantuan?
-📞 {{companyPhone}}
-📧 {{companyEmail}}
-
-Terima kasih,
-*{{companyName}}*`,
+Ada kendala? Balas chat ini. 
+Terima kasih, 
+*{{companyName}}*.`,
       variables: {
         customerName: 'Nama pelanggan',
-        username: 'Username PPPoE',
+        customerId: 'ID Pelanggan',
         expiredDate: 'Tanggal expired',
-        rateLimit: 'Rate limit (misal: 64k/64k)',
-        paymentLink: 'Link untuk pembayaran',
-        qrCode: 'QR Code URL',
-        companyName: 'Nama perusahaan',
-        companyPhone: 'No telepon perusahaan',
-        companyEmail: 'Email perusahaan'
+        paymentLink: 'Link pembayaran tagihan',
+        link_download_aplikasi: 'Link download aplikasi Android/PWA',
+        companyName: 'Nama ISP / Perusahaan',
       },
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   // Email Template
-  await prisma.isolationTemplate.upsert({
+  await db.isolationTemplate.upsert({
     where: { id: 'isolation-email-default' },
-    update: {},
-    create: {
-      id: 'isolation-email-default',
-      type: 'email',
+    update: {
       name: 'Default Email Isolation Notice',
       subject: '⚠️ Akun Anda Telah Diisolir - {{username}}',
       message: `<!DOCTYPE html>
@@ -75,85 +92,78 @@ Terima kasih,
 <head>
   <meta charset="UTF-8">
   <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-    .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; }
-    .alert-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; }
-    .info-box { background: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0; }
-    .button { display: inline-block; background: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-    .footer { background: #f9fafb; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; }
-    .qr-code { text-align: center; margin: 20px 0; }
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #222222; background-color: #f4f4f5; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e4e4e7; }
+    .header { background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%); color: white; padding: 25px; text-align: center; }
+    .header h1 { margin: 0; font-size: 21px; }
+    .header p { margin: 5px 0 0; opacity: 0.9; font-size: 13px; }
+    .content { padding: 28px; }
+    .alert-box { background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 14px; margin-bottom: 20px; border-radius: 4px; font-size: 14px; }
+    .info-box { background: #fafafa; padding: 15px; border: 1px solid #e4e4e7; border-radius: 6px; margin: 20px 0; }
+    .button-container { text-align: center; margin: 25px 0; }
+    .button { display: inline-block; background: #b91c1c; color: #ffffff !important; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; text-align: center; }
+    .qr-code { text-align: center; margin: 25px 0; padding: 15px; background: #fafafa; border: 1px dashed #d4d4d8; border-radius: 6px; }
+    .footer { background: #f4f4f5; padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #e4e4e7; }
+    .footer a { color: #b91c1c; text-decoration: none; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>⚠️ Akun Anda Telah Diisolir</h1>
-      <p>Layanan Internet Dibatasi</p>
+      <h1>⚠️ PERINGATAN PENANGGUHAN LAYANAN</h1>
+      <p>Akses Internet Dibatasi Sementara</p>
     </div>
     
     <div class="content">
-      <p>Halo <strong>{{customerName}}</strong>,</p>
+      <p>Yth. Bapak/Ibu <strong>{{customerName}}</strong>,</p>
       
       <div class="alert-box">
-        <strong>Pemberitahuan Penting</strong><br>
-        Akun internet Anda telah dibatasi karena masa berlangganan telah habis pada <strong>{{expiredDate}}</strong>.
+        <strong>Pemberitahuan Penangguhan:</strong><br>
+        Layanan internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan pada <strong>{{expiredDate}}</strong>.
       </div>
       
       <div class="info-box">
-        <h3>📋 Detail Akun</h3>
-        <table width="100%" cellpadding="5">
+        <table width="100%" cellpadding="6" style="border-collapse: collapse;">
           <tr>
-            <td width="150"><strong>Username</strong></td>
-            <td>{{username}}</td>
+            <td width="140" style="color: #52525b;"><strong>ID Pelanggan</strong></td>
+            <td>: {{username}}</td>
           </tr>
           <tr>
-            <td><strong>Expired Date</strong></td>
-            <td>{{expiredDate}}</td>
-          </tr>
-          <tr>
-            <td><strong>Rate Limit</strong></td>
-            <td>{{rateLimit}}</td>
+            <td style="color: #52525b;"><strong>Masa Aktif Habis</strong></td>
+            <td>: {{expiredDate}}</td>
           </tr>
         </table>
       </div>
       
-      <h3>🔒 Status Saat Ini:</h3>
-      <ul>
-        <li>✗ Akses internet dibatasi</li>
-        <li>✗ Bandwidth terbatas</li>
-        <li>✓ Masih bisa login PPPoE</li>
-      </ul>
-      
-      <h3>💡 Cara Mengaktifkan Kembali:</h3>
-      <ol>
-        <li>Lakukan pembayaran tagihan</li>
-        <li>Logout dan login ulang PPPoE Anda</li>
-        <li>Akses internet akan aktif otomatis dalam 5-10 menit</li>
+      <h3>💡 Aktifkan Kembali Sekarang (Otomatis Aktif):</h3>
+      <ol style="padding-left: 20px;">
+        <li>Selesaikan pembayaran melalui tombol di bawah atau scan QR Code.</li>
+        <li>Lakukan restart / reconnect router Anda.</li>
+        <li>Koneksi internet Anda akan aktif kembali secara otomatis.</li>
       </ol>
       
-      <div style="text-align: center;">
+      <div class="button-container">
         <a href="{{paymentLink}}" class="button">💳 Bayar Sekarang</a>
       </div>
       
       <div class="qr-code">
-        <p><strong>Atau Scan QR Code:</strong></p>
-        <img src="{{qrCodeImage}}" alt="QR Code" width="200" height="200">
+        <p style="margin-top: 0; font-weight: bold;">Atau Scan QR Code Pembayaran:</p>
+        <img src="{{qrCodeImage}}" alt="QR Code Pembayaran" width="180" height="180" style="display: block; margin: 0 auto;">
       </div>
       
-      <p style="margin-top: 30px;">
-        <strong>Butuh Bantuan?</strong><br>
-        📞 WhatsApp: {{companyPhone}}<br>
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e4e4e7; font-size: 14px;">
+        <strong>Ada kendala? Hubungi Customer Service Kami:</strong><br>
+        📱 WhatsApp: {{companyPhone}}<br>
         📧 Email: {{companyEmail}}
-      </p>
+      </div>
     </div>
     
     <div class="footer">
-      <p>{{companyName}} © 2025</p>
-      <p style="font-size: 12px; color: #6b7280;">
-        Email ini dikirim otomatis oleh sistem.
+      <p style="margin-bottom: 8px;">
+        📱 <a href="{{link_download_aplikasi}}">Aplikasi Pelanggan</a> | 
+        📢 <a href="https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v">WA Channel Info & Promo</a>
       </p>
+      <p style="margin: 5px 0;">Salam hangat, <strong>{{companyName}}</strong></p>
     </div>
   </div>
 </body>
@@ -161,22 +171,286 @@ Terima kasih,
       variables: {
         customerName: 'Nama pelanggan',
         username: 'Username PPPoE',
-        expiredDate: 'Tanggal expired (format: 5 November 2024)',
-        rateLimit: 'Rate limit (misal: 64k/64k)',
-        paymentLink: 'URL link untuk pembayaran',
-        qrCodeImage: 'URL image QR code',
-        companyName: 'Nama perusahaan',
-        companyPhone: 'No telepon perusahaan',
-        companyEmail: 'Email perusahaan'
+        expiredDate: 'Tanggal expired',
+        paymentLink: 'Link pembayaran tagihan',
+        qrCodeImage: 'URL QR Code Image',
+        companyPhone: 'Nomor WhatsApp CS',
+        companyEmail: 'Email Perusahaan',
+        companyName: 'Nama ISP / Perusahaan',
+        link_download_aplikasi: 'Link download aplikasi Android/PWA',
       },
-      isActive: true
-    }
+      isActive: true,
+    },
+    create: {
+      id: 'isolation-email-default',
+      type: 'email',
+      name: 'Default Email Isolation Notice',
+      subject: '⚠️ PERINGATAN PENANGGUHAN LAYANAN - {{username}}',
+      message: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #222222; background-color: #f4f4f5; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e4e4e7; }
+    .header { background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%); color: white; padding: 25px; text-align: center; }
+    .header h1 { margin: 0; font-size: 21px; }
+    .header p { margin: 5px 0 0; opacity: 0.9; font-size: 13px; }
+    .content { padding: 28px; }
+    .alert-box { background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 14px; margin-bottom: 20px; border-radius: 4px; font-size: 14px; }
+    .info-box { background: #fafafa; padding: 15px; border: 1px solid #e4e4e7; border-radius: 6px; margin: 20px 0; }
+    .button-container { text-align: center; margin: 25px 0; }
+    .button { display: inline-block; background: #b91c1c; color: #ffffff !important; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; text-align: center; }
+    .qr-code { text-align: center; margin: 25px 0; padding: 15px; background: #fafafa; border: 1px dashed #d4d4d8; border-radius: 6px; }
+    .footer { background: #f4f4f5; padding: 20px; text-align: center; font-size: 12px; color: #71717a; border-top: 1px solid #e4e4e7; }
+    .footer a { color: #b91c1c; text-decoration: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ PERINGATAN PENANGGUHAN LAYANAN</h1>
+      <p>Akses Internet Dibatasi Sementara</p>
+    </div>
+    
+    <div class="content">
+      <p>Yth. Bapak/Ibu <strong>{{customerName}}</strong>,</p>
+      
+      <div class="alert-box">
+        <strong>Pemberitahuan Penangguhan:</strong><br>
+        Layanan internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan pada <strong>{{expiredDate}}</strong>.
+      </div>
+      
+      <div class="info-box">
+        <table width="100%" cellpadding="6" style="border-collapse: collapse;">
+          <tr>
+            <td width="140" style="color: #52525b;"><strong>ID Pelanggan</strong></td>
+            <td>: {{username}}</td>
+          </tr>
+          <tr>
+            <td style="color: #52525b;"><strong>Masa Aktif Habis</strong></td>
+            <td>: {{expiredDate}}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <h3>💡 Aktifkan Kembali Sekarang (Otomatis Aktif):</h3>
+      <ol style="padding-left: 20px;">
+        <li>Selesaikan pembayaran melalui tombol di bawah atau scan QR Code.</li>
+        <li>Lakukan restart / reconnect router Anda.</li>
+        <li>Koneksi internet Anda akan aktif kembali secara otomatis.</li>
+      </ol>
+      
+      <div class="button-container">
+        <a href="{{paymentLink}}" class="button">💳 Bayar Sekarang</a>
+      </div>
+      
+      <div class="qr-code">
+        <p style="margin-top: 0; font-weight: bold;">Atau Scan QR Code Pembayaran:</p>
+        <img src="{{qrCodeImage}}" alt="QR Code Pembayaran" width="180" height="180" style="display: block; margin: 0 auto;">
+      </div>
+      
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e4e4e7; font-size: 14px;">
+        <strong>Ada kendala? Hubungi Customer Service Kami:</strong><br>
+        📱 WhatsApp: {{companyPhone}}<br>
+        📧 Email: {{companyEmail}}
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p style="margin-bottom: 8px;">
+        📱 <a href="{{link_download_aplikasi}}">Aplikasi Pelanggan</a> | 
+        📢 <a href="https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v">WA Channel Info & Promo</a>
+      </p>
+      <p style="margin: 5px 0;">Salam hangat, <strong>{{companyName}}</strong></p>
+    </div>
+  </div>
+</body>
+</html>`,
+      variables: {
+        customerName: 'Nama pelanggan',
+        username: 'Username PPPoE',
+        expiredDate: 'Tanggal expired',
+        paymentLink: 'Link pembayaran tagihan',
+        qrCodeImage: 'URL QR Code Image',
+        companyPhone: 'Nomor WhatsApp CS',
+        companyEmail: 'Email Perusahaan',
+        companyName: 'Nama ISP / Perusahaan',
+        link_download_aplikasi: 'Link download aplikasi Android/PWA',
+      },
+      isActive: true,
+    },
   });
 
   // HTML Landing Page Template
-  await prisma.isolationTemplate.upsert({
+  await db.isolationTemplate.upsert({
     where: { id: 'isolation-html-default' },
-    update: {},
+    update: {
+      name: 'Default HTML Landing Page',
+      message: `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peringatan Penangguhan Layanan - {{companyName}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: Arial, sans-serif; 
+      line-height: 1.6; 
+      color: #222222; 
+      background-color: #f4f4f5; 
+      margin: 0; 
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container { 
+      width: 100%;
+      max-width: 600px; 
+      margin: 0 auto; 
+      background: #ffffff; 
+      border-radius: 8px; 
+      overflow: hidden; 
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
+      border: 1px solid #e4e4e7; 
+    }
+    .header { 
+      background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%); 
+      color: white; 
+      padding: 25px; 
+      text-align: center; 
+    }
+    .header h1 { margin: 0; font-size: 21px; }
+    .header p { margin: 5px 0 0; opacity: 0.9; font-size: 13px; }
+    .content { padding: 28px; }
+    .alert-box { 
+      background: #fef2f2; 
+      border-left: 4px solid #ef4444; 
+      color: #991b1b; 
+      padding: 14px; 
+      margin-bottom: 20px; 
+      border-radius: 4px; 
+      font-size: 14px; 
+    }
+    .info-box { 
+      background: #fafafa; 
+      padding: 15px; 
+      border: 1px solid #e4e4e7; 
+      border-radius: 6px; 
+      margin: 20px 0; 
+    }
+    .button-container { text-align: center; margin: 25px 0; }
+    .button { 
+      display: inline-block; 
+      background: #b91c1c; 
+      color: #ffffff !important; 
+      padding: 12px 30px; 
+      text-decoration: none; 
+      border-radius: 6px; 
+      font-weight: bold; 
+      text-align: center; 
+    }
+    .button:hover { background: #991b1b; }
+    .qr-code { 
+      text-align: center; 
+      margin: 25px 0; 
+      padding: 15px; 
+      background: #fafafa; 
+      border: 1px dashed #d4d4d8; 
+      border-radius: 6px; 
+    }
+    .footer { 
+      background: #f4f4f5; 
+      padding: 20px; 
+      text-align: center; 
+      font-size: 12px; 
+      color: #71717a; 
+      border-top: 1px solid #e4e4e7; 
+    }
+    
+    @media (max-width: 480px) {
+      .content { padding: 20px; }
+      .header h1 { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ PERINGATAN PENANGGUHAN LAYANAN</h1>
+      <p>Akses Internet Dibatasi Sementara</p>
+    </div>
+    
+    <div class="content">
+      <p>Yth. Bapak/Ibu <strong>{{customerName}}</strong>,</p>
+      
+      <div class="alert-box">
+        <strong>Pemberitahuan Penangguhan:</strong><br>
+        Layanan internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan pada <strong>{{expiredDate}}</strong>.
+      </div>
+      
+      <div class="info-box">
+        <table width="100%" cellpadding="6" style="border-collapse: collapse;">
+          <tr>
+            <td width="140" style="color: #52525b;"><strong>ID Pelanggan</strong></td>
+            <td>: {{username}}</td>
+          </tr>
+          <tr>
+            <td style="color: #52525b;"><strong>Masa Aktif Habis</strong></td>
+            <td>: {{expiredDate}}</td>
+          </tr>
+        </table>
+      </div>
+      
+      <h3>💡 Aktifkan Kembali Sekarang (Otomatis Aktif):</h3>
+      <ol style="padding-left: 20px;">
+        <li>Selesaikan pembayaran melalui tombol di bawah atau scan QR Code.</li>
+        <li>Lakukan restart / reconnect router Anda.</li>
+        <li>Koneksi internet Anda akan aktif kembali secara otomatis.</li>
+      </ol>
+      
+      <div class="button-container">
+        <a href="{{paymentLink}}" class="button">💳 Bayar Sekarang</a>
+      </div>
+      
+      <div class="qr-code">
+        <p style="margin-top: 0; font-weight: bold;">Atau Scan QR Code Pembayaran:</p>
+        <img src="{{qrCodeImage}}" alt="QR Code Pembayaran" width="180" height="180" style="display: block; margin: 0 auto;">
+      </div>
+      
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e4e4e7; font-size: 14px;">
+        <strong>Ada kendala? Hubungi Customer Service Kami:</strong><br>
+        📱 WhatsApp: {{companyPhone}}<br>
+        📧 Email: {{companyEmail}}
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>Copyright &copy; 2026 <strong>{{companyName}}</strong>. All Rights Reserved.</p>
+    </div>
+  </div>
+
+  <script>
+    // Refresh halaman otomatis setiap 5 menit (300.000 ms)
+    setTimeout(function() { location.reload(); }, 300000);
+  </script>
+</body>
+</html>`,
+      variables: {
+        customerName: 'Nama pelanggan',
+        username: 'Username PPPoE',
+        expiredDate: 'Tanggal expired',
+        paymentLink: 'Link pembayaran tagihan',
+        qrCodeImage: 'URL QR Code Image',
+        companyPhone: 'Nomor WhatsApp CS',
+        companyEmail: 'Email Perusahaan',
+        companyName: 'Nama ISP / Perusahaan',
+      },
+      isActive: true,
+    },
     create: {
       id: 'isolation-html-default',
       type: 'html_page',
@@ -186,209 +460,181 @@ Terima kasih,
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Akun Diisolir - {{companyName}}</title>
+  <title>Peringatan Penangguhan Layanan - {{companyName}}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: Arial, sans-serif; 
+      line-height: 1.6; 
+      color: #222222; 
+      background-color: #f4f4f5; 
+      margin: 0; 
+      padding: 20px;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
     }
-    .container {
-      max-width: 600px;
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      overflow: hidden;
+    .container { 
+      width: 100%;
+      max-width: 600px; 
+      margin: 0 auto; 
+      background: #ffffff; 
+      border-radius: 8px; 
+      overflow: hidden; 
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
+      border: 1px solid #e4e4e7; 
     }
-    .header {
-      background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
-      color: white;
-      padding: 40px;
-      text-align: center;
+    .header { 
+      background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%); 
+      color: white; 
+      padding: 25px; 
+      text-align: center; 
     }
-    .header h1 { font-size: 32px; margin-bottom: 10px; }
-    .header p { opacity: 0.9; }
-    .content { padding: 40px; }
-    .alert {
-      background: #fef3c7;
-      border-left: 4px solid #f59e0b;
-      padding: 20px;
-      margin-bottom: 30px;
-      border-radius: 5px;
+    .header h1 { margin: 0; font-size: 21px; }
+    .header p { margin: 5px 0 0; opacity: 0.9; font-size: 13px; }
+    .content { padding: 28px; }
+    .alert-box { 
+      background: #fef2f2; 
+      border-left: 4px solid #ef4444; 
+      color: #991b1b; 
+      padding: 14px; 
+      margin-bottom: 20px; 
+      border-radius: 4px; 
+      font-size: 14px; 
     }
-    .info-box {
-      background: #f3f4f6;
-      padding: 20px;
-      border-radius: 10px;
-      margin: 20px 0;
+    .info-box { 
+      background: #fafafa; 
+      padding: 15px; 
+      border: 1px solid #e4e4e7; 
+      border-radius: 6px; 
+      margin: 20px 0; 
     }
-    .info-box table { width: 100%; }
-    .info-box td { padding: 8px 0; }
-    .info-box td:first-child { font-weight: 600; width: 120px; }
-    .status-list { margin: 20px 0; }
-    .status-list li { padding: 8px 0; list-style: none; }
-    .btn {
-      display: inline-block;
-      background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
-      color: white;
-      padding: 15px 40px;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      text-align: center;
-      margin: 20px 0;
-      display: block;
+    .button-container { text-align: center; margin: 25px 0; }
+    .button { 
+      display: inline-block; 
+      background: #b91c1c; 
+      color: #ffffff !important; 
+      padding: 12px 30px; 
+      text-decoration: none; 
+      border-radius: 6px; 
+      font-weight: bold; 
+      text-align: center; 
     }
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(220,38,38,0.3); }
-    .qr-section {
-      text-align: center;
-      padding: 30px;
-      background: #f9fafb;
-      border-radius: 10px;
-      margin: 20px 0;
+    .button:hover { background: #991b1b; }
+    .qr-code { 
+      text-align: center; 
+      margin: 25px 0; 
+      padding: 15px; 
+      background: #fafafa; 
+      border: 1px dashed #d4d4d8; 
+      border-radius: 6px; 
     }
-    .qr-section img { max-width: 200px; margin: 20px 0; }
-    .contact {
-      text-align: center;
-      margin-top: 30px;
-      padding-top: 30px;
-      border-top: 1px solid #e5e7eb;
+    .footer { 
+      background: #f4f4f5; 
+      padding: 20px; 
+      text-align: center; 
+      font-size: 12px; 
+      color: #71717a; 
+      border-top: 1px solid #e4e4e7; 
     }
-    .contact a {
-      display: inline-block;
-      margin: 10px;
-      padding: 10px 20px;
-      background: #10b981;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-    }
-    .footer {
-      background: #f9fafb;
-      padding: 20px;
-      text-align: center;
-      color: #6b7280;
-      font-size: 14px;
-    }
-    @media (max-width: 640px) {
-      .header h1 { font-size: 24px; }
+    
+    @media (max-width: 480px) {
       .content { padding: 20px; }
+      .header h1 { font-size: 18px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🛡️ Akun Anda Diisolir</h1>
-      <p>Layanan Internet Telah Dibatasi</p>
+      <h1>⚠️ PERINGATAN PENANGGUHAN LAYANAN</h1>
+      <p>Akses Internet Dibatasi Sementara</p>
     </div>
     
     <div class="content">
-      <div class="alert">
-        <strong>⚠️ Pemberitahuan Penting</strong><br>
-        Akun internet Anda telah dibatasi karena masa berlangganan telah habis.
-        Silakan lakukan pembayaran untuk mengaktifkan kembali layanan.
+      <p>Yth. Bapak/Ibu <strong>{{customerName}}</strong>,</p>
+      
+      <div class="alert-box">
+        <strong>Pemberitahuan Penangguhan:</strong><br>
+        Layanan internet Anda saat ini diisolir/ditangguhkan sementara karena telah melewati batas masa berlangganan pada <strong>{{expiredDate}}</strong>.
       </div>
       
       <div class="info-box">
-        <h3 style="margin-bottom: 15px;">👤 Informasi Akun</h3>
-        <table>
+        <table width="100%" cellpadding="6" style="border-collapse: collapse;">
           <tr>
-            <td>Username</td>
-            <td><strong>{{username}}</strong></td>
+            <td width="140" style="color: #52525b;"><strong>ID Pelanggan</strong></td>
+            <td>: {{username}}</td>
           </tr>
           <tr>
-            <td>Nama</td>
-            <td><strong>{{customerName}}</strong></td>
-          </tr>
-          <tr>
-            <td>Expired Date</td>
-            <td><strong style="color: #dc2626;">{{expiredDate}}</strong></td>
-          </tr>
-          <tr>
-            <td>Rate Limit</td>
-            <td><strong>{{rateLimit}}</strong></td>
+            <td style="color: #52525b;"><strong>Masa Aktif Habis</strong></td>
+            <td>: {{expiredDate}}</td>
           </tr>
         </table>
       </div>
       
-      <h3>🔒 Status Saat Ini:</h3>
-      <ul class="status-list">
-        <li>❌ Akses internet dibatasi</li>
-        <li>❌ Bandwidth sangat terbatas</li>
-        <li>✅ Masih bisa login PPPoE</li>
-        <li>✅ Dapat akses halaman pembayaran</li>
-      </ul>
-      
-      <h3>💡 Cara Mengaktifkan:</h3>
-      <ol class="status-list">
-        <li>1️⃣ Klik tombol "Bayar Sekarang" di bawah</li>
-        <li>2️⃣ Selesaikan pembayaran</li>
-        <li>3️⃣ Logout dan login ulang PPPoE</li>
-        <li>4️⃣ Internet aktif otomatis!</li>
+      <h3>💡 Aktifkan Kembali Sekarang (Otomatis Aktif):</h3>
+      <ol style="padding-left: 20px;">
+        <li>Selesaikan pembayaran melalui tombol di bawah atau scan QR Code.</li>
+        <li>Lakukan restart / reconnect router Anda.</li>
+        <li>Koneksi internet Anda akan aktif kembali secara otomatis.</li>
       </ol>
       
-      <a href="{{paymentLink}}" class="btn">💳 Bayar Sekarang</a>
-      
-      <div class="qr-section">
-        <h3>Atau Scan QR Code</h3>
-        <p style="color: #6b7280; margin: 10px 0;">Scan dengan kamera smartphone Anda</p>
-        <img src="{{qrCodeImage}}" alt="QR Code Payment">
+      <div class="button-container">
+        <a href="{{paymentLink}}" class="button">💳 Bayar Sekarang</a>
       </div>
       
-      <div class="contact">
-        <h3>💬 Butuh Bantuan?</h3>
-        <a href="https://wa.me/{{companyPhoneClean}}">📱 WhatsApp</a>
-        <a href="mailto:{{companyEmail}}">📧 Email</a>
+      <div class="qr-code">
+        <p style="margin-top: 0; font-weight: bold;">Atau Scan QR Code Pembayaran:</p>
+        <img src="{{qrCodeImage}}" alt="QR Code Pembayaran" width="180" height="180" style="display: block; margin: 0 auto;">
+      </div>
+      
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #e4e4e7; font-size: 14px;">
+        <strong>Ada kendala? Hubungi Customer Service Kami:</strong><br>
+        📱 WhatsApp: {{companyPhone}}<br>
+        📧 Email: {{companyEmail}}
       </div>
     </div>
     
     <div class="footer">
-      <p><strong>{{companyName}}</strong></p>
-      <p>© 2025 - Halaman ini dibuat otomatis oleh sistem</p>
+      <p>Copyright &copy; 2026 <strong>{{companyName}}</strong>. All Rights Reserved.</p>
     </div>
   </div>
-  
+
   <script>
+    // Refresh halaman otomatis setiap 5 menit (300.000 ms)
     setTimeout(function() { location.reload(); }, 300000);
   </script>
 </body>
 </html>`,
       variables: {
-        username: 'Username PPPoE',
         customerName: 'Nama pelanggan',
+        username: 'Username PPPoE',
         expiredDate: 'Tanggal expired',
-        rateLimit: 'Rate limit bandwidth',
-        paymentLink: 'URL link pembayaran',
-        qrCodeImage: 'URL image QR code',
-        companyName: 'Nama perusahaan',
-        companyPhone: 'No telepon dengan format (0895...)',
-        companyPhoneClean: 'No telepon tanpa karakter (62895...)',
-        companyEmail: 'Email perusahaan'
+        paymentLink: 'Link pembayaran tagihan',
+        qrCodeImage: 'URL QR Code Image',
+        companyPhone: 'Nomor WhatsApp CS',
+        companyEmail: 'Email Perusahaan',
+        companyName: 'Nama ISP / Perusahaan',
       },
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 
   // Update company to use default templates
-  await prisma.company.updateMany({
+  await db.company.updateMany({
     where: {
       OR: [
         { isolationWhatsappTemplateId: null },
         { isolationEmailTemplateId: null },
-        { isolationHtmlTemplateId: null }
-      ]
+        { isolationHtmlTemplateId: null },
+      ],
     },
     data: {
       isolationWhatsappTemplateId: 'isolation-wa-default',
       isolationEmailTemplateId: 'isolation-email-default',
-      isolationHtmlTemplateId: 'isolation-html-default'
-    }
+      isolationHtmlTemplateId: 'isolation-html-default',
+    },
   });
 
   console.log('✅ Isolation templates seeded successfully!');

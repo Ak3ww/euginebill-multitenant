@@ -20,7 +20,18 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 28, 2026 — v2.40.91: Live Production WhatsApp & Isolation Template Seeding Sync and Strict Verification Rule)
+
+- **Hard Invariant: Live Database Verification Rule (/learn)**:
+  - Dilarang berasumsi atau mengarang template pesan WhatsApp/Isolir dari file seed lokal lama. Ketika ada permintaan sinkronisasi dari database live server utama (`EugineBill_radius`), agen AI WAJIB meminta query/export database atau data langsung dari user.
+- **Hard Invariant: 100% Production Template Parity (`prisma/seeds/whatsapp-templates.ts`, `prisma/seeds/isolation-templates.ts`)**:
+  - Seluruh 33 template WhatsApp (`invoice-created`, `invoice-overdue`, `payment-received`, `ticket-created`, `manual-extension`, `voucher-payment-link`, `promo-offer`, dll.) dan 3 template isolir (`isolation-wa-default`, `isolation-email-default`, `isolation-html-default`) diselaraskan 100% dengan database live production VPS server utama.
+  - Setiap template menyertakan footer resmi: `📱 Aplikasi Pelanggan: {{link_download_aplikasi}}` dan `📢 WA Channel Info & Promo: https://whatsapp.com/channel/0029Vb80GhZ1CYoX3FVC4m2v`.
+- **Hard Invariant: SaaS Tenant Baseline Provisioning (`src/server/services/saas/provisioning.service.ts`)**:
+  - Setiap tenant baru yang dibuat melalui `TenantProvisioningService.createTenant` otomatis di-seed dengan 33 template notifikasi WhatsApp, 3 template isolir, master permission matrix, master katalog inventaris, template dokumen SPK/BA, dan aturan penomoran transaksi.
+
 ### Recent Patch Log (September 28, 2026 — v2.40.90: Setup Wizard Step 11 Technician Provisioning & Portal Login Resolution)
+
 
 - **Hard Invariant: Technician Provisioning Endpoint (`src/app/setup/page.tsx`, `src/app/api/admin/technicians/route.ts`)**:
   - Pendaftaran akun teknisi di Setup Wizard (Step 11) wajib menargetkan `POST /api/admin/technicians` dengan payload `{ name, username, password, phoneNumber, isActive: true, requireOtp: false }`. Dilarang memanggil `/api/users` yang non-existent.
