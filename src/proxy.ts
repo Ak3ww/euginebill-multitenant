@@ -57,7 +57,7 @@ const PORTAL_SUBDOMAIN_MAP: Record<string, string> = {
   'admin': '/admin',
 };
 
-function applySecurityHeaders(res: NextResponse, tenantSlug?: string): NextResponse {
+function applySecurityHeaders(res: NextResponse, tenantSlug?: string, isHttps = false): NextResponse {
   // X-Frame-Options: Prevents clickjacking attacks
   res.headers.set('X-Frame-Options', 'DENY');
   
@@ -76,19 +76,21 @@ function applySecurityHeaders(res: NextResponse, tenantSlug?: string): NextRespo
     'camera=(), microphone=(), geolocation=(self), interest-cohort=()'
   );
   
-  // Content-Security-Policy
+  // Content-Security-Policy (Permissive for Tailwind CSS + Fonts + Cloudflare)
   const cspDirectives = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
     "script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-    "img-src 'self' data: https: blob:",
+    "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+    "img-src 'self' data: https: http: blob:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://api.fonnte.com https://api.wablas.com https://api.kirimi.id https://cloudflareinsights.com",
+    "connect-src 'self' https: http: https://api.fonnte.com https://api.wablas.com https://api.kirimi.id https://cloudflareinsights.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "object-src 'none'"
+    "object-src 'none'",
+    ...(isHttps ? ["upgrade-insecure-requests"] : [])
   ].join('; ');
   res.headers.set('Content-Security-Policy', cspDirectives);
   
@@ -149,6 +151,10 @@ export default async function proxy(req: NextRequest) {
   const hostname = host.split(':')[0].toLowerCase();
   const hostParts = hostname.split('.');
 
+  const proto = (req.headers.get('x-forwarded-proto') || req.nextUrl.protocol).replace(':', '');
+  const isHttps = proto === 'https';
+  const targetProtocol = isHttps ? 'https:' : 'http:';
+
   const isSystem = pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.startsWith('/favicon');
   const isStaticFile = /\.(ico|png|jpg|jpeg|gif|svg|js|css|woff|woff2|ttf|mp4|webp|json|txt|xml)$/.test(pathname);
   const isStandaloneRoute = 
@@ -174,9 +180,9 @@ export default async function proxy(req: NextRequest) {
         if (!pathname.startsWith('/saas-admin') && !pathname.startsWith('/saas')) {
           const url = req.nextUrl.clone();
           url.pathname = '/saas-admin' + (pathname === '/' ? '' : pathname);
-          url.protocol = 'http:';
+          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url);
-          return applySecurityHeaders(rewriteRes);
+          return applySecurityHeaders(rewriteRes, undefined, isHttps);
         }
       }
     }
@@ -187,9 +193,9 @@ export default async function proxy(req: NextRequest) {
         if (!pathname.startsWith(targetBase)) {
           const url = req.nextUrl.clone();
           url.pathname = targetBase + (pathname === '/' ? '' : pathname);
-          url.protocol = 'http:';
+          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url);
-          return applySecurityHeaders(rewriteRes);
+          return applySecurityHeaders(rewriteRes, undefined, isHttps);
         }
       }
     }
@@ -208,19 +214,19 @@ export default async function proxy(req: NextRequest) {
         if (pathname === '/') {
           const url = req.nextUrl.clone();
           url.pathname = '/admin';
-          url.protocol = 'http:';
+          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url, {
             request: { headers: requestHeaders },
           });
-          return applySecurityHeaders(rewriteRes, detectedTenantSlug);
+          return applySecurityHeaders(rewriteRes, detectedTenantSlug, isHttps);
         } else {
           // Pass x-tenant-slug header through rewrite
           const url = req.nextUrl.clone();
-          url.protocol = 'http:';
+          url.protocol = targetProtocol;
           const rewriteRes = NextResponse.rewrite(url, {
             request: { headers: requestHeaders },
           });
-          return applySecurityHeaders(rewriteRes, detectedTenantSlug);
+          return applySecurityHeaders(rewriteRes, detectedTenantSlug, isHttps);
         }
       }
     }
@@ -300,7 +306,7 @@ export default async function proxy(req: NextRequest) {
   // 3. PASS-THROUGH RESPONSE WITH SECURITY HEADERS
   // ============================================
   const response = NextResponse.next();
-  return applySecurityHeaders(response, detectedTenantSlug);
+  return applySecurityHeaders(response, detectedTenantSlug, isHttps);
 }
 
 export const config = {

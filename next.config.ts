@@ -50,12 +50,13 @@ const nextConfig: NextConfig = {
       "default-src 'self'",
       // Scripts: allow self + inline (Next.js hydration) + Cloudflare analytics
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
-      // Styles: allow self + inline (Tailwind utility classes)
-      "style-src 'self' 'unsafe-inline'",
+      // Styles: allow self + inline (Tailwind utility classes) + fonts + CDNs
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+      "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
       // Images: allow self, data URIs (inline), blob (PDF export), CDN maps
       "img-src 'self' data: blob: https: http:",
-      // Fonts: self + data URIs
-      "font-src 'self' data:",
+      // Fonts: self + data URIs + Google Fonts
+      "font-src 'self' data: https://fonts.gstatic.com",
       // Connections: self + Cloudflare analytics beacon + payment gateways
       "connect-src 'self' https://cloudflareinsights.com https://api.midtrans.com https://api.xendit.co https://sandbox.duitku.com https://passport.duitku.com https://sandbox.tripay.co.id https://tripay.co.id",
       // Frames: hanya self (bukan 'none' agar SweetAlert2 modal bisa inline)
