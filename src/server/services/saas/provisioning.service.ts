@@ -12,8 +12,16 @@ import { promisify } from 'util';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { PrismaClient, TenantStatus } from '@prisma/client';
+import { PrismaClient, TenantStatus, AdminRole } from '@prisma/client';
 import { masterPrisma, getTenantDbUrl, getTenantPrisma, disconnectTenantPrisma } from '@/server/db/tenant-manager';
+import { whatsappTemplates } from '../../../../prisma/seeds/whatsapp-templates';
+import { PERMISSIONS, ROLE_TEMPLATES } from '../../../../prisma/seeds/permissions';
+import {
+  INVENTORY_CATEGORIES,
+  STANDARD_MASTER_ITEMS,
+  NUMBERING_RULES,
+  DOCUMENT_TEMPLATES,
+} from '../../../../prisma/seeds/client-clean-seed';
 
 const execAsync = promisify(exec);
 
@@ -260,9 +268,9 @@ export class TenantProvisioningService {
     info: { name: string; email: string; phone: string | null; slug: string }
   ): Promise<void> {
     // 1. Seed Company
-    const existingCompany = await prismaClient.company.findFirst();
-    if (!existingCompany) {
-      await prismaClient.company.create({
+    let company = await prismaClient.company.findFirst();
+    if (!company) {
+      company = await prismaClient.company.create({
         data: {
           id: randomUUID(),
           name: info.name,
@@ -285,15 +293,162 @@ export class TenantProvisioningService {
       });
     }
 
-    // 2. Seed Default Transaction Categories
+    // 2. Seed Isolation Templates (WhatsApp, Email, HTML Page)
+    await prismaClient.isolationTemplate.upsert({
+      where: { id: 'isolation-wa-default' },
+      update: {},
+      create: {
+        id: 'isolation-wa-default',
+        type: 'whatsapp',
+        name: 'Default WhatsApp Isolation Notice',
+        message: `Halo *{{customerName}}* 👋\n\n⚠️ *AKUN ANDA TELAH DIISOLIR*\n\nAkun internet Anda telah dibatasi karena masa berlangganan telah habis.\n\n📋 *Detail Akun:*\n• ID Pelanggan: {{customerId}}\n• Username: {{username}}\n• Expired: {{expiredDate}}\n\n🔒 *Status Saat Ini:*\n✗ Akses internet dibatasi\n✗ Bandwidth terbatas ({{rateLimit}})\n✓ Bisa login PPPoE\n\n💡 *Cara Mengaktifkan Kembali:*\n1. Lakukan pembayaran tagihan\n2. Logout dan login ulang PPPoE\n3. Akses internet akan aktif otomatis\n\n🔗 *Link Pembayaran:*\n{{paymentLink}}\n\nButuh bantuan?\n📞 {{companyPhone}}\n📧 {{companyEmail}}\n\nTerima kasih,\n*{{companyName}}*`,
+        variables: {
+          customerName: 'Nama pelanggan',
+          username: 'Username PPPoE',
+          expiredDate: 'Tanggal expired',
+          rateLimit: 'Rate limit (misal: 64k/64k)',
+          paymentLink: 'Link untuk pembayaran',
+          companyName: 'Nama perusahaan',
+          companyPhone: 'No telepon perusahaan',
+          companyEmail: 'Email perusahaan',
+        },
+        isActive: true,
+      },
+    });
+
+    await prismaClient.isolationTemplate.upsert({
+      where: { id: 'isolation-email-default' },
+      update: {},
+      create: {
+        id: 'isolation-email-default',
+        type: 'email',
+        name: 'Default Email Isolation Notice',
+        subject: '⚠️ Akun Anda Telah Diisolir - {{username}}',
+        message: `<!DOCTYPE html><html><body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;"><div style="max-width: 600px; margin: 0 auto; padding: 20px;"><div style="background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0;"><h2>⚠️ Akun Anda Telah Diisolir</h2></div><div style="background: #ffffff; padding: 25px; border: 1px solid #e5e7eb;"><p>Halo <strong>{{customerName}}</strong>,</p><p>Akun internet Anda telah dibatasi karena masa berlangganan telah habis pada <strong>{{expiredDate}}</strong>.</p><table width="100%" cellpadding="6"><tr><td width="140"><strong>Username</strong></td><td>{{username}}</td></tr><tr><td><strong>Expired</strong></td><td>{{expiredDate}}</td></tr><tr><td><strong>Rate Limit</strong></td><td>{{rateLimit}}</td></tr></table><div style="text-align: center; margin: 25px 0;"><a href="{{paymentLink}}" style="background: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">💳 Bayar Sekarang</a></div><p>WhatsApp: {{companyPhone}}<br>Email: {{companyEmail}}</p></div></div></body></html>`,
+        variables: {
+          customerName: 'Nama pelanggan',
+          username: 'Username PPPoE',
+          expiredDate: 'Tanggal expired',
+          rateLimit: 'Rate limit',
+          paymentLink: 'URL link untuk pembayaran',
+          companyName: 'Nama perusahaan',
+          companyPhone: 'No telepon perusahaan',
+          companyEmail: 'Email perusahaan',
+        },
+        isActive: true,
+      },
+    });
+
+    await prismaClient.isolationTemplate.upsert({
+      where: { id: 'isolation-html-default' },
+      update: {},
+      create: {
+        id: 'isolation-html-default',
+        type: 'html_page',
+        name: 'Default HTML Landing Page',
+        message: `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Akun Diisolir - {{companyName}}</title><style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; } .card { max-width: 540px; width: 100%; background: #1e293b; border-radius: 16px; border: 1px solid #334155; padding: 32px; text-align: center; } h1 { font-size: 24px; color: #ef4444; margin-bottom: 12px; } p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 20px; } .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; } </style></head><body><div class="card"><h1>Layanan Internet Diisolir</h1><p>Masa berlangganan akun <strong>{{username}}</strong> ({{customerName}}) telah berakhir. Silakan lakukan pembayaran tagihan untuk mengaktifkan kembali layanan.</p><a href="{{paymentLink}}" class="btn">Bayar Tagihan Sekarang</a></div></body></html>`,
+        variables: {
+          username: 'Username PPPoE',
+          customerName: 'Nama pelanggan',
+          expiredDate: 'Tanggal expired',
+          paymentLink: 'URL link pembayaran',
+          companyName: 'Nama perusahaan',
+        },
+        isActive: true,
+      },
+    });
+
+    // Link default isolation templates to company
+    await prismaClient.company.updateMany({
+      where: {
+        OR: [
+          { isolationWhatsappTemplateId: null },
+          { isolationEmailTemplateId: null },
+          { isolationHtmlTemplateId: null },
+        ],
+      },
+      data: {
+        isolationWhatsappTemplateId: 'isolation-wa-default',
+        isolationEmailTemplateId: 'isolation-email-default',
+        isolationHtmlTemplateId: 'isolation-html-default',
+      },
+    });
+
+    // 3. Seed Complete WhatsApp Notification Templates (30 templates)
+    for (const tpl of whatsappTemplates) {
+      await prismaClient.whatsapp_templates.upsert({
+        where: { type: tpl.type },
+        create: {
+          id: tpl.id || randomUUID(),
+          type: tpl.type,
+          name: tpl.name,
+          message: tpl.message,
+          isActive: tpl.isActive !== undefined ? tpl.isActive : true,
+        },
+        update: {
+          name: tpl.name,
+          message: tpl.message,
+          isActive: tpl.isActive !== undefined ? tpl.isActive : true,
+        },
+      });
+    }
+
+    // 4. Seed Permissions & Role Permission Templates
+    for (const perm of PERMISSIONS) {
+      await prismaClient.permission.upsert({
+        where: { key: perm.key },
+        create: {
+          id: randomUUID(),
+          key: perm.key,
+          name: perm.name,
+          category: perm.category,
+          description: perm.description,
+          isActive: true,
+        },
+        update: {
+          name: perm.name,
+          category: perm.category,
+          description: perm.description,
+        },
+      });
+    }
+
+    for (const [role, permissionKeys] of Object.entries(ROLE_TEMPLATES)) {
+      await prismaClient.rolePermission.deleteMany({
+        where: { role: role as AdminRole },
+      });
+
+      for (const key of permissionKeys) {
+        const permission = await prismaClient.permission.findUnique({
+          where: { key },
+        });
+        if (permission) {
+          await prismaClient.rolePermission.create({
+            data: {
+              id: randomUUID(),
+              role: role as AdminRole,
+              permissionId: permission.id,
+            },
+          });
+        }
+      }
+    }
+
+    // 5. Seed Default Transaction Categories (Income & Expense)
     const transactionCategories = [
       { id: 'cat-income-pppoe', name: 'Pembayaran PPPoE', type: 'INCOME', description: 'Tagihan PPPoE Bulanan' },
       { id: 'cat-income-hotspot', name: 'Pembayaran Hotspot', type: 'INCOME', description: 'Penjualan Voucher Hotspot' },
       { id: 'cat-income-instalasi', name: 'Biaya Pasang Baru', type: 'INCOME', description: 'Biaya Instalasi & Registrasi' },
+      { id: 'cat-income-lainnya', name: 'Pendapatan Lain-lain', type: 'INCOME', description: 'Pendapatan dari sumber lain' },
       { id: 'cat-expense-upstream', name: 'Bandwidth & Upstream', type: 'EXPENSE', description: 'Biaya Upstream & Bandwidth' },
       { id: 'cat-expense-gaji', name: 'Gaji Karyawan', type: 'EXPENSE', description: 'Operasional Gaji' },
       { id: 'cat-expense-listrik', name: 'Listrik & Operasional', type: 'EXPENSE', description: 'Biaya Listrik POP' },
       { id: 'cat-expense-hardware', name: 'Hardware & Material', type: 'EXPENSE', description: 'Pembelian Perangkat Jaringan' },
+      { id: 'cat-expense-maintenance', name: 'Maintenance & Repair', type: 'EXPENSE', description: 'Biaya perawatan & perbaikan' },
+      { id: 'cat-expense-sewa', name: 'Sewa Tempat & Tiang', type: 'EXPENSE', description: 'Biaya sewa kantor & tiang' },
+      { id: 'cat-expense-komisi', name: 'Komisi Agen Voucher', type: 'EXPENSE', description: 'Komisi penjualan agen' },
+      { id: 'cat-expense-marketing', name: 'Marketing & Promosi', type: 'EXPENSE', description: 'Promosi & brosur' },
+      { id: 'cat-expense-lainnya', name: 'Operasional Lainnya', type: 'EXPENSE', description: 'Biaya operasional lainnya' },
     ];
 
     for (const cat of transactionCategories) {
@@ -313,17 +468,8 @@ export class TenantProvisioningService {
       });
     }
 
-    // 3. Seed Document Numbering Rules
-    const numberingRules = [
-      { category: 'MOU', pattern: 'MOU/{DEPT}/{ROMAN_MM}/{YYYY}/{SEQ:3}', resetFrequency: 'yearly' },
-      { category: 'FAK', pattern: 'FAK/{DEPT}/{YYYY}{MM}/{SEQ:4}', resetFrequency: 'monthly' },
-      { category: 'KWT', pattern: 'KWT/{YYYY}{MM}/{SEQ:4}', resetFrequency: 'monthly' },
-      { category: 'SJ', pattern: 'SJ/LOG/{ROMAN_MM}/{YYYY}/{SEQ:4}', resetFrequency: 'yearly' },
-      { category: 'BAST', pattern: 'BAST/{DEPT}/{YYYY}/{SEQ:3}', resetFrequency: 'yearly' },
-      { category: 'SPK', pattern: 'SPK/{YYYY}/{SEQ:4}', resetFrequency: 'none' },
-    ];
-
-    for (const rule of numberingRules) {
+    // 6. Seed Document Numbering Rules
+    for (const rule of NUMBERING_RULES) {
       await prismaClient.numberingRule.upsert({
         where: { category: rule.category },
         create: {
@@ -339,19 +485,10 @@ export class TenantProvisioningService {
       });
     }
 
-    // 4. Seed Inventory Categories
-    const invCategories = [
-      { name: 'Hardware Utama (HW)', description: 'Router, Switch, OLT, Server' },
-      { name: 'Customer Equipment (CPE)', description: 'Modem ONT, STB, Access Point' },
-      { name: 'Perangkat Pasif (PAS)', description: 'ODP, ODC, Closure, Splitter' },
-      { name: 'Kabel & Dropcore (CAB)', description: 'Kabel Precon, Dropwire, Patchcord' },
-      { name: 'Konektor & Aksesoris (CON)', description: 'Fast Connector, Adapter SC, Klem' },
-      { name: 'Power & Adaptor (PWR)', description: 'Adaptor 12V, Mini UPS, POE Injector' },
-      { name: 'Alat & Perkakas (TLS)', description: 'Fusion Splicer, Cleaver, Stripper, OPM' },
-    ];
-
-    for (const invCat of invCategories) {
-      await prismaClient.inventoryCategory.upsert({
+    // 7. Seed Inventory Categories & Standard Master Items
+    const categoryMap: Record<string, string> = {};
+    for (const invCat of INVENTORY_CATEGORIES) {
+      const record = await prismaClient.inventoryCategory.upsert({
         where: { name: invCat.name },
         create: {
           name: invCat.name,
@@ -361,6 +498,50 @@ export class TenantProvisioningService {
           description: invCat.description,
         },
       });
+      categoryMap[invCat.code] = record.id;
+    }
+
+    for (const item of STANDARD_MASTER_ITEMS) {
+      const categoryId = categoryMap[item.categoryCode] || null;
+      await prismaClient.inventoryItem.upsert({
+        where: { sku: item.sku },
+        create: {
+          sku: item.sku,
+          name: item.name,
+          categoryCode: item.categoryCode,
+          subCategory: item.subCategory,
+          categoryId,
+          unit: item.unit,
+          isSerialized: item.isSerialized,
+          currentStock: 0,
+          packSize: (item as any).packSize || null,
+          isActive: true,
+        },
+        update: {
+          name: item.name,
+          categoryCode: item.categoryCode,
+          subCategory: item.subCategory,
+          ...(categoryId ? { categoryId } : {}),
+        },
+      });
+    }
+
+    // 8. Seed Document Templates
+    for (const tpl of DOCUMENT_TEMPLATES) {
+      const existing = await prismaClient.documentTemplate.findFirst({
+        where: { category: tpl.category, name: tpl.name },
+      });
+      if (!existing) {
+        await prismaClient.documentTemplate.create({
+          data: {
+            category: tpl.category,
+            name: tpl.name,
+            bodyHtml: tpl.bodyHtml,
+            fieldsSchema: tpl.fieldsSchema,
+            isActive: true,
+          },
+        });
+      }
     }
   }
 

@@ -5,7 +5,7 @@ import { seedSkuDictionary } from './sku-dictionary';
 const prisma = new PrismaClient();
 
 // ── 1. Inventory Categories ──────────────────────────────────────────────────
-const INVENTORY_CATEGORIES = [
+export const INVENTORY_CATEGORIES = [
   { code: 'HW',  name: 'Hardware Utama (HW)', description: 'Router, Switch, OLT, Server' },
   { code: 'CPE', name: 'Customer Equipment (CPE)', description: 'Modem ONT, STB, Access Point' },
   { code: 'PAS', name: 'Perangkat Pasif (PAS)', description: 'ODP, ODC, Closure, Splitter PLC/FBT' },
@@ -19,7 +19,7 @@ const INVENTORY_CATEGORIES = [
 ];
 
 // ── 2. Standard Master Items (7 ONT Vendors & FTTH Consumables) ─────────────
-const STANDARD_MASTER_ITEMS = [
+export const STANDARD_MASTER_ITEMS = [
   // 1. ZTE (ZTEG)
   { sku: 'EMG-CPE-ONT-ZTE-F609V3', name: 'Modem ZTE F609 V3 Gigabit GPON', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
   { sku: 'EMG-CPE-ONT-ZTE-F609V9', name: 'Modem ZTE F609 V9 Dual Band AC', categoryCode: 'CPE', subCategory: 'ONT', unit: 'pcs', isSerialized: true },
@@ -64,7 +64,7 @@ const STANDARD_MASTER_ITEMS = [
 ];
 
 // ── 3. Document Numbering Rules ─────────────────────────────────────────────
-const NUMBERING_RULES = [
+export const NUMBERING_RULES = [
   { category: 'MOU',  pattern: 'MOU/{DEPT}/{ROMAN_MM}/{YYYY}/{SEQ:3}', resetFrequency: 'yearly' },
   { category: 'FAK',  pattern: 'FAK/{DEPT}/{YYYY}{MM}/{SEQ:4}', resetFrequency: 'monthly' },
   { category: 'KWT',  pattern: 'KWT/{YYYY}{MM}/{SEQ:4}', resetFrequency: 'monthly' },
@@ -74,7 +74,7 @@ const NUMBERING_RULES = [
 ];
 
 // ── 4. Document Maker Templates ─────────────────────────────────────────────
-const DOCUMENT_TEMPLATES = [
+export const DOCUMENT_TEMPLATES = [
   {
     category: 'MOU',
     name: 'Template MOU Kerja Sama',
