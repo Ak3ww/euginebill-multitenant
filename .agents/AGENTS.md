@@ -74,10 +74,15 @@ For ALL customer-facing UI development (customer portal, payment pages, public l
    - **Mangle Mandatory**: Wajib pasang TCP MSS Clamping (`/ip firewall mangle add action=change-mss chain=forward comment="TCP-MSS-CLAMPING" new-mss=clamp-to-pmtu passthrough=yes protocol=tcp tcp-flags=syn`) untuk mencegah website/banking timeout di pelanggan PPPoE.
    - **Native Queuing**: Selalu andalkan parameter `rate-limit` pada `/ppp profile` (Simple Queue dinamis otomatis). Hindari queue manual atau mangle packet-mark berlebihan.
 
-## Sub-Agent Parallel Execution Standard
-1. **Always Leverage Sub-Agents (Max 3-4 Sub-Agents)**:
-   - Jika memungkinkan dan task dapat dipecah menjadi beberapa bagian independen (misal: backend API, frontend UI, database audit/seeding, testing/verifikasi), WAJIB memanfaatkan sub-agent secara paralel (maksimal 3-4 sub-agents) agar pekerjaan selesai lebih cepat dan efisien.
-   - Setiap sub-agent diberikan domain kerja yang jelas dan fokus untuk mencegah konflik penulisan file (*race conditions*).
-   - Hasil kerja sub-agent dikonsolidasikan dan diverifikasi secara menyeluruh oleh parent agent sebelum pelaporan ke user.
+## Strict MikroTik Script Parity & Universal RouterOS Standard (ROS 6 & ROS 7)
+1. **100% Identical Script Parity Across Editions**:
+   - Seluruh generator skrip MikroTik di `euginebillv2` (Single-Tenant) dan `euginebill-multitenant` (Multi-Tenant) WAJIB 100% identik dalam hal struktur, sintaks RouterOS, urutan firewall, dan opsi fallback.
+   - Satu-satunya parameter yang dinamis adalah `IP_VPS_BILLING` (sesuai IP VPS Single-Tenant atau Multi-Tenant cluster).
+2. **Mandatory Standard Comment Prefix (`comment="EugineBill - ..."`)**:
+   - Seluruh aturan yang di-generate sistem (`/ip pool`, `/ppp profile`, `/ip firewall address-list`, `/ip firewall nat`, `/ip firewall filter`, `/radius`) WAJIB menyertakan komentar dengan prefix persis `comment="EugineBill - ..."` agar admin dapat melakukan filter regex atau pembersihan masal (`/ip firewall filter remove [find comment~"^EugineBill"]`) tanpa menyentuh aturan firewall lain milik pelanggan.
+3. **Universal ROS 6 & ROS 7 Compatibility**:
+   - Skrip harus berjalan mulus di RouterOS v6 maupun RouterOS v7 tanpa sintaks yang deprecated.
+   - Gunakan format waktu universal `timeout=3s` dan `interim-update=00:05:00` pada konfigurasi RADIUS agar didukung oleh kernel ROS 6 dan ROS 7.
+   - Aturan firewall input untuk port API (`8728, 8729`, `8291`) dan interface VPN tunnel WAJIB selalu dipasang dengan `place-before=0` di urutan teratas agar koneksi Winbox dan API tidak pernah terblokir oleh rule drop di bawahnya.
 
 
