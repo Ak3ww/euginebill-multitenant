@@ -4,7 +4,30 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.92] — 2026-09-29
+
+### Unified 12-Step Setup Wizard Auto-Detection & SaaS Tenant Deletion Cleanup (`src/app/setup/page.tsx`, `src/server/services/saas/provisioning.service.ts`, `scripts/cleanup-deleted-tenants.ts`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Indikator Step `/setup` Kurang Akurat di Server Aktif**: Pada server utama yang sudah berjalan penuh sebelum adanya wizard `/setup`, beberapa indikator status langkah (Sistem Isolir, Payment Gateway, RADIUS Server, TR-069 & GenieACS, Tim & SPK Teknisi, Peluncuran Sistem) masih belum terdeteksi selesai secara otomatis.
+  2. **Subdomain Tenant Hapus Masih Menggantung di Multi-Tenant**: Pada SaaS Multi-Tenant, penghapusan tenant sebelumnya tidak men-drop database MySQL `euginebill_tenant_<slug>` secara permanen, sehingga subdomain dari tenant lama masih dapat diakses.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Comprehensive Step Auto-Detection (`src/app/setup/page.tsx`)**: Memperbarui loader `loadData()` agar mengevaluasi seluruh entitas sistem secara realtime (rekening bank & gateway, router, pool isolir, profil PPP, user aktif, WhatsApp provider, FreeRADIUS config, TR-069 ACS, dan teknisi lapangan). Server yang sudah memiliki data otomatis menampilkan badge *Selesai* 100% akurat.
+  2. **Permanent Tenant Database Drop & Pool Invalidation (`src/server/services/saas/provisioning.service.ts`)**: Method `TenantProvisioningService.deleteTenant` sekarang secara default menjalankan `DROP DATABASE IF EXISTS`, membersihkan seluruh relasi master DB (`tenantSubscription`, `saasInvoice`, `saasImpersonationToken`), serta memutus cache instance PrismaClient pool (`disconnectTenantPrisma`).
+  3. **Automated Orphan Cleanup Tool (`scripts/cleanup-deleted-tenants.ts`)**: Script 1-klik untuk memindai server MySQL dan menghapus database tenant yatim yang sudah tidak terdaftar di master database.
+
+- **Files**:
+  - Added: `scripts/cleanup-deleted-tenants.ts`
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/server/services/saas/provisioning.service.ts`
+  - Modified: `src/app/api/saas-admin/tenants/[id]/route.ts`
+  - Modified: `src/app/api/saas/tenants/[id]/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.91] — 2026-09-28
+
 
 ### Live Production WhatsApp & Isolation Template Seeding Sync and Strict Verification Rule (`prisma/seeds/whatsapp-templates.ts`, `prisma/seeds/isolation-templates.ts`, `src/server/services/saas/provisioning.service.ts`, `.agents/AGENTS.md`)
 

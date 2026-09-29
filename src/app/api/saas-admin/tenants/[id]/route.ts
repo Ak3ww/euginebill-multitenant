@@ -102,21 +102,12 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const tenant = await prisma.tenant.findUnique({
-      where: { id },
-    });
-
-    if (!tenant) {
-      return NextResponse.json({ error: 'Tenant tidak ditemukan.' }, { status: 404 });
-    }
-
-    await prisma.tenant.delete({
-      where: { id },
-    });
+    const { TenantProvisioningService } = await import('@/server/services/saas/provisioning.service');
+    const result = await TenantProvisioningService.deleteTenant(id, true);
 
     return NextResponse.json({
       success: true,
-      message: `Tenant '${tenant.name}' dan seluruh referensi database berhasil dihapus.`,
+      message: result.message,
     });
   } catch (err: any) {
     console.error('[SaaS Tenant DELETE Error]', err);
@@ -126,3 +117,4 @@ export async function DELETE(
     );
   }
 }
+

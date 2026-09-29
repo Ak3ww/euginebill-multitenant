@@ -20,7 +20,17 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 29, 2026 — v2.40.92: Unified 12-Step Setup Wizard Auto-Detection & SaaS Tenant Deletion Cleanup)
+
+- **Hard Invariant: Setup Wizard Realtime Entity Detection (`src/app/setup/page.tsx`)**:
+  - `loadData()` pada `/setup` mengevaluasi status kelulusan 12 langkah secara akurat dan realtime dari database (Profil ISP, WireGuard/L2TP VPN Client, Router MikroTik, Sistem Isolir, Profil PPP, User PPPoE, Rekening Bank & Payment Gateways, WhatsApp Provider, RADIUS Direct API / Server, TR-069 ACS, dan Teknisi Lapangan).
+  - Server aktif yang sudah memiliki data tidak akan menampilkan langkah sebagai "belum selesai" lagi.
+- **Hard Invariant: Permanent SaaS Tenant Deletion & Drop Database (`src/server/services/saas/provisioning.service.ts`, `scripts/cleanup-deleted-tenants.ts`)**:
+  - Penghapusan tenant SaaS via API / admin dashboard WAJIB menjalankan `DROP DATABASE IF EXISTS \`euginebill_tenant_<slug>\``, menghapus seluruh relasi subscription & invoice, dan memutus pool instance Prisma Client (`disconnectTenantPrisma`).
+  - Disediakan script `npx tsx scripts/cleanup-deleted-tenants.ts` untuk membersihkan database tenant yatim dari MySQL.
+
 ### Recent Patch Log (September 28, 2026 — v2.40.91: Live Production WhatsApp & Isolation Template Seeding Sync and Strict Verification Rule)
+
 
 - **Hard Invariant: Live Database Verification Rule (/learn)**:
   - Dilarang berasumsi atau mengarang template pesan WhatsApp/Isolir dari file seed lokal lama. Ketika ada permintaan sinkronisasi dari database live server utama (`EugineBill_radius`), agen AI WAJIB meminta query/export database atau data langsung dari user.

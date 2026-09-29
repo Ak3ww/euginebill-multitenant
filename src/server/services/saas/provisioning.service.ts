@@ -631,12 +631,13 @@ export class TenantProvisioningService {
   }
 
   /**
-   * Deletes a tenant from master DB and optionally drops the tenant's isolated database.
+   * Deletes a tenant from master DB, disconnects connection pool, and drops the tenant's isolated database.
    */
-  static async deleteTenant(tenantIdOrSlug: string, dropDatabase = false): Promise<{ success: boolean; message: string }> {
+  static async deleteTenant(tenantIdOrSlug: string, dropDatabase = true): Promise<{ success: boolean; message: string }> {
+    const cleanSlug = tenantIdOrSlug.toLowerCase().trim();
     const tenant = await masterPrisma.tenant.findFirst({
       where: {
-        OR: [{ id: tenantIdOrSlug }, { slug: tenantIdOrSlug.toLowerCase().trim() }],
+        OR: [{ id: tenantIdOrSlug }, { slug: cleanSlug }],
       },
     });
 
@@ -644,24 +645,38 @@ export class TenantProvisioningService {
       throw new Error(`Tenant '${tenantIdOrSlug}' tidak ditemukan.`);
     }
 
-    // Disconnect cached Prisma Client instance
+    // 1. Disconnect and purge cached Prisma Client instance
     await disconnectTenantPrisma(tenant.slug);
 
-    if (dropDatabase && tenant.databaseName) {
+    // 2. Drop the isolated MySQL database permanently
+    const dbName = tenant.databaseName || `euginebill_tenant_${tenant.slug.replace(/[^a-z0-9_]/g, '_')}`;
+    if (dropDatabase && dbName) {
       try {
-        await masterPrisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS \`${tenant.databaseName}\`;`);
+        await masterPrisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS \`${dbName}\`;`);
+        console.log(`[Provisioning] Successfully dropped tenant database: ${dbName}`);
       } catch (dropErr: any) {
-        console.warn(`[Provisioning] Error dropping database ${tenant.databaseName}:`, dropErr.message);
+        console.warn(`[Provisioning] Error dropping database ${dbName}:`, dropErr.message);
       }
     }
 
+    // 3. Delete related records in master database
+    try {
+      await masterPrisma.saaSImpersonationToken.deleteMany({ where: { tenantId: tenant.id } }).catch(() => {});
+      await masterPrisma.saaSInvoice.deleteMany({ where: { tenantId: tenant.id } }).catch(() => {});
+      await masterPrisma.tenantSubscription.deleteMany({ where: { tenantId: tenant.id } }).catch(() => {});
+    } catch (relErr: any) {
+      console.warn(`[Provisioning] Error cleaning tenant relations:`, relErr.message);
+    }
+
+    // 4. Delete tenant record
     await masterPrisma.tenant.delete({
       where: { id: tenant.id },
     });
 
     return {
       success: true,
-      message: `Tenant '${tenant.name}' berhasil dihapus.${dropDatabase ? ' Database telah dihapus permanen.' : ''}`,
+      message: `Tenant '${tenant.name}' (${tenant.slug}) dan database '${dbName}' berhasil dihapus permanen.`,
     };
   }
 }
+

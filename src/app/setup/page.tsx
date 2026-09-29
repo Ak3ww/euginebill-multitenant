@@ -581,24 +581,37 @@ export default function UnifiedSetupWizardPage() {
     async function loadData() {
       setIsLoadingData(true);
       try {
-        const [companyRes, routersRes, usersRes, waRes, profilesRes] = await Promise.allSettled([
+        const [
+          companyRes,
+          routersRes,
+          usersRes,
+          waRes,
+          profilesRes,
+          isolationRes,
+          techsRes,
+          acsRes,
+        ] = await Promise.allSettled([
           fetch('/api/company'),
           fetch('/api/network/routers'),
           fetch('/api/pppoe/users'),
           fetch('/api/whatsapp/providers'),
           fetch('/api/pppoe/profiles'),
+          fetch('/api/settings/isolation'),
+          fetch('/api/admin/technicians'),
+          fetch('/api/acs/settings'),
         ]);
 
         let rCount = 0;
         let uCount = 0;
-        const newCompletedSteps: number[] = [];
+        const newCompletedSteps: number[] = [0]; // Step 0 (Initialized) is always done if isInitialized
+
+        let companyData: any = null;
 
         if (companyRes.status === 'fulfilled' && companyRes.value.ok) {
           const cData = await companyRes.value.json();
+          companyData = cData;
           if (cData) {
             setRadiusEnabled(Boolean(cData.radiusEnabled));
-            const defaultNames = ['PT Eugine Solusi Internet', 'EugineBill RADIUS', 'EugineBill', ''];
-            const isCustomizedCompany = Boolean(cData.name && !defaultNames.includes(cData.name.trim()));
             setCompanyForm((prev) => ({
               ...prev,
               name: cData.name || prev.name,
@@ -608,13 +621,40 @@ export default function UnifiedSetupWizardPage() {
               address: cData.address || prev.address,
               email: cData.email || prev.email,
             }));
-            if (isCustomizedCompany) {
+            
+            // Step 1: Profil ISP
+            if (cData.name && cData.name.trim().length > 0) {
               setCompanySaved(true);
               newCompletedSteps.push(1);
+            }
+
+            // Step 4: Sistem Isolir (jika ada pool isolir atau profile isolir)
+            if (cData.isolationIpPool || cData.isolateProfileName || cData.isolationEnabled !== null) {
+              newCompletedSteps.push(4);
+            }
+
+            // Step 7: Payment Gateway (jika rekening bank terdaftar)
+            const bankAccounts = Array.isArray(cData.bankAccounts) ? cData.bankAccounts : [];
+            if (bankAccounts.length > 0) {
+              newCompletedSteps.push(7);
+            }
+
+            // Step 9: RADIUS Server Integration (selesai jika mode local atau radius secret/IP terisi)
+            if (cData.radiusEnabled === false || (cData.radiusEnabled && cData.radiusSecret)) {
+              newCompletedSteps.push(9);
             }
           }
         }
 
+        // Step 4 Fallback via isolation endpoint
+        if (isolationRes.status === 'fulfilled' && isolationRes.value.ok) {
+          const isoData = await isolationRes.value.json();
+          if (isoData?.success && isoData?.data?.isolationIpPool) {
+            newCompletedSteps.push(4);
+          }
+        }
+
+        // Step 3: Routers
         if (routersRes.status === 'fulfilled' && routersRes.value.ok) {
           const rData = await routersRes.value.json();
           const routers: Router[] = rData.routers || (Array.isArray(rData) ? rData : []);
@@ -628,6 +668,7 @@ export default function UnifiedSetupWizardPage() {
           }
         }
 
+        // Step 5: PPPoE Profiles
         if (profilesRes.status === 'fulfilled' && profilesRes.value.ok) {
           const pData = await profilesRes.value.json();
           const profiles = pData.profiles || (Array.isArray(pData) ? pData : []);
@@ -636,6 +677,7 @@ export default function UnifiedSetupWizardPage() {
           }
         }
 
+        // Step 6: Trial / PPPoE Users
         if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
           const uData = await usersRes.value.json();
           const users = uData.users || (Array.isArray(uData) ? uData : []);
@@ -645,14 +687,41 @@ export default function UnifiedSetupWizardPage() {
           }
         }
 
+        // Step 8: WhatsApp Providers
         if (waRes.status === 'fulfilled' && waRes.value.ok) {
           const wData = await waRes.value.json();
           if (Array.isArray(wData) && wData.length > 0) {
             setWaProviders(wData);
             const active = wData.some((p: any) => p.isActive);
             setWaConnected(active);
-            if (active) newCompletedSteps.push(8);
+            if (active || wData.length > 0) newCompletedSteps.push(8);
           }
+        }
+
+        // Step 10: TR-069 & GenieACS
+        if (acsRes.status === 'fulfilled' && acsRes.value.ok) {
+          const acsData = await acsRes.value.json();
+          if (acsData?.success || acsData?.settings) {
+            newCompletedSteps.push(10);
+          }
+        } else if (companyData) {
+          // Default ACS is available out of the box
+          newCompletedSteps.push(10);
+        }
+
+        // Step 11: Teknisi Lapangan
+        if (techsRes.status === 'fulfilled' && techsRes.value.ok) {
+          const tData = await techsRes.value.json();
+          const technicians = Array.isArray(tData?.data) ? tData.data : (Array.isArray(tData) ? tData : []);
+          if (technicians.length > 0) {
+            setTechSaved(true);
+            newCompletedSteps.push(11);
+          }
+        }
+
+        // Step 12: Turnkey Readiness (jika step inti 1, 3, 5, 6 selesai)
+        if (newCompletedSteps.includes(1) && newCompletedSteps.includes(3) && newCompletedSteps.includes(5) && newCompletedSteps.includes(6)) {
+          newCompletedSteps.push(12);
         }
 
         setCompletedSteps(Array.from(new Set(newCompletedSteps)));

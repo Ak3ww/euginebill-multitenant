@@ -166,7 +166,7 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     const { searchParams } = new URL(request.url);
-    const dropDatabase = searchParams.get('dropDatabase') === 'true';
+    const dropDatabase = searchParams.get('dropDatabase') !== 'false';
 
     const result = await TenantProvisioningService.deleteTenant(id, dropDatabase);
 
