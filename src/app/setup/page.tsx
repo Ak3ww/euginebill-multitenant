@@ -5430,26 +5430,38 @@ add chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="radiusSecret">RADIUS Secret (NAS Secret) *</Label>
-                      <Input
-                        id="radiusSecret"
-                        value={radiusForm.radiusSecret}
-                        onChange={(e) => setRadiusForm({ ...radiusForm, radiusSecret: e.target.value })}
-                        placeholder="secret123"
-                      />
+                  {radiusForm.radiusEnabled ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="radiusSecret">RADIUS Secret (NAS Secret) *</Label>
+                        <Input
+                          id="radiusSecret"
+                          value={radiusForm.radiusSecret}
+                          onChange={(e) => setRadiusForm({ ...radiusForm, radiusSecret: e.target.value })}
+                          placeholder="secret123"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="nasIp">NAS IP Address MikroTik *</Label>
+                        <Input
+                          id="nasIp"
+                          value={radiusForm.nasIp}
+                          onChange={(e) => setRadiusForm({ ...radiusForm, nasIp: e.target.value })}
+                          placeholder="10.254.1.2"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="nasIp">NAS IP Address MikroTik *</Label>
-                      <Input
-                        id="nasIp"
-                        value={radiusForm.nasIp}
-                        onChange={(e) => setRadiusForm({ ...radiusForm, nasIp: e.target.value })}
-                        placeholder="10.254.1.2"
-                      />
+                  ) : (
+                    <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-start gap-3">
+                      <Radio className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                      <div className="text-xs space-y-1">
+                        <div className="font-semibold text-foreground">Mode MikroTik Local (Direct API) Aktif</div>
+                        <p className="text-muted-foreground leading-relaxed">
+                          Pelanggan PPPoE dan Voucher Hotspot diautentikasi 100% langsung oleh router MikroTik melalui API lokal (<code className="bg-muted px-1 py-0.5 rounded text-foreground">/ppp/secret</code> dan <code className="bg-muted px-1 py-0.5 rounded text-foreground">/ip/hotspot/user</code>). Konfigurasi secret dan IP server FreeRADIUS tidak diperlukan.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </CardContent>
 
                 <CardFooter className="justify-between border-t border-border pt-4">
