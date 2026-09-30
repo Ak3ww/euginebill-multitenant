@@ -534,17 +534,10 @@ export default function CustomerLoginPage() {
       {/* ── Footer ── */}
       <footer className="relative z-10 text-center py-6 text-xs text-slate-400">
         <p>
-          {footerText && footerText.includes('EugineBill') ? (
-            <>
-              {footerText.split('EugineBill')[0]}
-              <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-[#002c60]">
-                EugineBill
-              </a>
-              {footerText.split('EugineBill')[1]}
-            </>
-          ) : (
-            footerText || `© ${new Date().getFullYear()} ${companyName}. Hak Cipta Dilindungi.`
-          )}
+          &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+          <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-[#002c60]">
+            Eugine Media Group
+          </a>
         </p>
       </footer>
 

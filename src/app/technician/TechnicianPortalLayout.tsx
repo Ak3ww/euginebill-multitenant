@@ -525,9 +525,21 @@ function TechnicianPortalInner({ children }: { children: React.ReactNode }) {
   const { addToast, confirm } = useToast();
 
   const [tech, setTech] = useState<TechnicianData | null>(null);
+  const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    fetch('/api/public/company')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.company?.name) {
+          setCompanyName(data.company.name);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Live clock
   useEffect(() => {
@@ -683,8 +695,21 @@ function TechnicianPortalInner({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         {/* Page Content */}
-        <main className="flex-1 relative z-10 pb-20 lg:pb-6">
-          {children}
+        <main className="flex-1 relative z-10 pb-20 lg:pb-6 flex flex-col justify-between">
+          <div>{children}</div>
+          <footer className="text-center py-6 text-xs text-muted-foreground border-t border-border/40 mt-12 mb-12 lg:mb-0">
+            <p>
+              &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+              <a
+                href="https://euginemediagroup.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline font-semibold text-primary"
+              >
+                Eugine Media Group
+              </a>
+            </p>
+          </footer>
         </main>
 
         {/* Mobile Bottom Navigation Bar */}

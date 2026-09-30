@@ -164,17 +164,10 @@ export default function TechnicianLoginPage() {
 
           {/* Footer */}
           <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-8">
-            {footerText.includes('EugineBill') ? (
-              <>
-                {footerText.split('EugineBill')[0]}
-                <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-blue-600 dark:text-blue-400">
-                  EugineBill
-                </a>
-                {footerText.split('EugineBill')[1]}
-              </>
-            ) : (
-              footerText
-            )}
+            &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+            <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-blue-600 dark:text-blue-400">
+              Eugine Media Group
+            </a>
           </p>
         </div>
       </div>

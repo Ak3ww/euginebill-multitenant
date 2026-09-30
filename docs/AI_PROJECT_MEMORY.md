@@ -20,6 +20,15 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (September 30, 2026 — v2.40.93: Universal Footer Standardization & EMG Branding Hyperlink Integration)
+
+- **Hard Invariant: Universal Standardized Footer Format Across All Portals**:
+  - Format resmi baku: `© {CurrentYear} {companyName} • All Rights Reserved • Powered by Eugine Media Group`.
+  - Teks **Eugine Media Group** WAJIB dirender sebagai hyperlink aktif ke `https://euginemediagroup.com` (`target="_blank" rel="noopener noreferrer"`).
+  - Berlaku di seluruh portal: Admin Portal (`AdminClientLayout.tsx`), Customer Portal (`CustomerClientLayout.tsx`), Technician Portal (`TechnicianPortalLayout.tsx`), Agent Portal (`agent/page.tsx`), Halaman Login seluruh role, Formulir Pendaftaran PSB (`daftar/page.tsx`), E-Voucher (`evoucher/page.tsx`), Download App (`download-app/page.tsx`), Setup Wizard (`setup/page.tsx`), Invoice Web (`InvoiceTemplate.tsx`), Invoice PDF Route (`invoice/[id]/pdf/route.ts`), Manual Invoice PDF (`manual-invoice-pdf.ts`), serta SaaS Multi-Tenant Platform (`saas/page.tsx`, `register/page.tsx`, `saas-admin/layout.tsx`).
+- **Hard Invariant: Deprecation of `/admin/settings/footer` UI**:
+  - Halaman kustomisasi footer dinonaktifkan dari menu navigasi dan di-redirect ke `/admin/settings/company` guna menjaga konsistensi identitas merk di seluruh lini produk.
+
 ### Recent Patch Log (September 29, 2026 — v2.40.92: Unified 12-Step Setup Wizard Auto-Detection & SaaS Tenant Deletion Cleanup)
 
 - **Hard Invariant: Setup Wizard Realtime Entity Detection (`src/app/setup/page.tsx`)**:

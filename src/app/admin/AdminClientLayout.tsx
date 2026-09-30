@@ -361,7 +361,6 @@ const menuGroups: MenuGroup[] = [
         requiredPermission: 'settings.view',
         children: [
           { titleKey: 'nav.company', href: '/admin/settings/company', requiredPermission: 'settings.company' },
-          { titleKey: 'nav.footerSettings', href: '/admin/settings/footer', requiredPermission: 'settings.company' },
           { titleKey: 'nav.database', href: '/admin/settings/database', requiredPermission: 'settings.view' },
           { titleKey: 'nav.security', href: '/admin/settings/security', requiredPermission: 'settings.view' },
           { titleKey: 'nav.cronJobs', href: '/admin/settings/cron', requiredPermission: 'settings.cron' },
@@ -1264,6 +1263,21 @@ function AdminLayoutContent({
 
         {/* Content - with safe area padding */}
         <main className="flex-1 p-3 sm:p-4 md:p-6 animate-in fade-in duration-500 safe-area-inset-bottom">{children}</main>
+
+        {/* Standardized Enterprise Footer */}
+        <footer className="py-4 px-6 border-t border-border/40 text-center text-xs text-muted-foreground bg-card/40">
+          <p>
+            &copy; {new Date().getFullYear()} {company.name || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+            <a
+              href="https://euginemediagroup.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline text-primary font-medium"
+            >
+              Eugine Media Group
+            </a>
+          </p>
+        </footer>
       </div>
 
       {/* Idle Timeout Warning Modal */}

@@ -8,11 +8,20 @@ import { Download, Smartphone, CheckCircle2, ArrowLeft, Globe, Share, PlusSquare
 
 export default function DownloadAppPage() {
   const router = useRouter();
+  const [companyName, setCompanyName] = useState('EUGINE MEDIA GROUP');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
+    fetch('/api/public/company')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.company?.name) {
+          setCompanyName(data.company.name);
+        }
+      })
+      .catch(() => {});
     // Check if iOS
     const ua = window.navigator.userAgent;
     const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
@@ -125,14 +134,14 @@ export default function DownloadAppPage() {
             
             {isIos ? (
               <div className="p-3 bg-background border border-border rounded-xl space-y-1.5">
-                <span className="font-bold text-foreground flex items-center gap-1">🍎 iPhone / iPad (Safari)</span>
+                <span className="font-bold text-foreground flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5 text-primary" /> iPhone / iPad (Safari)</span>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   Tekan ikon <strong>Share <Share className="w-3 h-3 inline" /></strong> di bagian bawah browser, lalu pilih <strong>&quot;Tambah ke Layar Utama&quot; <PlusSquare className="w-3 h-3 inline" /></strong>.
                 </p>
               </div>
             ) : (
               <div className="p-3 bg-background border border-border rounded-xl space-y-1.5">
-                <span className="font-bold text-foreground flex items-center gap-1">🤖 Android (Chrome / Edge)</span>
+                <span className="font-bold text-foreground flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5 text-primary" /> Android (Chrome / Edge)</span>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   Tekan menu titik tiga <strong>(⋮)</strong> di sudut kanan atas browser, lalu pilih <strong>&quot;Install Aplikasi&quot;</strong> atau <strong>&quot;Tambah ke Layar Utama&quot;</strong>.
                 </p>
@@ -144,8 +153,18 @@ export default function DownloadAppPage() {
 
       </div>
 
-      <div className="text-center py-4 text-[10px] font-mono text-muted-foreground">
-        &copy; {new Date().getFullYear()} EugineBill Customer Portal. All rights reserved.
+      <div className="text-center py-4 text-xs text-muted-foreground">
+        <p>
+          &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+          <a
+            href="https://euginemediagroup.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline font-semibold text-primary"
+          >
+            Eugine Media Group
+          </a>
+        </p>
       </div>
 
     </div>

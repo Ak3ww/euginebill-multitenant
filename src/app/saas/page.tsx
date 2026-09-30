@@ -804,12 +804,32 @@ export default function SaaSLandingPage() {
             </div>
             <div>
               <div className="font-bold text-sm tracking-tight">EugineBill SaaS Platform</div>
-              <div className="text-xs text-sky-200/70">Powered by Eugine Media Group</div>
+              <div className="text-xs text-sky-200/70">
+                Powered by{' '}
+                <a
+                  href="https://euginemediagroup.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline font-semibold text-sky-300"
+                >
+                  Eugine Media Group
+                </a>
+              </div>
             </div>
           </div>
 
           <div className="text-xs text-sky-200/70 text-center sm:text-right space-y-1">
-            <p>&copy; {new Date().getFullYear()} EugineBill. All rights reserved.</p>
+            <p>
+              &copy; {new Date().getFullYear()} Eugine Media Group &bull; All Rights Reserved &bull; Powered by{' '}
+              <a
+                href="https://euginemediagroup.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline font-semibold text-sky-300"
+              >
+                Eugine Media Group
+              </a>
+            </p>
             <p>Sistem Billing & Network Management ISP / RT-RW Net Berbasis Cloud.</p>
           </div>
         </div>

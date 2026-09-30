@@ -4,6 +4,43 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.93] — 2026-09-30
+
+### Universal Footer Standardization & EMG Branding Hyperlink Integration Across All Portals (`Admin`, `Customer`, `Technician`, `Agent`, `Invoices`, `Setup`, `SaaS`)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Standardisasi Footer Global**: Footer di seluruh portal (Admin, Pelanggan, Teknisi, Agen, Daftar PSB, E-Voucher, Download App, Setup Wizard, dan Invoice PDF/Web) diseragamkan dengan format resmi `© 2026 {companyName} • All Rights Reserved • Powered by Eugine Media Group`.
+  2. **Direct Hyperlink EMG**: Teks "Eugine Media Group" wajib berupa link aktif yang mengarah ke `https://euginemediagroup.com`.
+  3. **Penghapusan UI Menu `/admin/settings/footer`**: Halaman custom footer settings ditiadakan dan dialihkan (*redirect*) ke `/admin/settings/company` untuk menjaga konsistensi identitas merk.
+  4. **Sinkronisasi Paritas Single-Tenant & Multi-Tenant**: Menjamin standarisasi diterapkan identik pada `c:\EugineBill` dan `C:\EugineBill-multitenant`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Unified Footer Layout**: Menanamkan komponen footer standar di `AdminClientLayout.tsx`, `customer/CustomerClientLayout.tsx`, `technician/TechnicianPortalLayout.tsx`, login pages (`admin`, `customer`, `technician`, `agent`), `daftar/page.tsx`, `evoucher/page.tsx`, `download-app/page.tsx`, `setup/page.tsx`, `register/page.tsx`, `saas/page.tsx`, dan `saas-admin/layout.tsx`.
+  2. **Invoice Engine Standardization**: Memperbarui template invoice web (`src/components/InvoiceTemplate.tsx`), PDF Route API (`src/app/invoice/[id]/pdf/route.ts`), dan Manual Invoice PDF generator (`src/lib/manual-invoice-pdf.ts`).
+  3. **Navigation & Route Cleanup**: Menghapus `nav.footerSettings` dari menu sidebar dan mengubah `src/app/admin/settings/footer/page.tsx` menjadi client-side redirect ke `/admin/settings/company`.
+
+- **Files**:
+  - Modified: `src/app/admin/AdminClientLayout.tsx`
+  - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `src/app/customer/CustomerClientLayout.tsx`
+  - Modified: `src/app/customer/login/page.tsx`
+  - Modified: `src/app/technician/TechnicianPortalLayout.tsx`
+  - Modified: `src/app/technician/login/page.tsx`
+  - Modified: `src/app/agent/page.tsx`
+  - Modified: `src/app/daftar/page.tsx`
+  - Modified: `src/app/evoucher/page.tsx`
+  - Modified: `src/app/download-app/page.tsx`
+  - Modified: `src/app/setup/page.tsx`
+  - Modified: `src/app/register/page.tsx`
+  - Modified: `src/app/saas/page.tsx`
+  - Modified: `src/app/saas-admin/layout.tsx`
+  - Modified: `src/app/admin/settings/footer/page.tsx`
+  - Modified: `src/components/InvoiceTemplate.tsx`
+  - Modified: `src/app/invoice/[id]/pdf/route.ts`
+  - Modified: `src/lib/manual-invoice-pdf.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.92] — 2026-09-29
 
 ### Unified 12-Step Setup Wizard Auto-Detection & SaaS Tenant Deletion Cleanup (`src/app/setup/page.tsx`, `src/server/services/saas/provisioning.service.ts`, `scripts/cleanup-deleted-tenants.ts`)

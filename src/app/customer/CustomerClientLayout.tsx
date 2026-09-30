@@ -594,8 +594,21 @@ function CustomerLayoutInner({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ── Page Content ── */}
-        <div className="flex-1 pb-24 md:pb-8">
-          {children}
+        <div className="flex-1 pb-24 md:pb-8 flex flex-col justify-between">
+          <div>{children}</div>
+          <footer className="text-center py-6 text-xs text-slate-400 border-t border-slate-200/60 mt-12 mb-16 md:mb-0">
+            <p>
+              &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+              <a
+                href="https://euginemediagroup.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline font-semibold text-[#002c60]"
+              >
+                Eugine Media Group
+              </a>
+            </p>
+          </footer>
         </div>
         
         {/* ── Bottom Navigation Dock (Mobile) ── */}

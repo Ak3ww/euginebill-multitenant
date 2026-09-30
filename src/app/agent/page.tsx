@@ -172,17 +172,10 @@ export default function AgentLoginPage() {
 
           {/* Footer */}
           <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-8">
-            {poweredBy.includes('EugineBill') ? (
-              <>
-                {poweredBy.split('EugineBill')[0]}
-                <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-indigo-600 dark:text-indigo-400">
-                  EugineBill
-                </a>
-                {poweredBy.split('EugineBill')[1]}
-              </>
-            ) : (
-              poweredBy
-            )}
+            &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+            <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-indigo-600 dark:text-indigo-400">
+              Eugine Media Group
+            </a>
           </p>
         </div>
       </div>

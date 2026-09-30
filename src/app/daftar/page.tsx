@@ -537,7 +537,10 @@ function DaftarPageInner() {
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-400">
-          Powered by <span className="font-semibold text-slate-600">{poweredBy}</span>
+          &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+          <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-[#002c60]">
+            Eugine Media Group
+          </a>
         </p>
       </div>
 

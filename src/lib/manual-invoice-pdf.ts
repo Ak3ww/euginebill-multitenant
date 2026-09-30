@@ -369,7 +369,7 @@ export async function generateManualInvoicePdfBuffer(
           Dokumen ini diterbitkan secara elektronik &amp; sah tanpa memerlukan tanda tangan basah.
         </div>
         <div style="font-family: monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af;">
-          &copy; 2026 ${companyName} • All Rights Reserved ${poweredBy ? `• Powered by ${poweredBy}` : ''}
+          &copy; 2026 ${companyName} • All Rights Reserved • Powered by Eugine Media Group
         </div>
       </div>
     </div>
@@ -604,7 +604,7 @@ export async function generateManualInvoicePdfBuffer(
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(107, 114, 128);
   doc.text(`Dokumen ini diterbitkan secara elektronik & sah tanpa memerlukan tanda tangan basah.`, 105, 280, { align: 'center' });
-  doc.text(`© 2026 ${companyName} • All Rights Reserved`, 105, 285, { align: 'center' });
+  doc.text(`© 2026 ${companyName} • All Rights Reserved • Powered by Eugine Media Group`, 105, 285, { align: 'center' });
 
   return Buffer.from(doc.output('arraybuffer'));
 }

@@ -256,7 +256,15 @@ export default function InvoiceTemplate({ data }: { data: InvoiceTemplateData })
               Dokumen ini diterbitkan secara elektronik &amp; sah tanpa memerlukan tanda tangan basah.
             </p>
             <p className="font-mono text-[9px] uppercase tracking-wider text-gray-400">
-              © 2026 {data.company.name} • All Rights Reserved{data.company.poweredBy ? ` • Powered by ${data.company.poweredBy}` : ''}
+              &copy; {new Date().getFullYear()} {data.company.name || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+              <a
+                href="https://euginemediagroup.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline font-semibold text-gray-600"
+              >
+                Eugine Media Group
+              </a>
             </p>
           </div>
         </div>

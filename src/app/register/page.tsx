@@ -406,7 +406,17 @@ function RegisterFormContent() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-        &copy; {new Date().getFullYear()} EugineBill SaaS. Powered by Eugine Media Group.
+        <p>
+          &copy; {new Date().getFullYear()} Eugine Media Group &bull; All Rights Reserved &bull; Powered by{' '}
+          <a
+            href="https://euginemediagroup.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline font-semibold text-[#002c60]"
+          >
+            Eugine Media Group
+          </a>
+        </p>
       </footer>
     </div>
   );

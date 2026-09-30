@@ -5923,6 +5923,21 @@ add chain=dstnat src-address-list=isolir protocol=tcp dst-port=443 dst-address=!
           </div>
         </div>
       )}
+
+      {/* Standardized Footer */}
+      <footer className="text-center py-6 text-xs text-muted-foreground border-t border-border/40 mt-12">
+        <p>
+          &copy; {new Date().getFullYear()} {initFormData.companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+          <a
+            href="https://euginemediagroup.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline font-semibold text-primary"
+          >
+            Eugine Media Group
+          </a>
+        </p>
+      </footer>
       </main>
     </div>
   );

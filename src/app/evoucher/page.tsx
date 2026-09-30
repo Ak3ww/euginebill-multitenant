@@ -22,16 +22,18 @@ export default function EVoucherPage() {
   const [purchasing, setPurchasing] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', notificationMethod: 'both' });
-  const [poweredBy, setPoweredBy] = useState('EugineBill RADIUS');
+  const [companyName, setCompanyName] = useState('EUGINE MEDIA GROUP');
+  const [poweredBy, setPoweredBy] = useState('Eugine Media Group');
 
   useEffect(() => { loadProfiles(); loadCompanySettings(); }, []);
 
   const loadCompanySettings = async () => {
     try {
-      const res = await fetch('/api/company');
+      const res = await fetch('/api/public/company');
       if (res.ok) {
         const data = await res.json();
-        if (data.poweredBy) setPoweredBy(data.poweredBy);
+        if (data.company?.name) setCompanyName(data.company.name);
+        if (data.company?.poweredBy) setPoweredBy(data.company.poweredBy);
       }
     } catch (error) { console.error('Load company error:', error); }
   };
@@ -317,8 +319,13 @@ export default function EVoucherPage() {
       </div>
 
       {/* Footer */}
-      <div className="mt-8 py-4 border-t border-primary/30">
-        <p className="text-center text-[10px] text-gray-500">Powered by {poweredBy}</p>
+      <div className="mt-8 py-4 border-t border-border/40 text-center">
+        <p className="text-center text-xs text-muted-foreground">
+          &copy; {new Date().getFullYear()} {companyName || 'EUGINE MEDIA GROUP'} &bull; All Rights Reserved &bull; Powered by{' '}
+          <a href="https://euginemediagroup.com" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold text-primary">
+            Eugine Media Group
+          </a>
+        </p>
       </div>
     </div>
   );

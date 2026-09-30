@@ -177,8 +177,16 @@ export default function SaaSAdminLayout({
             <Globe className="w-3.5 h-3.5 text-blue-400" />
             <span>Multi-Tenant Architecture v2.4 • Dynamic MySQL Isolation & Edge Subdomain</span>
           </div>
-          <div className="text-[11px] text-slate-500">
-            EugineBill SaaS Controller • All rights reserved &copy; {new Date().getFullYear()}
+          <div className="text-[11px] text-slate-400">
+            &copy; {new Date().getFullYear()} Eugine Media Group &bull; All Rights Reserved &bull; Powered by{' '}
+            <a
+              href="https://euginemediagroup.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline font-semibold text-blue-400"
+            >
+              Eugine Media Group
+            </a>
           </div>
         </div>
       </footer>
