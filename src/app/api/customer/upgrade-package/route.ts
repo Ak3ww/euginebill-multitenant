@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import { sendPushToUser } from '@/server/services/notifications/push-templates.service';
 import { rateLimit } from '@/server/middleware/rate-limit';
 import { nowWIB } from '@/lib/timezone';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 // Helper to verify customer token using CustomerSession
 async function verifyCustomerToken(request: NextRequest) {
@@ -171,8 +172,8 @@ export async function POST(request: NextRequest) {
     });
 
     // Generate payment link - use VPS production format
-    const baseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+    const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
     // Update invoice with payment link
     await prisma.invoice.update({

@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
 import Papa from 'papaparse';
 import { randomBytes } from 'crypto';
 import { prisma } from '@/server/db/client';
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 function generatePaymentToken(): string {
   return randomBytes(32).toString('hex');
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Get company info for payment links
     const company = await prisma.company.findFirst();
-    const baseUrl = company?.baseUrl || 'http://localhost:3000';
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || 'http://localhost:3000');
 
     const results: {
       row: number;
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
       // Generate invoice number
       const invoiceNumber = generateInvoiceNumber();
       const paymentToken = generatePaymentToken();
-      const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+      const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
       try {
         await prisma.invoice.create({

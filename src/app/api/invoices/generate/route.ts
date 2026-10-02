@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { randomBytes } from 'crypto';
 import { badRequest, unauthorized } from '@/lib/api-response';
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 /**
  * POST /api/invoices/generate
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch company baseUrl for payment links
     const company = await prisma.company.findFirst({ select: { baseUrl: true, name: true, phone: true } });
-    const baseUrl = company?.baseUrl || 'http://localhost:3000';
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || 'http://localhost:3000');
 
     // Month range for duplicate check: from 1st to last day of targetMonth
     const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
@@ -214,7 +215,7 @@ export async function POST(request: NextRequest) {
         const invoiceId = nanoid();
         const invoiceNumber = generateInvoiceNumber();
         const paymentToken = randomBytes(32).toString('hex');
-        const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+        const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
         await prisma.invoice.create({
           data: {

@@ -4,12 +4,60 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.94] — 2026-10-02
+
+### Strict HTTPS Enforcement for `{{paymentLink}}` & Universal Notification Template Sanitization Across Single-Tenant & Multi-Tenant Platforms
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Protokol HTTP pada Variabel `{{paymentLink}}`**: Pada template pesan WhatsApp dan email, variabel `{{paymentLink}}` sebelumnya rentan memuat URL berawalan `http://` jika `company.baseUrl` atau request header belum berawalan `https://`. Hal ini memicu peringatan keamanan di browser pelanggan saat membuka link pembayaran `/pay/[token]`.
+  2. **Konsistensi di Seluruh Titik Pembuatan Tagihan**: Seluruh service backend (pembuatan invoice reguler, invoice aktivasi PSB, invoice SPK teknisi, auto-renewal pelanggan, extend billing, generate massal, dan broadcast invoice) wajib secara ketat membungkus dan memformat `paymentLink` serta `baseUrl` dengan protokol `https://`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Universal HTTPS Helper (`ensureHttpsUrl`)**: Memanfaatkan helper `ensureHttpsUrl` dari `@/lib/utils` untuk secara ketat mengubah format `http://` menjadi `https://` (dengan pengecualian lingkungan pengembangan `localhost`/`127.0.0.1`).
+  2. **WhatsApp Template Renderer Sanitizer (`whatsapp-templates.service.ts`)**:
+     - Memastikan `paymentLink`, `payment_link`, `paymentUrl`, `qrCode`, dan `downloadAppUrl` selalu melalui `ensureHttpsUrl`.
+     - Menambahkan regex post-sanitizer pada `renderTemplate` untuk secara otomatis mengganti tautan `http://.../pay/...` menjadi `https://.../pay/...` sebelum dikirimkan melalui WhatsApp Baileys.
+  3. **Backend Service & Route Handlers Update**:
+     - `src/server/jobs/voucher-sync.ts` & `src/server/jobs/auto-isolation.ts`
+     - `src/server/services/activation.service.ts` & `src/server/services/pppoe.service.ts`
+     - `src/server/services/notifications/email.service.ts` & `whatsapp-templates.service.ts`
+     - `src/app/api/invoices/route.ts`, `src/app/api/invoices/generate/route.ts`, `src/app/api/invoices/send-reminder/route.ts`
+     - `src/app/api/admin/users/[id]/renewal/route.ts`, `src/app/api/customer/renewal/route.ts`, `src/app/api/customer/upgrade-package/route.ts`
+     - `src/app/api/pppoe/users/[id]/extend/route.ts`, `src/app/api/pppoe/users/send-notification/route.ts`
+     - `src/app/api/technician/work-orders/[id]/complete/route.ts`, `src/app/api/admin/work-orders/[id]/route.ts`, `src/app/api/admin/package-changes/route.ts`
+     - `src/app/api/admin/invoices/import/route.ts`, `src/app/api/evoucher/purchase/route.ts`, `src/app/api/payment/create/route.ts`, `src/app/api/whatsapp/broadcast-invoice/route.ts`
+  4. **100% Multi-Tenant Parity**: Seluruh pembaruan disinkronkan secara identik ke `C:\EugineBill-multitenant` dan lolos kompilasi `tsc --noEmit` dengan 0 error.
+
+- **Files**:
+  - Modified: `src/server/services/notifications/whatsapp-templates.service.ts`
+  - Modified: `src/server/services/notifications/email.service.ts`
+  - Modified: `src/server/services/activation.service.ts`
+  - Modified: `src/server/services/pppoe.service.ts`
+  - Modified: `src/server/jobs/voucher-sync.ts`
+  - Modified: `src/app/api/whatsapp/broadcast-invoice/route.ts`
+  - Modified: `src/app/api/invoices/route.ts`
+  - Modified: `src/app/api/invoices/generate/route.ts`
+  - Modified: `src/app/api/invoices/send-reminder/route.ts`
+  - Modified: `src/app/api/admin/users/[id]/renewal/route.ts`
+  - Modified: `src/app/api/customer/renewal/route.ts`
+  - Modified: `src/app/api/customer/upgrade-package/route.ts`
+  - Modified: `src/app/api/pppoe/users/[id]/extend/route.ts`
+  - Modified: `src/app/api/pppoe/users/send-notification/route.ts`
+  - Modified: `src/app/api/technician/work-orders/[id]/complete/route.ts`
+  - Modified: `src/app/api/admin/work-orders/[id]/route.ts`
+  - Modified: `src/app/api/admin/package-changes/route.ts`
+  - Modified: `src/app/api/admin/invoices/import/route.ts`
+  - Modified: `src/app/api/evoucher/purchase/route.ts`
+  - Modified: `src/app/api/payment/create/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.93] — 2026-09-30
 
 ### Universal Footer Standardization & EMG Branding Hyperlink Integration Across All Portals (`Admin`, `Customer`, `Technician`, `Agent`, `Invoices`, `Setup`, `SaaS`)
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
-  1. **Standardisasi Footer Global**: Footer di seluruh portal (Admin, Pelanggan, Teknisi, Agen, Daftar PSB, E-Voucher, Download App, Setup Wizard, dan Invoice PDF/Web) diseragamkan dengan format resmi `© 2026 {companyName} • All Rights Reserved • Powered by Eugine Media Group`.
+  1. **Standardisasi Footer Global**: Footer di seluruh portal (Admin, Pelanggan, Teknisi, Agen, Daftar PSB, E-Voucher, Download App, Setup Wizard, dan Invoice PDF/Web) perlu diseragamkan dengan format resmi `© 2026 {companyName} • All Rights Reserved • Powered by Eugine Media Group`.
   2. **Direct Hyperlink EMG**: Teks "Eugine Media Group" wajib berupa link aktif yang mengarah ke `https://euginemediagroup.com`.
   3. **Penghapusan UI Menu `/admin/settings/footer`**: Halaman custom footer settings ditiadakan dan dialihkan (*redirect*) ke `/admin/settings/company` untuk menjaga konsistensi identitas merk.
   4. **Sinkronisasi Paritas Single-Tenant & Multi-Tenant**: Menjamin standarisasi diterapkan identik pada `c:\EugineBill` dan `C:\EugineBill-multitenant`.
@@ -31,9 +79,6 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Modified: `src/app/evoucher/page.tsx`
   - Modified: `src/app/download-app/page.tsx`
   - Modified: `src/app/setup/page.tsx`
-  - Modified: `src/app/register/page.tsx`
-  - Modified: `src/app/saas/page.tsx`
-  - Modified: `src/app/saas-admin/layout.tsx`
   - Modified: `src/app/admin/settings/footer/page.tsx`
   - Modified: `src/components/InvoiceTemplate.tsx`
   - Modified: `src/app/invoice/[id]/pdf/route.ts`
@@ -110,68 +155,60 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.40.89] — 2026-09-28
 
-### Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution (`src/app/setup/page.tsx`, `src/server/services/mikrotik/*`, `src/app/api/settings/isolation/*`)
+### Inventory Master Units Customization, Conditional PackUnit Toggle & SKU Consolidation (`src/app/admin/inventory/items/page.tsx`, `src/app/api/inventory/items/route.ts`)
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
-  1. **Paket PPPoE Tidak Tersinkron ke Router**: Pada wizard Step 5 dan CRUD profil paket, paket tersimpan di database MySQL namun belum secara otomatis dipasang ke `/ppp/profile` MikroTik RouterOS API.
-  2. **Error Pembuatan Akun Pelanggan Trial (Step 6)**: Terjadi error `"Gagal membuat akun pelanggan"` karena `profileId` tidak disertakan dalam payload, dan API menolak request tanpa fallback resolusi nama paket.
-  3. **Verifikasi & Diagnostik Sistem Isolasi (Step 4)**: Pengguna membutuhkan verifikasi langsung apakah aturan firewall isolir sudah aktif di router client, tombol 1-click push tanpa perlu copy-paste terminal secara manual, serta standardisasi prefix komentar `EugineBill - ` pada seluruh rule.
+  1. **Duplikasi Kategori & Sub-Kategori**: Database inventory memiliki kategori ganda hasil variasi seeding (CNS vs CON, CBL vs CAB, HDW vs HW), menyebabkan redudansi kode SKU dan sub-kategori.
+  2. **Kustomisasi Satuan Master (Base Unit & Pack Unit)**: Admin memerlukan fleksibilitas memilih satuan standar atau mengetik satuan baru secara bebas dengan rekomendasi cepat (*pills*).
+  3. **Satuan Kemasan Bersyarat (Conditional Pack Unit)**: Input *Satuan Kemasan (Pack Unit)* dan *Isi per Kemasan (Pack Size)* harus disembunyikan secara default dan hanya dimunculkan jika opsi *"Memiliki Satuan Kemasan / Grosir"* diceklis oleh admin.
+  4. **Fleksibilitas SKU Prefix**: Prefix SKU tidak terikat pada "EMG" saja, melainkan bebas diisi oleh admin/perusahaan lain, atau di-generate otomatis mengikuti inisial ISP (`company.customerIdPrefix`).
 
 - **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Isolation Synchronization & Diagnostic Service (`src/server/services/mikrotik/isolation-sync.service.ts`)**:
-     - `pushIsolationToRouter`: Pemasangan otomatis IP pool `pool-isolir`, PPP profile `isolir`, address-list whitelist payment gateways, firewall filter rules, dan DST-NAT redirect port 80/443 dengan komentar seragam berprefix `EugineBill - `.
-     - `verifyIsolationOnRouter`: Endpoint diagnostik realtime yang memvalidasi 5 komponen isolir dan mengembalikan checklist status `ok`, `warning`, atau `missing`.
-  2. **API Endpoints (`src/app/api/settings/isolation/push-router`, `src/app/api/settings/isolation/verify-router`)**:
-     - Menyediakan gateway REST API untuk integrasi 1-click push dan live verification dari antarmuka Wizard & Admin Settings.
-  3. **Auto-Sync RouterOS PPP Profile (`src/server/services/mikrotik/ppp-secret.service.ts` & `src/app/api/pppoe/profiles/route.ts`)**:
-     - Menambahkan fungsi `syncProfileToRouter` dan `syncProfileToAllRouters` pada `PPPSecretService`.
-     - Otomatis mengeksekusi `/ppp/profile/add` atau `/ppp/profile/set` ke router MikroTik saat paket PPPoE baru dibuat (POST) atau diupdate (PUT).
-  4. **Robust Customer Profile Resolution (`src/app/api/pppoe/users/route.ts` & `src/server/services/pppoe.service.ts`)**:
-     - Menambahkan intelligent profile resolution: Jika `profileId` tidak dikirim, sistem secara otomatis mencocokkan `profileName`, `groupName`, atau mengambil profil aktif pertama.
-     - Memperbaiki payload `handleSaveCustomer` di `src/app/setup/page.tsx` dengan menyertakan `profileId` dan `profileName`.
-  5. **Enhanced Step 4 UI (`src/app/setup/page.tsx`)**:
-     - Action bar ganda: Tombol **"Pasang Otomatis ke Router"** dan **"Uji Status Isolir"**.
-     - Diagnostic status banner dan 5 checklist cards interaktif.
-     - Generator script RouterOS dengan prefix komentar `EugineBill - ` yang identik 100% dengan aturan API.
+  1. **Automated Audit & Consolidation Scripts (`scripts/audit-inventory-duplicates.ts`, `scripts/cleanup-inventory-duplicates.ts`)**: Script 1-klik untuk mengaudit, menggabungkan barang duplikat (menggabungkan riwayat movement, aset, dan SPK), menghapus kategori kosong, serta menyinkronkan kamus `sku_category_codes` dan `sku_sub_category_codes`.
+  2. **Datalist & Master Units Pills**: Menambahkan HTML5 `<datalist>` terintegrasi untuk `unit` dan `packUnit` yang menggabungkan daftar default ISP dengan satuan unik yang ada di database, dilengkapi tombol klik cepat (*quick select pills*).
+  3. **Conditional Pack Unit Checkbox**: Menambahkan toggle `hasPackUnit`. Jika tidak dicentang, input kemasan disembunyikan dan nilai `packUnit`/`packSize` dikirim `null` secara bersih.
+  4. **Backend Persistence Alignment (`src/app/api/inventory/items/route.ts`)**: Memperbaiki method `POST` dan `PUT` agar `packUnit` tersimpan secara presisi ke tabel `inventory_items` di MySQL.
 
 - **Files**:
-  - Added: `src/server/services/mikrotik/isolation-sync.service.ts`
-  - Added: `src/app/api/settings/isolation/push-router/route.ts`
-  - Added: `src/app/api/settings/isolation/verify-router/route.ts`
-  - Modified: `src/server/services/mikrotik/ppp-secret.service.ts`
-  - Modified: `src/app/api/pppoe/profiles/route.ts`
-  - Modified: `src/app/api/pppoe/users/route.ts`
-  - Modified: `src/app/setup/page.tsx`
+  - Added: `scripts/audit-inventory-duplicates.ts`
+  - Added: `scripts/cleanup-inventory-duplicates.ts`
+  - Modified: `src/app/admin/inventory/items/page.tsx`
+  - Modified: `src/app/api/inventory/items/route.ts`
+  - Modified: `prisma/seeds/sku-dictionary.ts`
+  - Modified: `package.json`
   - Modified: `CHANGELOG.md`
   - Modified: `docs/AI_PROJECT_MEMORY.md`
 
-## [2.40.88] — 2026-09-26
+## [2.40.88] — 2026-09-27
 
-### SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning (`src/app/saas/page.tsx`, `src/app/api/saas/*`)
+### Multi-Tenant SaaS Architecture: Dynamic Contextual Prisma Proxy, 4-Field Self-Registration, In-App Trial Banner & Fresh DB Utilities
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
-  1. **SaaS Public Landing Page**: Diperlukan landing page SaaS publik berstandar Hallmark Design dengan tema Oceanic Blue (`#002c60`, `#1b437c`) untuk memasarkan layanan Cloud Billing & Network Management ISP / RT-RW Net EugineBill.
-  2. **Interaktivitas Paket & Harga**: Daftar harga transparan dengan toggle bulanan/tahunan (diskon 20%) dan 3 tier paket (Starter, Pro, Enterprise).
-  3. **Alur Pendaftaran Trial 7 Hari**: Form pendaftaran interaktif dengan pengecekan ketersediaan subdomain instan secara debounce dan animasi simulasi provisioning database terisolasi.
-  4. **Strict No Emojis & Indonesian Professional Copy**: Menggunakan komponen ikon resmi `Lucide React` di seluruh elemen visual dan copywriting bahasa Indonesia yang profesional tanpa teks buatan/jargon palsu.
+  1. **Simplifikasi Registrasi Tenant Baru**: Calon pengguna SaaS menginginkan alur pendaftaran 4-field yang ringkas (Nama Lengkap, Email, WhatsApp +62, Password) tanpa harus memilih paket di depan atau mengisi subdomain manual.
+  2. **In-App License & Subscription Lifecycle**: Pemilihan paket berlangganan (Starter, Pro, Enterprise) dan Whitelabel Add-On dipindahkan ke dalam dashboard billing. Tenant otomatis mendapatkan 7-Day Free Trial aktif penuh. Jika lisensi berakhir, dashboard beralih ke Read-Only Mode.
+  3. **Multi-Tenant Contextual Routing & Database Isolation**: Mengisolasi database per-tenant (`euginebill_tenant_<slug>`) secara transparan tanpa mengubah puluhan file handler API dengan Dynamic Prisma Proxy.
+  4. **Pembersihan Database & Fresh Reset**: Kebutuhan script 1-klik untuk mengosongkan seluruh tenant dan menghapus database tenant MySQL di server.
 
 - **Solusi Arsitektural & Perubahan Teknis**:
-  1. **Landing Page SaaS Komprehensif (`src/app/saas/page.tsx`)**:
-     - *Hero Section*: Pengumuman rilis v2.40, badge versi, headline, deskripsi manfaat, tombol aksi CTA ganda (Coba Gratis 7 Hari & Demo Sandbox), 4 trust badges, dan kartu showcase dashboard interaktif.
-     - *Feature Highlights Grid*: 6 modul unggulan (MikroTik API & Dynamic Ports, FreeRADIUS 3.x, WhatsApp Bot Otomatis, Cetak Voucher Hotspot Kilat, TR-069 GenieACS ONT Management, dan Integrasi Payment Gateway Lengkap).
-     - *Interactive Price List*: 3 paket berlangganan dengan toggle billing cycle bulanan/tahunan dan kartu Pro berlabel "Paling Populer & Rekomendasi".
-     - *Interactive Modal Pendaftaran Trial*: Form pendaftaran dengan realtime validation, visual status subdomain, dan progress stepper multi-langkah sebelum redirect ke halaman setup tenant.
-     - *Pilar Keamanan & FAQ Accordion*: 4 badge keamanan arsitektur data terisolasi dan daftar pertanyaan umum interaktif.
-  2. **Subdomain Checker API (`src/app/api/saas/check-subdomain/route.ts`)**: Endpoint verifikasi ketersediaan dan format slug subdomain tenant.
-  3. **SaaS Registration API (`src/app/api/saas/register/route.ts`)**: Endpoint penanganan registrasi trial dengan validasi kredensial dan pemetaan redirect URL tenant.
-  4. **Dokumentasi Teknis (`docs/saas/SAAS_LANDING_AND_TRIAL.md`)**: Panduan arsitektur dan kontrak API SaaS.
+  1. **Dynamic Contextual Prisma Proxy (`src/server/db/client.ts` & `tenant-manager.ts`)**: Prisma client dibungkus dalam proxy cerdas yang mendeteksi request header (`x-tenant-slug`, `host`) untuk mengarahkan query ORM secara dinamis ke database tenant terisolasi yang sesuai dengan LRU connection pooling.
+  2. **4-Field Self-Registration (`src/app/register/page.tsx`)**: Form registrasi ringkas dengan auto slug derivation, visual provisioning stepper animation, dan redirect otomatis ke portal tenant (`http://<slug>.euginemediagroup.site/admin/login`).
+  3. **In-App Subscription Hook & Top Banner (`src/components/saas/TenantLicenseBanner.tsx`)**: Menampilkan sisa hari trial, status paket aktif, atau banner expired read-only dengan tombol perpanjang modal.
+  4. **Fresh Multi-Tenant Reset Script (`scripts/fresh-master-db.ts`)**: Script otomasi untuk menghapus semua database tenant `euginebill_tenant_*` dan menginisialisasi ulang master subscription plans.
 
 - **Files**:
-  - Added: `src/app/saas/page.tsx`
-  - Added: `src/app/api/saas/register/route.ts`
-  - Added: `src/app/api/saas/check-subdomain/route.ts`
-  - Added: `docs/saas/SAAS_LANDING_AND_TRIAL.md`
+  - Added: `scripts/fresh-master-db.ts`
+  - Added: `src/components/saas/TenantLicenseBanner.tsx`
+  - Added: `src/components/saas/TenantUpgradeModal.tsx`
+  - Added: `src/hooks/useTenantSubscription.ts`
+  - Added: `src/app/api/admin/subscription/route.ts`
+  - Added: `src/app/register/page.tsx`
+  - Modified: `src/app/admin/AdminClientLayout.tsx`
   - Modified: `src/app/admin/login/page.tsx`
+  - Modified: `src/app/saas/page.tsx`
+  - Modified: `src/server/db/client.ts`
+  - Modified: `src/server/db/tenant-manager.ts`
+  - Modified: `src/proxy.ts`
+  - Modified: `package.json`
   - Modified: `CHANGELOG.md`
   - Modified: `docs/AI_PROJECT_MEMORY.md`
 

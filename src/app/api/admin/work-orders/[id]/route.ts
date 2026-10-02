@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { checkAuth } from '@/server/middleware/api-auth';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,14 +158,14 @@ export async function PUT(req: Request, props: { params: Promise<{ id: string }>
 
       if (invoice) {
         const company = await prisma.company.findFirst();
-        const appBaseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || '';
+        const appBaseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || '');
 
-        let paymentLink = invoice.paymentLink || '';
+        let paymentLink = invoice.paymentLink ? ensureHttpsUrl(invoice.paymentLink) : '';
         let paymentToken = invoice.paymentToken || '';
         if (!paymentLink || !paymentToken) {
           const { randomBytes } = await import('crypto');
           paymentToken = paymentToken || randomBytes(32).toString('hex');
-          paymentLink = `${appBaseUrl}/pay/${paymentToken}`;
+          paymentLink = ensureHttpsUrl(`${appBaseUrl}/pay/${paymentToken}`);
           await prisma.invoice.update({
             where: { id: invoice.id },
             data: { paymentLink, paymentToken },

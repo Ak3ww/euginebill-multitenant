@@ -1,8 +1,9 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { randomBytes, randomUUID } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 function generatePaymentToken(): string {
   return randomBytes(32).toString('hex');
@@ -68,7 +69,7 @@ export async function POST(
 
     // Create invoice for renewal
     const company = await prisma.company.findFirst();
-    const baseUrl = company?.baseUrl || 'http://localhost:3000';
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || 'http://localhost:3000');
 
     // Generate invoice number with retry for uniqueness
     const year = now.getFullYear();
@@ -103,7 +104,7 @@ export async function POST(
 
     // Generate payment token and link
     const paymentToken = generatePaymentToken();
-    const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+    const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
     // Create invoice with retry on duplicate
     let invoice;

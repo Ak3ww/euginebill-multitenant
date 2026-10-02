@@ -13,6 +13,7 @@ import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cy
 import crypto, { randomBytes, randomUUID } from 'crypto';
 import { PPPSecretService } from '@/server/services/mikrotik/ppp-secret.service';
 import { detectOntVendorAndModel } from '@/lib/olt/ont-detector';
+import { ensureHttpsUrl } from '@/lib/utils';
 import type { NextRequest } from 'next/server';
 import type { Session } from 'next-auth';
 
@@ -531,7 +532,7 @@ export async function createPppoeUser(
 
       const invoiceId = crypto.randomUUID();
       const invoiceNumber = generateInvoiceNumber();
-      const baseUrl = companyConfig?.baseUrl || 'http://localhost:3000';
+      const baseUrl = ensureHttpsUrl(companyConfig?.baseUrl || 'http://localhost:3000');
       
       // Installation invoice due date: future-safe (at least 2 days from now)
       const daysToAdd = parseInt(String((data as any).installationDueDateDays || 2)) || 2;
@@ -542,7 +543,7 @@ export async function createPppoeUser(
       installationDueDate.setHours(23, 59, 59, 999);
 
       const paymentToken = randomBytes(32).toString('hex');
-      const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+      const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
       await prisma.invoice.create({
         data: {

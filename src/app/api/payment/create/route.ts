@@ -6,6 +6,7 @@ import { createDuitkuClient } from '@/server/services/payment/duitku.service';
 import { createTripayClient } from '@/server/services/payment/tripay.service';
 import { createQrinClient } from '@/server/services/payment/qrin.service';
 import { rateLimit, RateLimitPresets } from '@/server/middleware/rate-limit';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,11 +145,13 @@ export async function POST(request: NextRequest) {
     const _proto = request.headers.get('x-forwarded-proto') || 'http';
     const _host = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
     const _inferred = _host ? `${_proto}://${_host}` : '';
-    const appBaseUrl = (companyForBase?.baseUrl && !companyForBase.baseUrl.includes('localhost'))
-      ? companyForBase.baseUrl
-      : (_inferred && !_inferred.includes('localhost'))
-        ? _inferred
-        : companyForBase?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appBaseUrl = ensureHttpsUrl(
+      (companyForBase?.baseUrl && !companyForBase.baseUrl.includes('localhost'))
+        ? companyForBase.baseUrl
+        : (_inferred && !_inferred.includes('localhost'))
+          ? _inferred
+          : companyForBase?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    );
 
     let paymentUrl = '';
     let snapToken = '';
@@ -452,7 +455,7 @@ async function createVoucherPayment(order: any, gateway: string, paymentMethod?:
 
   // Get base URL for return redirect
   const company = await prisma.company.findFirst();
-  const baseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
   
   if (gateway === 'midtrans') {
     try {

@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/server/db/client';
 import { formatWIB } from '@/lib/timezone';
+import { ensureHttpsUrl } from '@/lib/utils';
 const nodemailer = require('nodemailer');
 
 export interface EmailOptions {
@@ -762,7 +763,7 @@ export const EmailService = {
         dueDate: dueDateStr,
         daysRemaining: daysRemaining.toString(),
         daysOverdue: daysOverdue.toString(),
-        paymentLink: data.paymentLink,
+        paymentLink: ensureHttpsUrl(data.paymentLink),
         bankAccounts: this.formatBankAccountsForEmail(companySettings?.bankAccounts),
         companyName: data.companyName,
         companyPhone: data.companyPhone,
@@ -1106,7 +1107,7 @@ export const EmailService = {
         invoiceNumber: data.invoiceNumber,
         totalAmount: data.totalAmount,
         dueDate: data.dueDate,
-        paymentLink: data.paymentLink,
+        paymentLink: ensureHttpsUrl(data.paymentLink),
         subscriptionType: data.subscriptionType,
       });
 
@@ -1127,7 +1128,7 @@ export const EmailService = {
             ? `Rp ${data.totalAmount.toLocaleString('id-ID')}`
             : `Rp ${data.installationFee.toLocaleString('id-ID')}`,
           dueDate: data.dueDate ? formatDate(data.dueDate) : '-',
-          paymentLink: data.paymentLink || '',
+          paymentLink: ensureHttpsUrl(data.paymentLink),
           paymentToken: data.paymentToken || '',
           baseUrl: company?.baseUrl || '',
           bankAccounts: this.formatBankAccountsForEmail(company?.bankAccounts),
@@ -1219,7 +1220,7 @@ export const EmailService = {
               
               ${data.paymentLink ? `
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${data.paymentLink}" style="display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;">Bayar Sekarang</a>
+                <a href="${ensureHttpsUrl(data.paymentLink)}" style="display: inline-block; padding: 15px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold;">Bayar Sekarang</a>
               </div>
               ` : ''}
               

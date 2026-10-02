@@ -5,6 +5,7 @@ import { createXenditInvoice } from '@/server/services/payment/xendit.service';
 import { createDuitkuClient } from '@/server/services/payment/duitku.service';
 import { createTripayClient } from '@/server/services/payment/tripay.service';
 import { sendPackageUpgradeApproval } from '@/server/services/notifications/whatsapp-templates.service';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     // Get Base URL
     const company = await prisma.company.findFirst();
-    const appBaseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appBaseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
 
     if (activeGateway) {
       try {
@@ -258,7 +259,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const checkoutUrl = paymentUrl || `${appBaseUrl}/pay/${paymentToken}`;
+    const rawCheckoutUrl = paymentUrl || `${appBaseUrl}/pay/${paymentToken}`;
+    const checkoutUrl = ensureHttpsUrl(rawCheckoutUrl);
 
     // Update invoice with payment link
     await prisma.invoice.update({

@@ -8,6 +8,8 @@ import { randomBytes } from 'crypto';
 import { WhatsAppService } from '@/server/services/notifications/whatsapp.service';
 import { EmailService } from '@/server/services/notifications/email.service';
 
+import { ensureHttpsUrl } from '@/lib/utils';
+
 interface BroadcastInvoiceRequest {
   invoiceIds: string[];
   channel?: 'whatsapp' | 'email' | 'both'; // Optional, defaults to 'both'
@@ -29,6 +31,11 @@ function renderTemplate(template: string, variables: Record<string, string>): st
     rendered = rendered.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'gi'), value ?? '');
     rendered = rendered.replace(new RegExp(`\\{${escapedKey}\\}`, 'gi'), value ?? '');
   }
+  // Post-processing safety: enforce HTTPS on any payment or portal URLs
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/pay\/[^\s]+)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/download-app[^\s]*)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/isolated[^\s]*)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/invoice\/[^\s]+)/gi, 'https://$1');
   return rendered;
 }
 
@@ -103,7 +110,7 @@ export async function POST(request: NextRequest) {
     if (invoicesWithoutLink.length > 0) {
       await Promise.all(invoicesWithoutLink.map(async (inv) => {
         const paymentToken = randomBytes(32).toString('hex');
-        const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+        const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
         await prisma.invoice.update({ where: { id: inv.id }, data: { paymentToken, paymentLink } });
         inv.paymentLink = paymentLink; // mutate in-memory so map below picks it up
       }));
@@ -172,6 +179,8 @@ export async function POST(request: NextRequest) {
             ? (waOverdueTemplate?.message || waReminderTemplate?.message)
             : (waReminderTemplate?.message || waOverdueTemplate?.message);
 
+          const resolvedPaymentLink = ensureHttpsUrl(invoice.paymentLink || (invoice.paymentToken ? `${baseUrl}/pay/${invoice.paymentToken}` : '-'));
+
           let message: string;
           if (templateContent) {
             const variables: Record<string, string> = {
@@ -185,9 +194,9 @@ export async function POST(request: NextRequest) {
               dueDate: dueDateStr,
               daysRemaining: String(Math.max(0, daysRemaining)),
               daysOverdue: String(daysOverdue),
-              paymentLink: invoice.paymentLink || '-',
-              invoiceWebLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invoice/${invoice.invoiceNumber}`,
-              invoicePdfLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invoice/${invoice.invoiceNumber}`,
+              paymentLink: resolvedPaymentLink,
+              invoiceWebLink: ensureHttpsUrl(`${baseUrl}/invoice/${invoice.invoiceNumber}`),
+              invoicePdfLink: ensureHttpsUrl(`${baseUrl}/invoice/${invoice.invoiceNumber}`),
               bankAccounts: bankAccountsText,
               companyName: company.name || '-',
               companyPhone: company.phone || '-',
@@ -196,7 +205,7 @@ export async function POST(request: NextRequest) {
             message = renderTemplate(templateContent, variables);
           } else {
             // Ultimate fallback - no template in DB
-            message = `📄 *Tagihan Internet*\n\nHalo *${targetName}*,\n\nNo. Invoice: *${invoice.invoiceNumber}*\nJumlah: *Rp ${invoice.amount.toLocaleString('id-ID')}*\nJatuh Tempo: *${dueDateStr}*\n${invoice.paymentLink ? `\nBayar: ${invoice.paymentLink}` : ''}\n\n${company.name}`;
+            message = `📄 *Tagihan Internet*\n\nHalo *${targetName}*,\n\nNo. Invoice: *${invoice.invoiceNumber}*\nJumlah: *Rp ${invoice.amount.toLocaleString('id-ID')}*\nJatuh Tempo: *${dueDateStr}*\n${resolvedPaymentLink !== '-' ? `\nBayar: ${resolvedPaymentLink}` : ''}\n\n${company.name}`;
           }
 
           return {
@@ -214,6 +223,14 @@ export async function POST(request: NextRequest) {
 
       if (messagesToSend.length > 0) {
         console.log(`[Invoice Broadcast] Sending WhatsApp to ${messagesToSend.length} customers`);
+
+        const reminderSettings = await prisma.whatsapp_reminder_settings.findFirst().catch(() => null);
+        const configuredBatchSize = typeof reminderSettings?.batchSize === 'number' && reminderSettings.batchSize > 0
+          ? reminderSettings.batchSize
+          : 10;
+        const configuredBatchDelaySec = typeof reminderSettings?.batchDelay === 'number' && reminderSettings.batchDelay > 0
+          ? reminderSettings.batchDelay
+          : 120;
 
         const { sendWithRateLimit } = await import('@/lib/utils/rateLimiter');
 

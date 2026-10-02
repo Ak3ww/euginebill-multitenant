@@ -4,6 +4,7 @@ import { authOptions } from '@/server/auth/config';
 import { prisma } from '@/server/db/client';
 import { WhatsAppService } from '@/server/services/notifications/whatsapp.service';
 import { EmailService } from '@/server/services/notifications/email.service';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
               });
               const invNumber = `INV-${year}${month}-${String(count + 1).padStart(4, '0')}`;
               const token = crypto.randomUUID();
-              const baseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+              const baseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
               const dueDate = user.expiredAt || new Date(Date.now() + 7 * 24 * 3600 * 1000);
 
               targetInvoice = await prisma.invoice.create({
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
                   customerPhone: user.phone,
                   customerUsername: user.username,
                   paymentToken: token,
-                  paymentLink: `${baseUrl}/pay/${token}`,
+                  paymentLink: ensureHttpsUrl(`${baseUrl}/pay/${token}`),
                 }
               });
             } catch (invErr: any) {
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
             nominal: amountFormatted,
             dueDate: new Date(targetInvoice.dueDate).toLocaleDateString('id-ID'),
             customerEmail: user.email || '',
-            paymentLink: targetInvoice.paymentLink || `${company?.baseUrl || ''}/pay/${targetInvoice.paymentToken}`,
+            paymentLink: ensureHttpsUrl(targetInvoice.paymentLink || `${company?.baseUrl || ''}/pay/${targetInvoice.paymentToken}`),
             additionalMessage: additionalMessage || '',
           };
         } else if (notificationType === 'payment') {

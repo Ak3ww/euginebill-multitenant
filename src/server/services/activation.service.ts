@@ -1,6 +1,7 @@
 import { prisma } from '@/server/db/client';
 import crypto from 'crypto';
 import { sendRegistrationApproval } from '@/server/services/notifications/whatsapp-templates.service';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export async function activateAndBillUser(userId: string) {
   const user = await prisma.pppoeUser.findUnique({
@@ -104,9 +105,9 @@ export async function activateAndBillUser(userId: string) {
     invoiceAmount = Math.round(baseAmount + (baseAmount * taxRate / 100));
   }
 
-  const baseUrl = companyInfo?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = ensureHttpsUrl(companyInfo?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
   const paymentToken = crypto.randomBytes(32).toString('hex');
-  const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+  const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
   const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const invoice = await prisma.invoice.create({

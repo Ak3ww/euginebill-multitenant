@@ -108,7 +108,23 @@ function renderTemplate(template: string, variables: Record<string, any>): strin
     companyWebsite: variables.companyWebsite || baseUrl,
   };
 
-  const merged = { ...defaultVars, ...variables };
+  const merged: Record<string, any> = { ...defaultVars, ...variables };
+
+  // Explicitly guarantee all critical URL variables are ALWAYS HTTPS
+  const resolvedPaymentLink = ensureHttpsUrl(variables.paymentLink || variables.payment_link || variables.paymentUrl || paymentLink);
+  merged.paymentLink = resolvedPaymentLink;
+  merged.payment_link = resolvedPaymentLink;
+  merged.paymentUrl = resolvedPaymentLink;
+  merged.qrCode = ensureHttpsUrl(variables.qrCode || variables.qrCodeImage || qrCode || resolvedPaymentLink);
+  merged.qrCodeImage = merged.qrCode;
+  merged.link_download_aplikasi = ensureHttpsUrl(variables.link_download_aplikasi || variables.link_download_apk || variables.link_download_app || variables.download_app_link || variables.appDownloadLink || variables.appDownloadUrl || downloadAppUrl);
+  merged.link_download_apk = merged.link_download_aplikasi;
+  merged.link_download_app = merged.link_download_aplikasi;
+  merged.download_app_link = merged.link_download_aplikasi;
+  merged.appDownloadLink = merged.link_download_aplikasi;
+  merged.appDownloadUrl = merged.link_download_aplikasi;
+  merged.baseUrl = ensureHttpsUrl(variables.baseUrl || baseUrl);
+  merged.isolatedUrl = ensureHttpsUrl(variables.isolatedUrl || `${baseUrl}/isolated?username=${encodeURIComponent(variables.username || '')}`);
 
   for (const [key, value] of Object.entries(merged)) {
     if (!key) continue;
@@ -123,6 +139,12 @@ function renderTemplate(template: string, variables: Record<string, any>): strin
   // Fallback: replace bare words like "expiredat" or "expired_at" if written without brackets in custom templates
   rendered = rendered.replace(/\bexpiredat\b/gi, formattedDate);
   rendered = rendered.replace(/\bexpired_at\b/gi, formattedDate);
+
+  // Post-processing safety: convert any remaining http:// URLs pointing to payment or portal endpoints into https://
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/pay\/[^\s]+)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/download-app[^\s]*)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/isolated[^\s]*)/gi, 'https://$1');
+  rendered = rendered.replace(/http:\/\/([^\s/$.?#].[^\s]*\/invoice\/[^\s]+)/gi, 'https://$1');
 
   return rendered;
 }

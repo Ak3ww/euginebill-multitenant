@@ -10,15 +10,23 @@
 
 **EugineBill Radius** adalah sistem billing & network management ISP/RTRW.NET berbasis web dengan integrasi FreeRADIUS 3.x, MikroTik Local Auth Mode, Built-in WireGuard & L2TP VPN Server, ONT Remote Proxy, Native WhatsApp Baileys Bot, dan Multi-Portal PWA.
 
-- **Version**: 2.40.89
-- **Status**: Commercial Turnkey & Multi-Tenant SaaS Release (Ready to Rent / Sell as Managed Single-Tenant VPS or Cloud Multi-Tenant)
-- **Last Updated**: September 28, 2026
+- **Version**: 2.40.87
+- **Status**: Commercial Turnkey Release (Ready to Rent / Sell as Managed Single-Tenant VPS)
+- **Last Updated**: September 26, 2026
 - **GitHub**: https://github.com/Ak3ww/euginebillv2 (public)
 - **Turnkey 1-Command Installer**: `curl -fsSL https://raw.githubusercontent.com/Ak3ww/euginebillv2/main/scripts/install.sh | sudo bash`
 
 ---
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
+
+### Recent Patch Log (October 02, 2026 — v2.40.94: Strict HTTPS Enforcement for `{{paymentLink}}` & Universal Notification Template Sanitization)
+
+- **Hard Invariant: Strict HTTPS Protocol on `{{paymentLink}}` & Notification URLs**:
+  - Semua variabel `{{paymentLink}}`, `{{payment_link}}`, `{{paymentUrl}}`, `{{qrCode}}`, dan tautan pembayaran `/pay/[token]` yang dikirim via WhatsApp Baileys maupun Email WAJIB selalu menggunakan protokol `https://` (menggunakan helper `ensureHttpsUrl(...)` dari `@/lib/utils`, kecuali `localhost`/`127.0.0.1` saat pengujian lokal).
+  - Tautan pada `renderTemplate` di `src/server/services/notifications/whatsapp-templates.service.ts` dilengkapi regex post-sanitizer otomatis `http://([^\s/$.?#].[^\s]*\/pay\/[^\s]+)` -> `https://$1` untuk mencegah keluarnya URL HTTP jika konfigurasi `baseUrl` di database belum HTTPS.
+  - Seluruh generator invoice (`voucher-sync.ts`, `activation.service.ts`, `pppoe.service.ts`, `/api/invoices`, `/api/customer/renewal`, `/api/admin/users/[id]/renewal`, dll.) wajib membungkus pembuatan `paymentLink` dengan `ensureHttpsUrl(...)`.
+  - Paritas 100% identik diterapkan antara `c:\EugineBill` (Single-Tenant) dan `C:\EugineBill-multitenant` (Multi-Tenant).
 
 ### Recent Patch Log (September 30, 2026 — v2.40.93: Universal Footer Standardization & EMG Branding Hyperlink Integration)
 
@@ -61,25 +69,30 @@
 - **Hard Invariant: Universal Code & Script Parity Across Editions**:
   - Seluruh script MikroTik dan endpoint auth wajib memiliki 100% kesamaan struktural antara `euginebillv2` dan `euginebill-multitenant`.
 
-### Recent Patch Log (September 28, 2026 — v2.40.89: Automated 1-Click Isolation Push, Live Verification Diagnostic Checklist, RouterOS Auto-Sync for PPPoE Profiles, and Customer Onboarding Resolution)
+### Recent Patch Log (September 28, 2026 — v2.40.89: Inventory Master Units Customization, Conditional PackUnit Toggle & SKU Consolidation)
 
-- **Hard Invariant: Isolation Rule Standard & Prefix Uniformity (`src/server/services/mikrotik/isolation-sync.service.ts`)**:
-  - Seluruh komentar aturan firewall isolir (`/ip pool`, `/ppp profile`, `/ip firewall address-list`, `/ip firewall nat`, `/ip firewall filter`) WAJIB diawali dengan prefix persis `comment="EugineBill - ..."` agar admin dan script dapat melakukan filter regex atau bulk remove (`/ip firewall filter remove [find comment~"^EugineBill"]`) secara aman tanpa menyentuh aturan firewall existing milik pengguna.
-  - Endpoint `POST /api/settings/isolation/push-router` dan `POST /api/settings/isolation/verify-router` menyediakan sinkronisasi otomatis dan verifikasi diagnostik 5 poin (Pool, Profile, Whitelist, NAT, Filter) langsung ke MikroTik via API.
+- **Hard Invariant: Inventory Master Units & Conditional PackUnit (`src/app/admin/inventory/items/page.tsx`, `src/app/api/inventory/items/route.ts`)**:
+  - Kolom Satuan Utama (`unit`) dan Satuan Kemasan (`packUnit`) menggunakan HTML5 `<datalist>` dinamis + rekomendasi tombol cepat (*pills*), memungkinkan admin memilih dari master atau mengetik bebas (*free-text*).
+  - Field Satuan Kemasan (`packUnit`) dan Isi per Kemasan (`packSize`) bersyarat: hanya muncul jika checkbox *"Memiliki Satuan Kemasan / Grosir (Pack, Box, Dus, Roll)"* dicentang (`hasPackUnit = true`). Jika tidak dicentang, payload dikirim `null` secara bersih.
+  - Prefix SKU tidak terikat "EMG" (contoh bawaan seed); sistem mengizinkan admin mengisi format SKU perusahaan sendiri, atau otomatis di-generate menggunakan inisial ISP (`company.customerIdPrefix`).
+- **Hard Invariant: Automated Inventory & SKU Dictionary Consolidation (`scripts/cleanup-inventory-duplicates.ts`)**:
+  - Menggabungkan duplikasi barang consumable dan kabel dropcore tanpa merusak relasi histori (movements, aset fisik, dan SPK).
+  - Menghapus kategori kosong pada `inventory_categories` dan membersihkan kode redundan (`CNS`, `CBL`, `HDW`, `ACC`) pada kamus `sku_category_codes` dan `sku_sub_category_codes`.
 
-- **Hard Invariant: Automated RouterOS PPPoE Profile Sync (`src/server/services/mikrotik/ppp-secret.service.ts`, `src/app/api/pppoe/profiles/route.ts`)**:
-  - Setiap pembuatan (`POST`) atau pembaruan (`PUT`) paket PPPoE pada database web billing WAJIB secara otomatis mengeksekusi sinkronisasi `/ppp/profile` ke MikroTik RouterOS API (`PPPSecretService.syncProfileToAllRouters`). Hal ini menjamin profil tarif dan rate-limit langsung ada di MikroTik saat secret pelanggan dibuat.
+### Recent Patch Log (September 27, 2026 — v2.40.88: Multi-Tenant SaaS Architecture: Dynamic Contextual Prisma Proxy, 4-Field Register, In-App Trial Banner & Fresh DB Utilities)
 
-- **Hard Invariant: Intelligent Customer Profile Resolution (`src/app/api/pppoe/users/route.ts`, `src/app/setup/page.tsx`)**:
-  - Pembuatan akun pelanggan PPPoE (`POST /api/pppoe/users`) mendukung resolusi cerdas `profileId` melalui fallback nama paket (`profileName`), nama grup (`groupName`), atau profil aktif pertama jika client tidak menyertakan `profileId` secara eksplisit.
-
-### Recent Patch Log (September 26, 2026 — v2.40.88: SaaS Landing Page with 7-Day Free Trial, Interactive Price List & Multi-Tenant Provisioning)
-
-- **Hard Invariant: Hallmark Oceanic Blue Design System (`src/app/saas/page.tsx`)**:
-  - Halaman SaaS publik wajib menggunakan palet warna Oceanic Blue (`#002c60`, `#1b437c`) dengan hairline borders (`#e2e8f0` / `border-slate-200`) dan tipografi roman bersih (dilarang menggunakan italic header).
-  - DILARANG KERAS menggunakan teks emoji/emotikon di seluruh teks UI; seluruh ikon grafis WAJIB menggunakan `Lucide React` (`<Wifi />`, `<Server />`, `<Zap />`, `<CheckCircle2 />`, `<ShieldCheck />`, `<Radio />`, dll.).
-  - Formulir pendaftaran trial 7 hari (`Coba Gratis 7 Hari`) terintegrasi langsung dengan debounce checker ketersediaan subdomain (`/api/saas/check-subdomain`) dan alur simulasi provisioning database multi-langkah (`/api/saas/register`).
-  - Section harga menyediakan switch interaktif Bulanan vs Tahunan (Hemat 20%) dengan 3 tingkatan paket: *Starter* (Rp 99.000), *Pro* (Rp 249.000, Paling Populer & Rekomendasi), dan *Enterprise* (Rp 499.000).
+- **Hard Invariant: Dynamic Contextual Prisma Proxy (`src/server/db/client.ts` & `src/server/db/tenant-manager.ts`)**:
+  - Semua operasi Prisma pada backend dialihkan secara dinamis melalui Proxy ES6. Proxy mendeteksi header `x-tenant-slug` atau hostname subdomain (`<slug>.domain.com`) untuk merutekan query ke instance `PrismaClient` database tenant terisolasi (`euginebill_tenant_<slug>`).
+  - Dilengkapi in-memory LRU connection pooling (kapasitas 50 client bersamaan) agar server VPS hemat memori dan terhindar dari koneksi bocor.
+- **Hard Invariant: 4-Field Registration & Instant Provisioning (`src/app/register/page.tsx`)**:
+  - Calon pelanggan mendaftar hanya dengan 4 field: Nama Lengkap, Email, WhatsApp (+62), Password.
+  - Subdomain dibuat otomatis (unik, kebab-case) dan tenant langsung mendapatkan lisensi 7-Day Active Free Trial.
+  - Selesai inisiasi, user diarahkan langsung ke portal tenant (`http://<slug>.domain.com/admin/login`).
+- **Hard Invariant: In-App License Management & Read-Only Grace Period (`src/components/saas/TenantLicenseBanner.tsx`)**:
+  - Pemilihan paket (Starter / Pro / Enterprise) dan Whitelabel Add-On disajikan di dalam portal admin.
+  - Apabila lisensi/trial habis (`isExpired = true`), dashboard tenant otomatis terkunci dalam mode Read-Only dengan sticky warning banner dan modal pembayaran/upgrade.
+- **Hard Invariant: Multi-Tenant Reset Automation (`scripts/fresh-master-db.ts`)**:
+  - Menjalankan `npx npm run db:fresh:multitenant` akan melakukan drop seluruh database `euginebill_tenant_*` dan mengosongkan tabel tenant di database master secara bersih.
 
 ### Recent Patch Log (September 26, 2026 — v2.40.87: Network Parity: 3-Column Ports Layout, Dynamic Port Forwarding & Smart Shortcut Conditioning)
 

@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto'
 import { startBackupCron, startHealthCron } from './telegram-cron'
 import { nowWIB, formatWIB, startOfDayWIBtoUTC, endOfDayWIBtoUTC } from '@/lib/timezone'
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service'
+import { ensureHttpsUrl } from '@/lib/utils'
 
 let isRunning = false
 let isAutoIsolirRunning = false
@@ -1615,7 +1616,7 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
 
     // Get company settings for invoice generation window
     const company = await prisma.company.findFirst();
-    const baseUrl = company?.baseUrl || 'http://localhost:3000';
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || 'http://localhost:3000');
     const invoiceGenerateDays = company?.invoiceGenerateDays ?? 7;
 
     // ========================================
@@ -1938,7 +1939,7 @@ export async function generateInvoices(force = false): Promise<{ success: boolea
 
         // Generate payment token and link
         const paymentToken = randomBytes(32).toString('hex');
-        const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+        const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
         // Determine invoice status based on due date
         const isOverdue = dueDate < now;

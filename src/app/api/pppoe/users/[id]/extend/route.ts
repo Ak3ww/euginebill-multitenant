@@ -5,6 +5,7 @@ import { prisma } from '@/server/db/client';
 import { generateInvoiceNumber, generateInvoiceId, generateTransactionId, generateCategoryId } from '@/server/services/billing/invoice.service';
 import { calculateNextBillingExpiry, getCycleDueDate } from '@/server/services/billing/billing-cycle.service';
 import crypto from 'crypto';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export async function POST(
   request: NextRequest,
@@ -195,13 +196,15 @@ export async function POST(
       const forwardedProto = request.headers.get('x-forwarded-proto') || 'http';
       const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
       const inferredBase = forwardedHost ? `${forwardedProto}://${forwardedHost}` : '';
-      const baseUrl = (company?.baseUrl && !company.baseUrl.includes('localhost'))
-        ? company.baseUrl
-        : (inferredBase && !inferredBase.includes('localhost'))
-          ? inferredBase
-          : company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const baseUrl = ensureHttpsUrl(
+        (company?.baseUrl && !company.baseUrl.includes('localhost'))
+          ? company.baseUrl
+          : (inferredBase && !inferredBase.includes('localhost'))
+            ? inferredBase
+            : company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      );
       const paymentToken = crypto.randomBytes(32).toString('hex');
-      const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+      const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
       await prisma.invoice.create({
         data: {

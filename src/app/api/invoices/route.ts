@@ -10,6 +10,7 @@ import { randomBytes } from 'crypto';
 import { nanoid } from 'nanoid';
 import { startOfDayWIBtoUTC, endOfDayWIBtoUTC } from '@/lib/timezone';
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/api-response';
+import { ensureHttpsUrl } from '@/lib/utils';
 // Generate secure random token for payment link
 function generatePaymentToken(): string {
   return randomBytes(32).toString('hex');
@@ -501,7 +502,7 @@ export async function POST(request: NextRequest) {
 
     // Generate payment token and link
     const paymentToken = generatePaymentToken();
-    const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+    const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
     const invoice = await prisma.invoice.create({
       data: {

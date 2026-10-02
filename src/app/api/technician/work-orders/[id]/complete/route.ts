@@ -7,6 +7,7 @@ import { sendInstallationInvoice, sendInvoiceReminder, sendPSBReportToGroup } fr
 
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 export async function POST(
   req: NextRequest,
@@ -433,7 +434,7 @@ export async function POST(
     }
 
     const company = await prisma.company.findFirst();
-    const appBaseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || '';
+    const appBaseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || '');
     const isInstallType = wo.issueType?.toUpperCase().includes('INSTAL') || wo.issueType?.toUpperCase() === 'INSTALLATION';
 
     // Auto-create missing installation invoice if customer has no invoice yet upon SPK completion
@@ -469,7 +470,7 @@ export async function POST(
         const invoiceNumber = generateInvoiceNumber();
         const { randomBytes } = await import('crypto');
         const paymentToken = randomBytes(32).toString('hex');
-        const paymentLink = `${appBaseUrl}/pay/${paymentToken}`;
+        const paymentLink = ensureHttpsUrl(`${appBaseUrl}/pay/${paymentToken}`);
 
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 2);
@@ -509,12 +510,12 @@ export async function POST(
 
     if (invoice) {
       // Auto-generate paymentLink and paymentToken if missing
-      let paymentLink = invoice.paymentLink || '';
+      let paymentLink = invoice.paymentLink ? ensureHttpsUrl(invoice.paymentLink) : '';
       let paymentToken = invoice.paymentToken || '';
       if (!paymentLink || !paymentToken) {
         const { randomBytes } = await import('crypto');
         paymentToken = paymentToken || randomBytes(32).toString('hex');
-        paymentLink = `${appBaseUrl}/pay/${paymentToken}`;
+        paymentLink = ensureHttpsUrl(`${appBaseUrl}/pay/${paymentToken}`);
         await prisma.invoice.update({
           where: { id: invoice.id },
           data: { paymentLink, paymentToken },

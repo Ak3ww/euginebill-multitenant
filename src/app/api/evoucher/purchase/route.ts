@@ -1,6 +1,7 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { randomBytes } from 'crypto';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 // Generate secure payment token
 function generatePaymentToken(): string {
@@ -183,11 +184,11 @@ export async function POST(request: NextRequest) {
 
     // Get company base URL for payment link
     const company = await prisma.company.findFirst();
-    const baseUrl = company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
 
     // Generate payment token and link
     const paymentToken = generatePaymentToken();
-    const paymentLink = `${baseUrl}/evoucher/pay/${paymentToken}`;
+    const paymentLink = ensureHttpsUrl(`${baseUrl}/evoucher/pay/${paymentToken}`);
 
     // Create voucher order
     const order = await prisma.voucherOrder.create({

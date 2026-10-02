@@ -5,6 +5,7 @@ import { prisma } from '@/server/db/client'
 import { randomBytes } from 'crypto'
 import { sendInvoiceReminder } from '@/server/services/notifications/whatsapp-templates.service'
 import { EmailService } from '@/server/services/notifications/email.service'
+import { ensureHttpsUrl } from '@/lib/utils'
 
 /**
  * POST /api/invoices/send-reminder - Send invoice reminder via WhatsApp and/or Email
@@ -94,11 +95,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-generate paymentLink if missing (for invoices created without one)
-    let paymentLink = invoice.paymentLink || '';
+    let paymentLink = invoice.paymentLink ? ensureHttpsUrl(invoice.paymentLink) : '';
     if (!paymentLink) {
-      const baseUrl = company.baseUrl || 'http://localhost:3000';
+      const baseUrl = ensureHttpsUrl(company.baseUrl || 'http://localhost:3000');
       const paymentToken = randomBytes(32).toString('hex');
-      paymentLink = `${baseUrl}/pay/${paymentToken}`;
+      paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
       await prisma.invoice.update({
         where: { id: invoice.id },
         data: { paymentToken, paymentLink },

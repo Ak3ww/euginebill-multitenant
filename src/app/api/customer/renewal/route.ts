@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
 import { randomBytes, randomUUID } from 'crypto';
+import { ensureHttpsUrl } from '@/lib/utils';
 
 function generatePaymentToken(): string {
   return randomBytes(32).toString('hex');
@@ -183,8 +184,8 @@ export async function POST(request: NextRequest) {
 
     // Generate payment token and link
     const paymentToken = generatePaymentToken();
-    const baseUrl = company?.baseUrl || 'http://localhost:3000';
-    const paymentLink = `${baseUrl}/pay/${paymentToken}`;
+    const baseUrl = ensureHttpsUrl(company?.baseUrl || 'http://localhost:3000');
+    const paymentLink = ensureHttpsUrl(`${baseUrl}/pay/${paymentToken}`);
 
     // Create invoice with retry on duplicate
     console.log('📄 Creating invoice:', invoiceNumber);
