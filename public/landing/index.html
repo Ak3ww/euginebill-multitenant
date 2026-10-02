@@ -77,20 +77,38 @@
     .services-header { text-align: center; margin-bottom: 64px; }
     .services-title { font-size: clamp(26px,4vw,42px); font-weight: 700; color: var(--color-text-dark); letter-spacing: -0.02em; margin-bottom: 16px; }
     .services-sub { font-size: 16px; color: var(--color-text-muted-dark); max-width: 480px; margin: 0 auto; }
-    .services-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 24px; }
-    .service-card { background: #fff; border-radius: var(--radius-card); overflow: hidden; border: 1px solid var(--color-border-light); transition: var(--transition); box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .services-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 18px; }
+    .service-card { background: #fff; border-radius: var(--radius-card); overflow: hidden; border: 1px solid var(--color-border-light); transition: var(--transition); box-shadow: 0 2px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
     .service-card:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,0.12); border-color: rgba(230,51,41,0.2); }
     .service-card:hover .service-img img { transform: scale(1.05); }
-    .service-img { height: 180px; overflow: hidden; background: #222; }
+    .service-img { height: 150px; overflow: hidden; background: #222; }
     .service-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; display: block; }
-    .service-body { padding: 24px; }
-    .service-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(230,51,41,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .service-body { padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }
+    .service-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(230,51,41,0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
     .service-icon svg { width: 20px; height: 20px; stroke: var(--color-accent); }
-    .service-name { font-size: 16px; font-weight: 700; color: var(--color-text-dark); margin-bottom: 8px; }
-    .service-desc { font-size: 13px; color: var(--color-text-muted-dark); line-height: 1.6; margin-bottom: 20px; }
-    .service-link { font-size: 13px; font-weight: 600; color: var(--color-accent); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: gap var(--transition); }
+    .service-name { font-size: 15px; font-weight: 700; color: var(--color-text-dark); margin-bottom: 8px; }
+    .service-desc { font-size: 12.5px; color: var(--color-text-muted-dark); line-height: 1.55; margin-bottom: 16px; flex-grow: 1; }
+    .service-link { font-size: 13px; font-weight: 600; color: var(--color-accent); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: gap var(--transition); margin-top: auto; }
     .service-link:hover { gap: 10px; }
     .service-link svg { width: 14px; height: 14px; }
+
+    /* EUGINE BILL SHOWCASE */
+    #euginebill { padding: 96px 0; background: var(--color-surface); border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); position: relative; overflow: hidden; }
+    #euginebill::before { content: ''; position: absolute; top: -120px; right: -120px; width: 450px; height: 450px; background: radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%); pointer-events: none; }
+    .eb-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--color-accent-glow); border: 1px solid rgba(230,51,41,0.3); border-radius: var(--radius-pill); padding: 6px 16px; font-size: 11px; font-weight: 700; color: var(--color-accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px; }
+    .eb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 48px 0; }
+    .eb-card { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 28px; transition: var(--transition); display: flex; flex-direction: column; }
+    .eb-card:hover { border-color: rgba(230,51,41,0.35); transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.25); }
+    .eb-card-icon { width: 44px; height: 44px; border-radius: 12px; background: rgba(230,51,41,0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; color: var(--color-accent); }
+    .eb-card-icon svg { width: 22px; height: 22px; }
+    .eb-card-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .eb-card-desc { font-size: 13px; color: var(--color-text-muted); line-height: 1.6; }
+    .eb-banner { background: linear-gradient(135deg, #1f1f1f 0%, #141414 100%); border: 1px solid rgba(230,51,41,0.25); border-radius: var(--radius-card); padding: 36px 40px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; position: relative; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .eb-banner::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--color-accent); }
+    .eb-banner-info { max-width: 620px; }
+    .eb-banner-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .eb-banner-sub { font-size: 14px; color: var(--color-text-muted); line-height: 1.6; }
+    .eb-banner-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
     /* PRICING */
     #harga { padding: 96px 0; background: var(--color-bg); }
@@ -199,10 +217,10 @@
     .footer-powered a { color: var(--color-accent); text-decoration: none; }
 
     /* RESPONSIVE */
-    @media (max-width:1100px) { .pricing-grid { grid-template-columns: repeat(3,1fr); } .pricing-card.popular { transform: none; } .services-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width:1100px) { .pricing-grid { grid-template-columns: repeat(3,1fr); } .pricing-card.popular { transform: none; } .services-grid { grid-template-columns: repeat(3,1fr); } .eb-grid { grid-template-columns: repeat(2,1fr); } }
     @media (max-width:768px) {
       .nav-links,.nav-cta .btn { display: none; } .nav-hamburger { display: block; }
-      .services-grid,.pricing-grid { grid-template-columns: 1fr; }
+      .services-grid,.pricing-grid,.eb-grid { grid-template-columns: 1fr; }
       .pricing-card.popular { transform: none; }
       .stats-grid { grid-template-columns: repeat(2,1fr); }
       .stat-item { border-right: none; border-bottom: 1px solid var(--color-border); }
@@ -212,6 +230,7 @@
       .footer-bottom { flex-direction: column; text-align: center; }
       .cta-contacts { flex-direction: column; gap: 16px; }
       .hero-actions { flex-direction: column; align-items: flex-start; }
+      .eb-banner { flex-direction: column; align-items: flex-start; padding: 24px; }
     }
     @media (max-width:480px) { .stats-grid { grid-template-columns: 1fr; } .stat-item,.stat-item:nth-child(odd) { border-right: none; } }
   </style>
@@ -226,6 +245,7 @@
     </a>
     <ul class="nav-links">
       <li><a href="#services">Layanan</a></li>
+      <li><a href="#euginebill" style="color:var(--color-accent);font-weight:600">Eugine Bill</a></li>
       <li><a href="#harga">Harga</a></li>
       <li><a href="#testimoni">Testimoni</a></li>
       <li><a href="#faq">FAQ</a></li>
@@ -242,6 +262,7 @@
 <div class="nav-mobile" id="mobileNav">
   <button class="nav-mobile-close" id="closeNav">&#x2715;</button>
   <a href="#services">Layanan</a>
+  <a href="#euginebill" style="color:var(--color-accent)">Eugine Bill Platform</a>
   <a href="#harga">Harga</a>
   <a href="#testimoni">Testimoni</a>
   <a href="#faq">FAQ</a>
@@ -307,10 +328,86 @@
         <div class="service-img"><img src="/assets/service_hardware.jpg" alt="Hardware Sales" loading="lazy"/></div>
         <div class="service-body">
           <div class="service-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-          <h3 class="service-name">Hardware Sales &amp; Services</h3>
-          <p class="service-desc">Penjualan dan servis PC, laptop, dan berbagai periferal komputer dengan garansi resmi.</p>
-          <a href="https://wa.me/6285169990995?text=Halo,%20saya%20tertarik%20dengan%20layanan%20Hardware%20Sales%20%26%20Services%20PT.%20Eugine%20Media%20Group" target="_blank" class="service-link">Hubungi Kami <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+          <h3 class="service-name">Hardware Sales</h3>
+          <p class="service-desc">Penjualan dan servis PC, laptop, server, serta periferal komputer bergaransi.</p>
+          <a href="https://wa.me/6285169990995?text=Halo,%20saya%20tertarik%20dengan%20layanan%20Hardware%20Sales%20PT.%20Eugine%20Media%20Group" target="_blank" class="service-link">Hubungi Kami <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
         </div>
+      </div>
+      <div class="service-card reveal" style="border-color: rgba(230,51,41,0.3); background: #161616;">
+        <div class="service-img" style="background: linear-gradient(135deg, #1c0505 0%, #0d0d0d 100%); display:flex; align-items:center; justify-content:center;">
+          <div style="font-weight:800; font-size:24px; color:var(--color-accent); letter-spacing:-0.03em;">Eugine<span style="color:#fff">Bill</span></div>
+        </div>
+        <div class="service-body">
+          <div class="service-icon" style="background: rgba(230,51,41,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <h3 class="service-name" style="color:#fff">Eugine Bill Platform</h3>
+          <p class="service-desc" style="color:var(--color-text-muted)">Software billing ISP &amp; RT-RW Net otomatis. Integrasi MikroTik, FreeRADIUS 3, ACS ONT, Bot WA, &amp; QRIS.</p>
+          <a href="https://euginemediagroup.site" target="_blank" rel="noopener noreferrer" class="service-link">Buka Eugine Bill <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="euginebill">
+  <div class="container">
+    <div class="reveal" style="text-align: center; margin-bottom: 56px;">
+      <div class="eb-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> PRODUK UNGGULAN · ISP &amp; RT-RW NET AUTOMATION</div>
+      <h2 style="font-size: clamp(26px,4vw,44px); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px;">Eugine Bill — Sistem Billing &amp; Otomasi Jaringan</h2>
+      <p style="font-size: 16px; color: var(--color-text-muted); max-width: 680px; margin: 0 auto; line-height: 1.7;">
+        Software all-in-one dari PT. Eugine Media Group untuk pengusaha ISP, RT/RW Net, dan WISP. Kelola MikroTik tak terbatas, isolir otomatis, WhatsApp Bot notifikasi tagihan, FreeRADIUS 3, TR-069 ACS ONT, hingga pembayaran QRIS instan.
+      </p>
+    </div>
+
+    <div class="eb-grid">
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
+        <h3 class="eb-card-title">Native MikroTik &amp; Remote Proxy</h3>
+        <p class="eb-card-desc">Auto proxy port 24000-24999 untuk akses web ONT pelanggan langsung dari browser admin tanpa konfigurasi VPN lokal yang rumit.</p>
+      </div>
+
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3 class="eb-card-title">FreeRADIUS 3.x High-Performance</h3>
+        <p class="eb-card-desc">Dual-mode autentikasi (Direct Local API / FreeRADIUS) dengan CoA disconnect instan dan pemantauan sesi aktif realtime.</p>
+      </div>
+
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+        <h3 class="eb-card-title">WhatsApp Bot (Baileys Engine)</h3>
+        <p class="eb-card-desc">Pengiriman invoice PDF otomatis, reminder jatuh tempo berkala, dan scan e-receipt dengan strict anti-banned batch limiter.</p>
+      </div>
+
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+        <h3 class="eb-card-title">TR-069 &amp; GenieACS ONT Remote</h3>
+        <p class="eb-card-desc">Monitoring redaman optik (RX Power), auto config VLAN, ganti SSID/password WiFi ONT pelanggan secara terpusat.</p>
+      </div>
+
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+        <h3 class="eb-card-title">Cetak Voucher Hotspot &amp; Agen</h3>
+        <p class="eb-card-desc">Generator voucher kilat thermal/A4 dengan custom logo, QR scan login, serta manajemen saldo deposit agen reseller.</p>
+      </div>
+
+      <div class="eb-card reveal">
+        <div class="eb-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+        <h3 class="eb-card-title">Multi Payment Gateway QRIS</h3>
+        <p class="eb-card-desc">Integrasi QRIS (QRIN, Midtrans, Tripay, Xendit) &amp; Virtual Account bank. Pelanggan bayar, isolir langsung terbuka otomatis 24/7.</p>
+      </div>
+    </div>
+
+    <div class="eb-banner reveal">
+      <div class="eb-banner-info">
+        <div class="eb-banner-title">Otomatisasi Bisnis ISP &amp; RT-RW Net Anda Sekarang</div>
+        <div class="eb-banner-sub">Kunjungi platform resmi Eugine Bill di <strong>euginemediagroup.site</strong> untuk eksplorasi fitur dan demo sistem billing terpadu.</div>
+      </div>
+      <div class="eb-banner-actions">
+        <a href="https://euginemediagroup.site" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="font-size:15px;padding:14px 28px">
+          Buka Eugine Bill <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+        </a>
+        <a href="https://wa.me/6285169990995?text=Halo,%20saya%20tertarik%20konsultasi%20sistem%20billing%20Eugine%20Bill%20(euginemediagroup.site)" target="_blank" class="btn btn-ghost" style="font-size:15px;padding:14px 28px">
+          Konsultasi Sistem
+        </a>
       </div>
     </div>
   </div>
@@ -502,7 +599,7 @@
       </div>
       <div>
         <div class="footer-col-title">Layanan</div>
-        <ul class="footer-links"><li><a href="#services">Internet FTTH</a></li><li><a href="#services">IT Infrastructure</a></li><li><a href="#services">CCTV &amp; Security</a></li><li><a href="#services">Hardware Sales</a></li></ul>
+        <ul class="footer-links"><li><a href="#services">Internet FTTH</a></li><li><a href="https://euginemediagroup.site" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent)">Eugine Bill Platform</a></li><li><a href="#services">IT Infrastructure</a></li><li><a href="#services">CCTV &amp; Security</a></li><li><a href="#services">Hardware Sales</a></li></ul>
       </div>
       <div>
         <div class="footer-col-title">Informasi</div>
