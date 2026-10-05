@@ -14,26 +14,75 @@ import { nanoid } from 'nanoid';
 export const dynamic = 'force-dynamic';
 
 /**
+ * GET Handler — Health-check & validation endpoint for payment gateway dashboards
+ */
+export async function GET() {
+  return NextResponse.json({
+    status: 'ok',
+    success: true,
+    message: 'EugineBill Payment Webhook Endpoint is active and ready to receive callbacks.',
+    endpoint: '/api/payment/webhook',
+    supportedGateways: ['midtrans', 'xendit', 'duitku', 'tripay', 'qrin', 'winpay', 'ipaymu'],
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * HEAD Handler — Fast health-check for gateways testing connectivity
+ */
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
+/**
+ * OPTIONS Handler — CORS preflight support
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Callback-Token, X-Signature, X-Callback-Signature, x-api-key',
+    },
+  });
+}
+
+/**
  * Unified Payment Webhook Handler
- * Supports: Midtrans & Xendit
+ * Supports: Midtrans, Xendit, Duitku, Tripay, QRIN, etc.
  * Single endpoint: /api/payment/webhook
  */
 export async function POST(request: Request) {
   let webhookLogId: string | undefined;
   try {
     const contentType = request.headers.get('content-type') || '';
-    let body: any;
+    let body: any = {};
     let rawBody: string = '';
 
-    // Duitku sends form-urlencoded, others send JSON
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      const formData = await request.text();
-      rawBody = formData;
-      body = Object.fromEntries(new URLSearchParams(formData));
-      console.log('[Webhook] Parsed form data:', body);
-    } else {
+    try {
       rawBody = await request.text();
-      body = JSON.parse(rawBody);
+      if (!rawBody || rawBody.trim() === '') {
+        return NextResponse.json({ status: 'ok', success: true, message: 'Ping/Health check received' }, { status: 200 });
+      }
+
+      if (contentType.includes('application/x-www-form-urlencoded')) {
+        body = Object.fromEntries(new URLSearchParams(rawBody));
+      } else {
+        try {
+          body = JSON.parse(rawBody);
+        } catch {
+          body = Object.fromEntries(new URLSearchParams(rawBody));
+        }
+      }
+    } catch (parseError) {
+      console.warn('[Webhook] Body parse warning:', parseError);
+      return NextResponse.json({ status: 'ok', success: true, message: 'Ping received' }, { status: 200 });
+    }
+
+    // Acknowledge generic test / ping events from payment gateways
+    if (body.event === 'ping' || body.event === 'test' || body.type === 'ping' || body.action === 'ping' || body.test === true) {
+      return NextResponse.json({ status: 'ok', success: true, message: 'Webhook test ping acknowledged' }, { status: 200 });
     }
 
     const signature = request.headers.get('x-callback-token') || request.headers.get('x-signature') || request.headers.get('x-callback-signature');

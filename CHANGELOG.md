@@ -4,6 +4,31 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.98] — 2026-10-05
+
+### Payment Webhook Validation Handlers (`GET`, `HEAD`, `OPTIONS`) & Resilient Health-Check Handlers for Payment Gateway Providers
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Kegagalan Validasi Webhook oleh Penyedia Payment Gateway**: Saat mendaftarkan URL Webhook (`/api/payment/webhook`) di dashboard penyedia gateway (seperti Duitku, Xendit, Tripay, QRIN, dll.), sistem payment gateway mengirimkan request uji coba (`GET`, `HEAD`, atau empty `POST` ping).
+  2. **Error 405 Method Not Allowed & Syntax Error**: Endpoint sebelumnya hanya mengekspor `POST` dan mem-parse body secara langsung tanpa fallback, menyebabkan response `405 Method Not Allowed` saat menerima `GET` atau `500` saat menerima ping kosong.
+  3. **Penyelarasan Subdomain & SSL**: Dukungan penuh untuk pemanggilan via `https://r4net.web.id/api/payment/webhook` maupun `https://www.r4net.web.id/api/payment/webhook`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Handler `GET`, `HEAD`, `OPTIONS` pada `/api/payment/webhook` & `/api/payment/qris-notify`**:
+     - Menambahkan handler `GET` yang mengembalikan status `200 OK` dan metadata kesiapan webhook.
+     - Menambahkan handler `HEAD` untuk pengecekan cepat liveness URL.
+     - Menambahkan handler `OPTIONS` untuk dukungan CORS preflight.
+  2. **Resilient Body Parser & Ping Acknowledgment**:
+     - Menangani payload kosong, format JSON, maupun form-urlencoded secara aman tanpa melempar runtime exception.
+     - Mengakui generic test ping event (`ping`, `test`) dengan status `200 OK`.
+  3. **100% Multi-Tenant Parity**: Disinkronkan ke `C:\EugineBill-multitenant` dan lolos `tsc --noEmit` dengan 0 error.
+
+- **Files**:
+  - Modified: `src/app/api/payment/webhook/route.ts`
+  - Modified: `src/app/api/payment/qris-notify/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.96] — 2026-10-05
 
 ### Fix Technician Portal Login on Client VPS & Introduce Dual-Layer Auth with Diagnosis Doctor Script

@@ -20,6 +20,13 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 05, 2026 — v2.40.98: Payment Webhook Validation Handlers & Health-Check Readiness)
+
+- **Hard Invariant: Payment Webhook Health-Check Handlers (`GET`, `HEAD`, `OPTIONS`)**:
+  - Seluruh endpoint webhook (`/api/payment/webhook` dan `/api/payment/qris-notify`) WAJIB mendukung metode `GET`, `HEAD`, dan `OPTIONS` dengan mengembalikan status `200 OK`.
+  - Pengecekan liveness otomatis dari dashboard penyedia payment gateway (seperti Duitku, Xendit, Tripay, QRIN, dll.) mengirimkan request `GET` / `HEAD` saat mendaftarkan URL. Tanpa handler ini, Next.js mengembalikan `405 Method Not Allowed`.
+  - Handler `POST` harus mem-parse body secara aman (mendukung `application/json`, `application/x-www-form-urlencoded`, dan empty ping) serta mengembalikan `200 OK` pada generic test event (`ping`, `test`).
+
 ### Recent Patch Log (October 05, 2026 — v2.40.96: Fix Technician Portal Login on Client VPS & Dual-Layer Auth with Diagnosis Doctor Script)
 
 - **Hard Invariant: Dynamic HTTPS Auto-Detection for `technician-token` Cookie**:

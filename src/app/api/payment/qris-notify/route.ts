@@ -43,6 +43,30 @@ function checkDedup(key: string): boolean {
   return false;
 }
 
+export async function GET() {
+  return NextResponse.json({
+    status: 'ok',
+    success: true,
+    message: 'QRIS Notification Webhook is active.',
+    endpoint: '/api/payment/qris-notify',
+  });
+}
+
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-qris-secret',
+    },
+  });
+}
+
 /**
  * POST /api/payment/qris-notify
  * Webhook receiver for Android m-banking notification listener app.
