@@ -4,6 +4,23 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.100] — 2026-10-05
+
+### Fix 7-Hour Timezone Offset in createWibEndOfDay & Align Precise Midnight Auto-Isolation
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Isolir Prematur Jam 5 Sore (17:00 WIB)**: Siklus tagihan menyimpan Date dengan jam `16:59:59 UTC`. Saat dievaluasi oleh query MySQL `WHERE expiredAt <= NOW()` di timezone WIB, jam 17:00:00 sore bernilai `>= 16:59:59`, memicu eksekusi isolir 7 jam lebih awal sebelum tengah malam.
+  2. **Penyelarasan Siklus Bisnis Strict**: Pelanggan dengan jatuh tempo tanggal $N$ harus aktif hingga tanggal $(N-1)$ pukul 23:59:59 WIB, dan baru masuk status isolir tepat tengah malam (masuk tanggal $N$ pukul 00:00:00 WIB sebagai H+0, notifikasi WA ditunda ke H+X).
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Fix `createWibEndOfDay`**: Mengubah jam Date.UTC dari `16, 59, 59, 999` menjadi `23, 59, 59, 999` (WIB-as-UTC) sehingga MySQL menyimpan `YYYY-MM-DD 23:59:59` dan tidak pernah lagi trigger di jam 17:00 sore.
+  2. **Strict Invariant Guarantee**: Memastikan seluruh tenant SaaS terlindungi dari premature auto-isolation tanpa memerlukan script manipulasi manual.
+
+- **Files**:
+  - Modified: `src/server/services/billing/billing-cycle.service.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.98] — 2026-10-05
 
 ### Payment Webhook Validation Handlers (`GET`, `HEAD`, `OPTIONS`) & Resilient Health-Check Handlers for Payment Gateway Providers

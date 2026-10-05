@@ -36,7 +36,7 @@ export function getWibDateParts(date: Date) {
 export function createWibEndOfDay(year: number, month: number, day: number): Date {
   const maxDayInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const clampedDay = Math.min(Math.max(1, day), maxDayInMonth);
-  return new Date(Date.UTC(year, month, clampedDay, 16, 59, 59, 999));
+  return new Date(Date.UTC(year, month, clampedDay, 23, 59, 59, 999));
 }
 
 /**

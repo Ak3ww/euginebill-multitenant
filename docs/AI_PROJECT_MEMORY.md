@@ -20,6 +20,14 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 05, 2026 — v2.40.100: Fix 7-Hour Timezone Offset in createWibEndOfDay & Align Precise Midnight Auto-Isolation)
+
+- **Hard Invariant: `createWibEndOfDay` Representation (`23, 59, 59, 999` WIB-as-UTC)**:
+  - DILARANG KERAS mengurangi 7 jam (`16, 59, 59, 999`) di dalam fungsi `createWibEndOfDay` (`src/server/services/billing/billing-cycle.service.ts`).
+  - Prisma menyimpan nilai `Date` ke kolom MySQL `DATETIME` secara verbatim. Jika disimpan dengan jam 16:59:59, saat waktu lokal server/MySQL mencapai pukul 17:00:00 (5 sore), query `WHERE expiredAt <= NOW()` mengevaluasi `16:59:59 <= 17:00:00` sebagai TRUE dan cron mengeksekusi isolasi 7 jam terlalu dini.
+  - Nilai jam wajib persis `23, 59, 59, 999` (WIB-as-UTC) sehingga tanggal jatuh tempo $N$ menghasilkan `expiredAt` pada $(N-1)$ pukul 23:59:59 WIB, dan pelanggan baru diisolir tepat saat memasuki tanggal $N$ pukul 00:00:00 WIB (H+0).
+  - Pesan isolasi WhatsApp ditunda (`deferred: true`) sampai hari H+X sesuai setting `isolationDelayDays`.
+
 ### Recent Patch Log (October 05, 2026 — v2.40.98: Payment Webhook Validation Handlers & Health-Check Readiness)
 
 - **Hard Invariant: Payment Webhook Health-Check Handlers (`GET`, `HEAD`, `OPTIONS`)**:
