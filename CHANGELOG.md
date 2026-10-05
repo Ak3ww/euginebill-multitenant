@@ -4,6 +4,38 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.95] — 2026-10-05
+
+### Fix Inventory ONT Stock Lookup & Auto-Complete for Pre-Owned (`USED_GOOD`) and New (`AVAILABLE`) Warehouse Modems
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **False "Modem tidak ditemukan di inventori" Notice**: Saat admin mendaftarkan pelanggan PPPoE baru di `/admin/pppoe/users/new` dan memasukkan Serial Number ONT (misal `ZTEGCF9237FC`) yang berstatus `USED_GOOD` (stok gudang bekas layak pakai dari hasil auto-swap atau penarikan), sistem sebelumnya memunculkan peringatan kuning *"Modem tidak ditemukan di inventori — akan didaftarkan otomatis saat simpan"*.
+  2. **Pembatasan Query API Filter Tunggal**: Endpoint `/api/inventory/assets` sebelumnya hanya menerima single status exact match (`where.status = status`), sehingga pemanggilan `status=AVAILABLE` mengabaikan unit modem `USED_GOOD` yang berstatus siap pasang di gudang.
+  3. **Tampilan Autocomplete & Status Badge**: Dropdown autocomplete dan modal ganti modem perlu menampilkan badge status yang jelas antara `Tersedia (Baru)` dan `Tersedia (Gudang / Bekas Layak)` serta mengisi MAC address secara otomatis jika ditemukan exact match.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Multi-Status & Multi-Condition Filtering (`/api/inventory/assets/route.ts`)**:
+     - Memperbarui parser query param `status`, `condition`, dan `assetType` agar mendukung string berpemisah koma (contoh: `status=AVAILABLE,USED_GOOD`), mengonversinya menjadi Prisma query `{ in: [...] }`.
+  2. **Pencarian Unit Siap Pasang pada Form PSB (`/admin/pppoe/users/new/page.tsx`)**:
+     - Mengubah pemanggilan autocomplete menjadi `status=AVAILABLE,USED_GOOD`.
+     - Menghindari false trigger `ontNotFound` ketika SN cocok dengan stok gudang.
+     - Menampilkan label status kondisional `Tersedia (Baru)` (`AVAILABLE`) vs `Tersedia (Gudang / Bekas Layak)` (`USED_GOOD`).
+     - Auto-fill MAC address dan form sanitization ketika exact match ditemukan.
+  3. **Konsistensi Dropdown & Modal User (`UserDetailModal.tsx` & `/admin/pppoe/users/[id]/page.tsx`)**:
+     - Menyelaraskan status preview dan badge pada modal detail pelanggan dan modal ganti modem ONT.
+  4. **Modul Inventori Admin (`/admin/inventory/assets/page.tsx`)**:
+     - Menambahkan `USED_GOOD` pada tipe `AssetStatus`, konfigurasi badge `STATUS_CONFIG`, dan kartu ringkasan (summary cards) *"Bekas Layak"*.
+  5. **100% Multi-Tenant Parity**: Seluruh perubahan disinkronkan ke `C:\EugineBill-multitenant` dan lolos `tsc --noEmit` dengan 0 error.
+
+- **Files**:
+  - Modified: `src/app/api/inventory/assets/route.ts`
+  - Modified: `src/app/admin/pppoe/users/new/page.tsx`
+  - Modified: `src/components/UserDetailModal.tsx`
+  - Modified: `src/app/admin/pppoe/users/[id]/page.tsx`
+  - Modified: `src/app/admin/inventory/assets/page.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.94] — 2026-10-02
 
 ### Strict HTTPS Enforcement for `{{paymentLink}}` & Universal Notification Template Sanitization Across Single-Tenant & Multi-Tenant Platforms

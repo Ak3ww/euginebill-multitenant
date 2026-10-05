@@ -49,9 +49,9 @@ import { Textarea } from '@/components/ui/textarea';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AssetStatus = 'AVAILABLE' | 'IN_USE' | 'DEFECTIVE' | 'DEPLETED' | 'RESERVED';
+type AssetStatus = 'AVAILABLE' | 'USED_GOOD' | 'IN_USE' | 'DEFECTIVE' | 'DEPLETED' | 'RESERVED';
 type AssetType = 'MODEM' | 'CABLE_ROLL' | 'ROUTER' | 'OTHER';
-type AssetCondition = 'NEW' | 'GOOD' | 'DAMAGED' | 'SCRAP';
+type AssetCondition = 'NEW' | 'GOOD' | 'DAMAGED' | 'SCRAP' | 'USED_GOOD';
 
 interface InventoryAsset {
   id: string;
@@ -125,6 +125,7 @@ interface FormData {
 
 const STATUS_CONFIG: Record<AssetStatus, { label: string; className: string }> = {
   AVAILABLE: { label: 'Tersedia', className: 'bg-green-100 text-green-700 border-green-200' },
+  USED_GOOD: { label: 'Bekas Layak (Gudang)', className: 'bg-amber-100 text-amber-800 border-amber-200' },
   IN_USE: { label: 'Dipakai', className: 'bg-blue-100 text-blue-700 border-blue-200' },
   DEFECTIVE: { label: 'Defektif', className: 'bg-red-100 text-red-700 border-red-200' },
   DEPLETED: { label: 'Depleted', className: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -134,6 +135,7 @@ const STATUS_CONFIG: Record<AssetStatus, { label: string; className: string }> =
 const CONDITION_LABELS: Record<AssetCondition, string> = {
   NEW: 'Baru',
   GOOD: 'Baik',
+  USED_GOOD: 'Bekas Bagus',
   DAMAGED: 'Rusak',
   SCRAP: 'Scrap',
 };
@@ -787,7 +789,7 @@ export default function InventoryAssetsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard
           label="Total Aset"
           count={total}
@@ -795,11 +797,18 @@ export default function InventoryAssetsPage() {
           onClick={() => setFilterStatus('ALL')}
         />
         <SummaryCard
-          label="Tersedia"
+          label="Tersedia (Baru)"
           count={statusCounts['AVAILABLE'] ?? 0}
           active={filterStatus === 'AVAILABLE'}
           onClick={() => setFilterStatus('AVAILABLE')}
           className="text-green-600"
+        />
+        <SummaryCard
+          label="Bekas Layak"
+          count={statusCounts['USED_GOOD'] ?? 0}
+          active={filterStatus === 'USED_GOOD'}
+          onClick={() => setFilterStatus('USED_GOOD')}
+          className="text-amber-600"
         />
         <SummaryCard
           label="Dipakai"

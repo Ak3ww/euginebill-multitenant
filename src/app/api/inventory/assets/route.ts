@@ -25,9 +25,27 @@ export async function GET(req: NextRequest) {
 
     const where: any = {};
 
-    if (assetType) where.assetType = assetType;
-    if (status) where.status = status;
-    if (condition) where.condition = condition;
+    if (assetType) {
+      if (assetType.includes(',')) {
+        where.assetType = { in: assetType.split(',').map((s: string) => s.trim()).filter(Boolean) };
+      } else {
+        where.assetType = assetType;
+      }
+    }
+    if (status) {
+      if (status.includes(',')) {
+        where.status = { in: status.split(',').map((s: string) => s.trim()).filter(Boolean) };
+      } else {
+        where.status = status;
+      }
+    }
+    if (condition) {
+      if (condition.includes(',')) {
+        where.condition = { in: condition.split(',').map((c: string) => c.trim()).filter(Boolean) };
+      } else {
+        where.condition = condition;
+      }
+    }
     if (vendor) where.vendor = vendor;
     if (itemId) where.itemId = itemId;
 

@@ -20,6 +20,16 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 05, 2026 — v2.40.95: Fix Inventory ONT Stock Lookup & Auto-Complete for Pre-Owned [`USED_GOOD`] and New [`AVAILABLE`] Warehouse Modems)
+
+- **Hard Invariant: Multi-Status Inventory Query & Warehouse Ready Modems**:
+  - Unit modem dengan status `AVAILABLE` (Baru di gudang) maupun `USED_GOOD` (Bekas layak pakai di gudang, hasil pelepasan pelanggan lama atau auto-swap) adalah stok inventaris valid yang siap dipasang untuk pelanggan baru.
+  - Endpoint `/api/inventory/assets` WAJIB mendukung query multi-status dan multi-condition dengan pemisah koma (contoh: `status=AVAILABLE,USED_GOOD`), yang di-parse menjadi Prisma query `{ in: [...] }`.
+  - Pada form Pasang Baru PPPoE (`/admin/pppoe/users/new`), pencarian Serial Number ONT memanggil `status=AVAILABLE,USED_GOOD`. Peringatan *"Modem tidak ditemukan di inventori"* dilarang muncul jika modem berstatus `AVAILABLE` atau `USED_GOOD`.
+  - Dropdown autocomplete dan modal ganti modem menampilkan badge status yang jelas: `Tersedia (Baru)` (`AVAILABLE`) vs `Tersedia (Gudang / Bekas Layak)` (`USED_GOOD`). Jika exact match ditemukan, MAC address otomatis diisi.
+  - Modul inventori admin (`/admin/inventory/assets/page.tsx`) menyertakan badge dan summary card `Bekas Layak` (`USED_GOOD`).
+  - Paritas 100% diterapkan identik pada `c:\EugineBill` (Single-Tenant) dan `C:\EugineBill-multitenant` (Multi-Tenant).
+
 ### Recent Patch Log (October 02, 2026 — v2.40.94: Strict HTTPS Enforcement for `{{paymentLink}}` & Universal Notification Template Sanitization)
 
 - **Hard Invariant: Strict HTTPS Protocol on `{{paymentLink}}` & Notification URLs**:

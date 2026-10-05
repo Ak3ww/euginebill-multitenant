@@ -143,17 +143,26 @@ export default function NewPppoeUserPage() {
   };
 
   const handleOntSnChange = async (value: string) => {
-    setOntSerialNumber(value);
+    const upperVal = value.toUpperCase();
+    setOntSerialNumber(upperVal);
     setOntNotFound(false);
-    if (value.length < 3) { setOntSuggestions([]); setShowOntDropdown(false); return; }
+    if (upperVal.length < 3) { setOntSuggestions([]); setShowOntDropdown(false); return; }
     setOntSearching(true);
     try {
-      const res = await fetch(`/api/inventory/assets?assetType=MODEM&status=AVAILABLE&search=${encodeURIComponent(value)}&limit=10`);
+      const res = await fetch(`/api/inventory/assets?assetType=MODEM&status=AVAILABLE,USED_GOOD&search=${encodeURIComponent(upperVal)}&limit=10`);
       const data = await res.json();
       const assets = data.assets || [];
       setOntSuggestions(assets);
       setShowOntDropdown(assets.length > 0);
-      if (assets.length === 0 && value.length >= 5) setOntNotFound(true);
+      const exactMatch = assets.find((a: any) => a.serialNumber?.toUpperCase() === upperVal);
+      if (exactMatch) {
+        setOntNotFound(false);
+        if (exactMatch.macAddress && !formData.macAddress) {
+          setFormData(prev => ({ ...prev, macAddress: formatMacAddress(exactMatch.macAddress) }));
+        }
+      } else if (assets.length === 0 && upperVal.length >= 5) {
+        setOntNotFound(true);
+      }
     } catch { setOntSuggestions([]); }
     finally { setOntSearching(false); }
   };
@@ -645,18 +654,35 @@ export default function NewPppoeUserPage() {
                     )}
                   </div>
                   {showOntDropdown && ontSuggestions.length > 0 && (
-                    <div className="absolute z-30 mt-1 w-full bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-                      {ontSuggestions.map((asset: any) => (
-                        <button
-                          key={asset.id}
-                          type="button"
-                          onMouseDown={() => handleSelectOntAsset(asset)}
-                          className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted flex flex-col gap-0.5 border-b border-border last:border-0"
-                        >
-                          <span className="font-mono font-bold text-foreground">{asset.serialNumber}</span>
-                          <span className="text-muted-foreground">{[asset.vendor, asset.model].filter(Boolean).join(' ')} &mdash; <span className="text-emerald-600 font-bold">Tersedia</span></span>
-                        </button>
-                      ))}
+                    <div className="absolute z-30 mt-1 w-full bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                      {ontSuggestions.map((asset: any) => {
+                        const isUsed = asset.status === 'USED_GOOD' || asset.condition === 'USED_GOOD';
+                        const statusBadge = isUsed ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-semibold border border-amber-500/20">
+                            Tersedia (Gudang / Bekas Layak)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold border border-emerald-500/20">
+                            Tersedia (Baru)
+                          </span>
+                        );
+                        return (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            onMouseDown={() => handleSelectOntAsset(asset)}
+                            className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted/70 flex flex-col gap-0.5 border-b border-border last:border-0 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-foreground">{asset.serialNumber}</span>
+                              {statusBadge}
+                            </div>
+                            <span className="text-muted-foreground text-[11px]">
+                              {[asset.vendor, asset.model].filter(Boolean).join(' ') || 'Modem ONT'} {asset.macAddress ? `• MAC: ${asset.macAddress}` : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                   {ontNotFound && ontSerialNumber.length >= 5 && (

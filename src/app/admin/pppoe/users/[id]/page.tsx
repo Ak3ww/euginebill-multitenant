@@ -929,7 +929,12 @@ export default function PppoeUserDetailPage({ params }: { params: Promise<{ id: 
                   <div className="mt-1.5 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                     <p className="text-[11px] font-bold text-emerald-600">Ditemukan di inventori</p>
                     <p className="text-[11px] text-foreground font-mono">{gantiModemAssetPreview.serialNumber} — {gantiModemAssetPreview.vendor} {gantiModemAssetPreview.model}</p>
-                    <p className="text-[11px] text-muted-foreground">Status: <span className={gantiModemAssetPreview.status === 'AVAILABLE' ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>{gantiModemAssetPreview.status}</span></p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Status:{' '}
+                      <span className={gantiModemAssetPreview.status === 'AVAILABLE' ? 'text-emerald-600 font-bold' : gantiModemAssetPreview.status === 'USED_GOOD' ? 'text-teal-600 font-bold' : 'text-amber-600 font-bold'}>
+                        {gantiModemAssetPreview.status === 'AVAILABLE' ? 'Tersedia (Baru)' : gantiModemAssetPreview.status === 'USED_GOOD' ? 'Tersedia (Gudang / Bekas Layak)' : gantiModemAssetPreview.status}
+                      </span>
+                    </p>
                   </div>
                 )}
                 {gantiModemSN.length >= 6 && !gantiModemAssetPreview && !gantiModemSearching && (

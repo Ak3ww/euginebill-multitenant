@@ -723,7 +723,9 @@ export default function UserDetailModal({
                             <div className="font-mono font-bold text-foreground flex items-center gap-1.5">
                               {asset.serialNumber}
                               {asset.status === 'AVAILABLE' ? (
-                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-sans font-medium">Ready di Gudang</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-sans font-medium">Ready (Baru)</span>
+                              ) : asset.status === 'USED_GOOD' ? (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-sans font-medium">Ready (Bekas Layak / Gudang)</span>
                               ) : asset.status === 'IN_USE' ? (
                                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-sans font-medium">Terpakai</span>
                               ) : (
