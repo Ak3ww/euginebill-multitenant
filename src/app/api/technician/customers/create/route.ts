@@ -1,36 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
 import { prisma } from '@/server/db/client';
 import { createPppoeUser } from '@/server/services/pppoe.service';
-import { TECH_JWT_SECRET } from '@/server/auth/technician-secret';
-
-async function verifyTechnician(req: NextRequest) {
-  const token = req.cookies.get('technician-token')?.value;
-  if (!token) return null;
-  try {
-    const secret = TECH_JWT_SECRET;
-    const { payload } = await jwtVerify(token, secret);
-    if (payload.type === 'admin_user') {
-      const adminUser = await prisma.adminUser.findUnique({
-        where: { id: payload.id as string },
-        select: { id: true, name: true, email: true, isActive: true, role: true },
-      });
-      if (!adminUser?.isActive || adminUser.role !== 'TECHNICIAN') return null;
-      return { id: adminUser.id, name: adminUser.name, email: adminUser.email, type: 'admin_user' as const };
-    }
-    const tech = await prisma.technician.findUnique({
-      where: { id: payload.id as string },
-      select: { id: true, name: true, isActive: true },
-    });
-    if (!tech?.isActive) return null;
-    return { id: tech.id, name: tech.name, email: null, type: 'technician' as const };
-  } catch {
-    return null;
-  }
-}
+import { getTechnicianSession } from '@/server/auth/technician-auth';
 
 export async function POST(req: NextRequest) {
-  const tech = await verifyTechnician(req);
+  const tech = await getTechnicianSession(req);
   if (!tech) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

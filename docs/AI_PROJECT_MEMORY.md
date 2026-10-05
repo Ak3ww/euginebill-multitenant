@@ -20,6 +20,18 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 05, 2026 — v2.40.96: Fix Technician Portal Login on Client VPS & Dual-Layer Auth with Diagnosis Doctor Script)
+
+- **Hard Invariant: Dynamic HTTPS Auto-Detection for `technician-token` Cookie**:
+  - Dilarang keras melakukan hardcode `secure: process.env.NODE_ENV === 'production'` pada cookie sesi teknisi tanpa memeriksa protokol request. Jika server client diakses melalui HTTP biasa, browser modern akan menolak/men-drop cookie `Secure`. Selalu gunakan `secure: isHttps` (`x-forwarded-proto === 'https' || req.nextUrl.protocol === 'https:'`).
+- **Hard Invariant: Dual-Layer Authentication (`localStorage` + Bearer Token + Cookie)**:
+  - Login teknisi mengembalikan `token` pada payload response JSON untuk disimpan di `localStorage`.
+  - Frontend portal teknisi mengirimkan header `Authorization: Bearer <token>` dan endpoint API memverifikasi sesi melalui helper terpusat `getTechnicianSession(req)` dari `@/server/auth/technician-auth`.
+- **Hard Invariant: Universal Secret Fallback**:
+  - `TECH_JWT_SECRET` secara otomatis melakukan fallback `process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || '...'` agar server yang hanya mendefinisikan `NEXTAUTH_SECRET` tetap dapat memverifikasi JWT teknisi.
+- **Hard Invariant: CLI Technician Diagnosis Doctor (`scripts/diagnose-technician.ts`)**:
+  - Setiap kali ada kendala login teknisi di VPS client, admin dapat menjalankan `npx tsx scripts/diagnose-technician.ts` untuk memeriksa tabel, menjalankan simulasi login `--test <user> <pass>`, atau membuat/reset akun teknisi `--create` / `--reset-password`.
+
 ### Recent Patch Log (October 05, 2026 — v2.40.95: Fix Inventory ONT Stock Lookup & Auto-Complete for Pre-Owned [`USED_GOOD`] and New [`AVAILABLE`] Warehouse Modems)
 
 - **Hard Invariant: Multi-Status Inventory Query & Warehouse Ready Modems**:

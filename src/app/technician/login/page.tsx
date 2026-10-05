@@ -53,6 +53,11 @@ export default function TechnicianLoginPage() {
       const data = await res.json();
 
       if (res.ok) {
+        if (data.token) {
+          try {
+            localStorage.setItem('technician_token', data.token);
+          } catch {}
+        }
         router.push('/technician/dashboard');
       } else {
         setError(data.error || 'Login gagal');

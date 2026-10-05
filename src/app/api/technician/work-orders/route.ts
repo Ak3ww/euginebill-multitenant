@@ -5,6 +5,7 @@ import { TECH_JWT_SECRET } from '@/server/auth/technician-secret';
 
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth/config';
+import { getTechnicianSession } from '@/server/auth/technician-auth';
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,28 +18,13 @@ export async function GET(req: NextRequest) {
       technicianId = (session.user as any).id;
       isAdminUser = true;
     } else {
-      // 2. Try technician-token JWT cookie
-      const token = req.cookies.get('technician-token')?.value;
-      if (!token) {
+      // 2. Try technician token (cookie or Authorization header)
+      const techSession = await getTechnicianSession(req);
+      if (!techSession) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
       }
-
-      const secret = TECH_JWT_SECRET;
-      const { payload } = await jwtVerify(token, secret);
-
-      if (payload.type === 'admin_user') {
-        const adminUser = await prisma.adminUser.findUnique({
-          where: { id: payload.id as string },
-          select: { id: true, isActive: true, role: true },
-        });
-        if (!adminUser?.isActive) {
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        technicianId = adminUser.id;
-        isAdminUser = true;
-      } else {
-        technicianId = payload.id as string;
-      }
+      technicianId = techSession.id;
+      isAdminUser = techSession.type === 'admin_user';
     }
 
     // Get query parameters
@@ -102,33 +88,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get token from cookie
-    const token = req.cookies.get('technician-token')?.value;
-
-    if (!token) {
+    const techSession = await getTechnicianSession(req);
+    if (!techSession) {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
       );
     }
-
-    // Verify JWT
-    const secret = TECH_JWT_SECRET;
-
-    const { payload } = await jwtVerify(token, secret);
-    let technicianId: string;
-    if (payload.type === 'admin_user') {
-      const adminUser = await prisma.adminUser.findUnique({
-        where: { id: payload.id as string },
-        select: { id: true, isActive: true, role: true },
-      });
-      if (!adminUser?.isActive || adminUser.role !== 'TECHNICIAN') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      technicianId = adminUser.id;
-    } else {
-      technicianId = payload.id as string;
-    }
+    const technicianId = techSession.id;
 
     const { workOrderId, action } = await req.json();
 

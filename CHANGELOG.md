@@ -4,6 +4,46 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.96] — 2026-10-05
+
+### Fix Technician Portal Login on Client VPS & Introduce Dual-Layer Auth with Diagnosis Doctor Script
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Kegagalan Login / Redirect Loop pada VPS Client (`/technician`)**: Pada VPS client (terutama yang diakses via HTTP, IP address, atau reverse proxy sebelum sertifikat SSL aktif), login teknisi berhasil `200 OK` tetapi langsung mental kembali ke `/technician/login` saat diarahkan ke `/technician/dashboard`.
+  2. **Cookie `Secure` Flag Rejection over HTTP**: Cookie `technician-token` sebelumnya dipasang dengan `secure: process.env.NODE_ENV === 'production'`. Di lingkungan produksi yang berjalan via HTTP, browser modern secara otomatis memblokir dan menolak penyimpanan cookie `Secure`.
+  3. **Role Restriction & Secret Mismatch**: Akun admin/superadmin yang ingin mengakses portal teknisi sebelumnya ditolak karena pembatasan ketat `{ role: 'TECHNICIAN' }`, dan fallback secret jika `JWT_SECRET` belum diset di `.env` rentan gagal jika server hanya memiliki `NEXTAUTH_SECRET`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Dynamic HTTPS Auto-Detection for Cookies (`/api/technician/auth/login/route.ts`)**:
+     - Memeriksa header `x-forwarded-proto === 'https'` dan protocol `https:` secara dinamis. Jika koneksi adalah HTTP biasa, flag `secure: false` diterapkan sehingga browser tidak lagi men-drop session cookie.
+  2. **Dual-Layer Authentication (`localStorage` + Bearer Token + Cookie)**:
+     - Endpoint login mengembalikan `token` dalam JSON response dan disimpan di `localStorage.setItem('technician_token', token)`.
+     - Layout teknisi ([`TechnicianPortalLayout.tsx`](file:///C:/EugineBill/src/app/technician/TechnicianPortalLayout.tsx)) mengirimkan header `Authorization: Bearer <token>` saat memeriksa sesi `/api/technician/auth/session`.
+     - Helper terpusat ([`technician-auth.ts`](file:///C:/EugineBill/src/server/auth/technician-auth.ts)) memverifikasi token dari cookie maupun header Authorization.
+  3. **Universal Secret Fallback ([`technician-secret.ts`](file:///C:/EugineBill/src/server/auth/technician-secret.ts))**:
+     - `JWT_SECRET_VALUE` secara otomatis menggunakan `process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || '...'` sehingga instalasi baru yang hanya mendefinisikan `NEXTAUTH_SECRET` tetap berjalan lancar.
+  4. **Multi-Role & Flexible Identifier Resolution**:
+     - Mendukung login menggunakan username, format nomor HP (`08...`, `628...`, `+628...`), dan email.
+     - Mengizinkan akun dari tabel `technician` maupun `adminUser` (termasuk `SUPER_ADMIN` dan `TECHNICIAN`).
+  5. **CLI Technician Diagnosis & Doctor Script ([`scripts/diagnose-technician.ts`](file:///C:/EugineBill/scripts/diagnose-technician.ts))**:
+     - Script diagnostik interaktif untuk memeriksa konfigurasi ENV, daftar akun teknisi, verifikasi bcrypt password, simulasi login, serta perintah 1-baris untuk membuat atau mereset password teknisi langsung dari terminal VPS (`npx tsx scripts/diagnose-technician.ts`).
+  6. **100% Multi-Tenant Parity**: Disinkronkan ke `C:\EugineBill-multitenant` dan lolos `tsc --noEmit` dengan 0 error.
+
+- **Files**:
+  - Created: `src/server/auth/technician-auth.ts`
+  - Created: `scripts/diagnose-technician.ts`
+  - Modified: `src/server/auth/technician-secret.ts`
+  - Modified: `src/app/api/technician/auth/login/route.ts`
+  - Modified: `src/app/api/technician/auth/session/route.ts`
+  - Modified: `src/app/technician/login/page.tsx`
+  - Modified: `src/app/technician/TechnicianPortalLayout.tsx`
+  - Modified: `src/app/api/technician/tickets/route.ts`
+  - Modified: `src/app/api/technician/work-orders/route.ts`
+  - Modified: `src/app/api/technician/customers/route.ts`
+  - Modified: `src/app/api/technician/customers/create/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.95] — 2026-10-05
 
 ### Fix Inventory ONT Stock Lookup & Auto-Complete for Pre-Owned (`USED_GOOD`) and New (`AVAILABLE`) Warehouse Modems

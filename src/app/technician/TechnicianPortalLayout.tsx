@@ -567,9 +567,13 @@ function TechnicianPortalInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetch('/api/technician/auth/session')
+    const localToken = typeof window !== 'undefined' ? localStorage.getItem('technician_token') : null;
+    fetch('/api/technician/auth/session', {
+      headers: localToken ? { Authorization: `Bearer ${localToken}` } : {},
+    })
       .then((res) => {
         if (!res.ok) {
+          try { localStorage.removeItem('technician_token'); } catch {}
           router.replace('/technician/login');
           return null;
         }
@@ -580,12 +584,16 @@ function TechnicianPortalInner({ children }: { children: React.ReactNode }) {
         setLoading(false);
       })
       .catch(() => {
+        try { localStorage.removeItem('technician_token'); } catch {}
         router.replace('/technician/login');
       });
   }, [router]);
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('technician_token');
+      }
       await fetch('/api/technician/auth/logout', { method: 'POST' });
     } catch {
       // ignore

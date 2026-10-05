@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanInput = username.trim();
+    const cleanInput = String(username).trim();
     const digitsOnly = cleanInput.replace(/\D/g, '');
     const phone62 = digitsOnly ? (digitsOnly.startsWith('62') ? digitsOnly : digitsOnly.startsWith('0') ? '62' + digitsOnly.substring(1) : '62' + digitsOnly) : '';
     const phone0 = digitsOnly ? (digitsOnly.startsWith('62') ? '0' + digitsOnly.substring(2) : digitsOnly.startsWith('0') ? digitsOnly : '0' + digitsOnly) : '';
@@ -29,11 +29,14 @@ export async function POST(req: NextRequest) {
     const possibleIdentifiers = Array.from(new Set([
       cleanInput,
       cleanInput.toLowerCase(),
+      cleanInput.toUpperCase(),
       digitsOnly,
       phone62,
       phone0,
       phone62 ? `+${phone62}` : '',
     ].filter(Boolean)));
+
+    const isHttps = req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:';
 
     // 1. Try finding in `technician` table by username OR phoneNumber OR email
     const tech = await prisma.technician.findFirst({
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
         OR: [
           { username: { in: possibleIdentifiers } },
           { phoneNumber: { in: possibleIdentifiers } },
-          { email: cleanInput },
+          { email: { in: possibleIdentifiers } },
         ]
       }
     });
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
         username: tech.username || tech.phoneNumber,
         name: tech.name,
         phone: tech.phoneNumber,
-        role: 'technician',
+        role: 'TECHNICIAN',
         type: 'technician',
       })
         .setProtectedHeader({ alg: 'HS256' })
@@ -94,6 +97,7 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json({
         success: true,
         message: 'Login berhasil',
+        token,
         user: {
           id: tech.id,
           username: tech.username || tech.phoneNumber,
@@ -105,7 +109,7 @@ export async function POST(req: NextRequest) {
 
       response.cookies.set('technician-token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isHttps,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 7, // 7 days
         path: '/',
@@ -114,28 +118,38 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    // 2. Fallback to `adminUser` table with role TECHNICIAN
+    // 2. Fallback to `adminUser` table (allowing TECHNICIAN, SUPER_ADMIN, etc.)
     const adminUser = await prisma.adminUser.findFirst({
       where: {
-        AND: [
-          { role: 'TECHNICIAN' },
-          {
-            OR: [
-              { username: { in: possibleIdentifiers } },
-              { phone: { in: possibleIdentifiers } },
-              { email: cleanInput },
-            ]
-          }
+        OR: [
+          { username: { in: possibleIdentifiers } },
+          { phone: { in: possibleIdentifiers } },
+          { email: { in: possibleIdentifiers } },
         ]
       },
     });
 
-    if (adminUser && adminUser.role === 'TECHNICIAN') {
+    if (adminUser) {
       if (!adminUser.isActive) {
         return NextResponse.json({ error: 'Akun tidak aktif' }, { status: 403 });
       }
 
-      const isValid = await bcrypt.compare(password, adminUser.password);
+      let isValid = false;
+      if (adminUser.password) {
+        if (adminUser.password.startsWith('$2a$') || adminUser.password.startsWith('$2b$')) {
+          isValid = await bcrypt.compare(password, adminUser.password);
+        } else {
+          isValid = adminUser.password === password;
+          if (isValid) {
+            const hashed = await bcrypt.hash(password, 10);
+            await prisma.adminUser.update({
+              where: { id: adminUser.id },
+              data: { password: hashed }
+            }).catch(() => {});
+          }
+        }
+      }
+
       if (!isValid) {
         return NextResponse.json({ error: 'Username atau password salah' }, { status: 401 });
       }
@@ -143,14 +157,14 @@ export async function POST(req: NextRequest) {
       await prisma.adminUser.update({
         where: { id: adminUser.id },
         data: { lastLogin: new Date() },
-      });
+      }).catch(() => {});
 
       const token = await new SignJWT({
         id: adminUser.id,
         username: adminUser.username,
         name: adminUser.name,
         phone: adminUser.phone,
-        role: 'technician',
+        role: adminUser.role,
         type: 'admin_user',
       })
         .setProtectedHeader({ alg: 'HS256' })
@@ -161,6 +175,7 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json({
         success: true,
         message: 'Login berhasil',
+        token,
         user: {
           id: adminUser.id,
           username: adminUser.username,
@@ -172,9 +187,9 @@ export async function POST(req: NextRequest) {
 
       response.cookies.set('technician-token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isHttps,
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 24 * 7, // 7 days
         path: '/',
       });
 
