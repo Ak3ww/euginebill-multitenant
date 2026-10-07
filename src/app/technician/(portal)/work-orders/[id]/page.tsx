@@ -448,7 +448,6 @@ export default function TechnicianWorkOrderWizardPage() {
   const [existingOdps, setExistingOdps] = useState<OdpOption[]>([]);
   const [selectedOdp, setSelectedOdp] = useState<OdpOption | null>(null);
   const [suggestedOdp, setSuggestedOdp] = useState<{ name: string; distMeters: number; odp: OdpOption } | null>(null);
-  const [isManualOdp, setIsManualOdp] = useState(false);
 
   // Cable roll picker (Step 2 — ODP step)
   const [selectedRollId, setSelectedRollId] = useState<string | null>(null);
@@ -680,9 +679,6 @@ export default function TechnicianWorkOrderWizardPage() {
       }
     } else {
       setSelectedOdp(null);
-      if (existingOdps.length > 0) {
-        setIsManualOdp(true);
-      }
     }
   }, [reportData.odpName, existingOdps, lockedOdpGps]);
 
@@ -733,8 +729,25 @@ export default function TechnicianWorkOrderWizardPage() {
       return true;
     }
     const missing: string[] = [];
-    if (!reportData.odpName.trim()) missing.push('Nama ODP');
-    if (!reportData.portNumber) missing.push('Nomor Port ODP');
+    if (!reportData.odpName.trim()) {
+      missing.push('Pilih ODP Terdaftar');
+    } else if (!selectedOdp) {
+      missing.push('ODP harus dipilih dari daftar ODP terdaftar');
+    }
+
+    if (!reportData.portNumber) {
+      missing.push('Nomor Port ODP');
+    } else if (selectedOdp) {
+      const isPortUsed = selectedOdp.usedPorts?.some(u => u.portNumber === reportData.portNumber);
+      if (isPortUsed) {
+        addToast({
+          type: 'error',
+          title: 'Port Sudah Terpakai',
+          description: `Port ${reportData.portNumber} pada ${selectedOdp.name} sudah digunakan oleh pelanggan lain! Silakan pilih port yang masih kosong.`
+        });
+        return false;
+      }
+    }
 
     // Auto-resolve ODP GPS from selected master ODP if not already locked
     let effectiveOdpGps = lockedOdpGps;
@@ -1278,93 +1291,39 @@ export default function TechnicianWorkOrderWizardPage() {
               <label className="block text-xs font-bold text-foreground">
                 Pilih ODP (Master Data) *
               </label>
-              {!isManualOdp ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsManualOdp(true);
-                    setReportData(p => ({ ...p, odpName: '' }));
-                    setSelectedOdp(null);
-                  }}
-                  className="text-[11px] text-primary hover:underline font-semibold"
-                >
-                  + Ketik ODP Manual
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsManualOdp(false);
-                    const first = existingOdps[0]?.name || '';
-                    if (first) {
-                      const found = existingOdps[0];
-                      setSelectedOdp(found);
-                      setReportData(p => ({
-                        ...p,
-                        odpName: first,
-                        odpLat: found?.latitude ? String(found.latitude) : p.odpLat,
-                        odpLng: found?.longitude ? String(found.longitude) : p.odpLng,
-                      }));
-                      if (found?.latitude && found?.longitude) {
-                        setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
-                      }
-                    }
-                  }}
-                  className="text-[11px] text-primary hover:underline font-semibold"
-                >
-                  &larr; Pilih dari Daftar ODP
-                </button>
-              )}
+              <span className="text-[11px] text-muted-foreground font-medium">
+                Wajib pilih ODP terdaftar
+              </span>
             </div>
 
-            {!isManualOdp ? (
-              <select
-                value={reportData.odpName}
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val === '__MANUAL__') {
-                    setIsManualOdp(true);
-                    setReportData(p => ({ ...p, odpName: '' }));
-                    setSelectedOdp(null);
-                    return;
-                  }
-                  const found = existingOdps.find(o => o.name === val);
-                  setSelectedOdp(found || null);
-                  setReportData(p => ({
-                    ...p,
-                    odpName: val,
-                    odpLat: found?.latitude ? String(found.latitude) : p.odpLat,
-                    odpLng: found?.longitude ? String(found.longitude) : p.odpLng,
-                  }));
-                  if (found?.latitude && found?.longitude) {
-                    setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
-                  }
-                }}
-                className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs text-foreground"
-              >
-                <option value="">-- Pilih ODP Terdaftar --</option>
-                {existingOdps.map(o => (
-                  <option key={o.id} value={o.name}>
-                    {o.name} ({o.portCount || 16} Port{o.latitude && o.longitude ? ' - Tikor Tersedia' : ''})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="space-y-1.5">
-                <input
-                  type="text"
-                  placeholder="Ketik Nama ODP (Cth: ODP-KDS-07)"
-                  value={reportData.odpName}
-                  onChange={e => setReportData(p => ({ ...p, odpName: e.target.value }))}
-                  className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  Mode manual aktif. Pastikan kunci GPS ODP di bawah jika ODP belum ada di master data.
-                </span>
-              </div>
-            )}
+            <select
+              value={reportData.odpName}
+              onChange={e => {
+                const val = e.target.value;
+                const found = existingOdps.find(o => o.name === val);
+                setSelectedOdp(found || null);
+                setReportData(p => ({
+                  ...p,
+                  odpName: val,
+                  portNumber: null, // Reset port selection if ODP changes
+                  odpLat: found?.latitude ? String(found.latitude) : p.odpLat,
+                  odpLng: found?.longitude ? String(found.longitude) : p.odpLng,
+                }));
+                if (found?.latitude && found?.longitude) {
+                  setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
+                }
+              }}
+              className="w-full p-2.5 bg-background border border-input rounded-xl focus:ring-2 focus:ring-primary outline-none font-mono text-xs text-foreground"
+            >
+              <option value="">-- Pilih ODP Terdaftar --</option>
+              {existingOdps.map(o => (
+                <option key={o.id} value={o.name}>
+                  {o.name} ({o.portCount || 16} Port - {o.usedPorts?.length || 0} Terpakai{o.latitude && o.longitude ? ' - Tikor Tersedia' : ''})
+                </option>
+              ))}
+            </select>
 
-            {suggestedOdp && !isManualOdp && (
+            {suggestedOdp && (
               <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between">
                 <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-emerald-600 inline" /> ODP Terdekat: <strong>{suggestedOdp.name}</strong> ({suggestedOdp.distMeters}m)
@@ -1375,6 +1334,7 @@ export default function TechnicianWorkOrderWizardPage() {
                     setReportData(p => ({
                       ...p,
                       odpName: suggestedOdp.name,
+                      portNumber: null,
                       odpLat: suggestedOdp.odp.latitude ? String(suggestedOdp.odp.latitude) : p.odpLat,
                       odpLng: suggestedOdp.odp.longitude ? String(suggestedOdp.odp.longitude) : p.odpLng,
                     }));
@@ -1398,7 +1358,7 @@ export default function TechnicianWorkOrderWizardPage() {
               <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-bold text-foreground">Tikor GPS Tiang ODP *</span>
-                {(!lockedOdpGps || isManualOdp) && (
+                {!lockedOdpGps && (
                   <GpsAccuracyBadge accuracy={odpGps.gps.accuracy} watching={odpGps.gps.watching} />
                 )}
               </div>
@@ -1448,19 +1408,16 @@ export default function TechnicianWorkOrderWizardPage() {
               )}
             </div>
             {selectedOdp ? (
-              <PortGrid portCount={selectedOdp.portCount || 16} usedPorts={selectedOdp.usedPorts} selected={reportData.portNumber}
-                onSelect={port => setReportData(p => ({ ...p, portNumber: port }))} />
+              <PortGrid
+                portCount={selectedOdp.portCount || 16}
+                usedPorts={selectedOdp.usedPorts}
+                selected={reportData.portNumber}
+                onSelect={port => setReportData(p => ({ ...p, portNumber: port }))}
+              />
             ) : (
-              <div className="p-3 bg-muted/40 border border-dashed border-border rounded-xl text-center">
-                <p className="text-xs text-muted-foreground">Masukkan Nama ODP dulu untuk lihat port tersedia</p>
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {Array.from({length:16},(_,i)=>i+1).map(p => (
-                    <button key={p} type="button" onClick={() => setReportData(prev => ({...prev, portNumber: p}))}
-                      className={cn('h-10 rounded-xl font-mono text-xs font-bold border transition-all',
-                        reportData.portNumber === p ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted text-foreground border-border hover:bg-muted/80'
-                      )}>{String(p).padStart(2,'0')}</button>
-                  ))}
-                </div>
+              <div className="p-4 bg-muted/30 border border-dashed border-border rounded-xl text-center space-y-1">
+                <p className="text-xs font-semibold text-foreground">Silakan pilih ODP terlebih dahulu di atas</p>
+                <p className="text-[11px] text-muted-foreground">Port ODP akan ditampilkan otomatis dengan status ketersediaan (kosong / terpakai)</p>
               </div>
             )}
           </div>

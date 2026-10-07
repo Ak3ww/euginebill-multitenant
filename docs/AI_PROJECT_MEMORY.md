@@ -20,13 +20,38 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 07, 2026 — v2.40.102: ODP Customer Navigation, ODP Edit Fix, and Strict SPK ODP Port Reservation Enforcement)
+
+- **Hard Invariant: Strict ODP Master Selection in Technician SPK**:
+  - Teknisi di portal SPK (`/technician/work-orders/[id]`) DILARANG KERAS mengetik nama ODP manual (`isManualOdp`).
+  - Teknisi WAJIB memilih ODP yang telah terdaftar di master data (`existingOdps`).
+  - Port ODP yang telah digunakan oleh pelanggan aktif (dari `usedPorts`) WAJIB di-disable di UI grid port (`disabled={isUsed}`) dan divalidasi ketat pada backend `complete/route.ts` dan frontend `validateStep2()`.
+  - Backend penyelesaian SPK (`complete/route.ts`) TIDAK BOLEH membuat record ODP dummy/bayangan baru secara otomatis (`prisma.networkODP.create`). ODP harus dicocokkan ke master data yang sudah terdaftar.
+- **Hard Invariant: ODP Edit ODC Capacity Evaluation**:
+  - Saat mengedit ODP di `/admin/network/odps`, evaluasi batas kapasitas ODC (`odc.portCount`) WAJIB mengecualikan ODP yang sedang diedit itu sendiri (`editingOdp?.odcId === odc.id`). Hal ini mencegah false-positive warning atau penolakan simpan ketika ODC sudah terisi penuh oleh ODP yang bersangkutan.
+
+### Recent Patch Log (October 06, 2026 — v2.40.101: Fix Auto-Isolation Policy Overwrite Bug & Un-isolation MikroTik Parity)
+
+- **Hard Invariant: Never Overwrite `autoIsolationEnabled` to `false` on User Activation / Update**:
+  - DILARANG KERAS menetapkan `autoIsolationEnabled: false` secara otomatis saat admin mengubah status pelanggan menjadi `active` (misal pada `status/route.ts`, `bulk-status/route.ts`, atau `pppoe.service.ts`).
+  - Flag `autoIsolationEnabled` adalah preferensi akun pelanggan: nilai default di skema Prisma adalah `true`. Hanya pelanggan khusus (seperti Kp. Tegal `billingDay = 10` atau akun bebas isolir yang diset manual) yang bernilai `false`.
+  - Jika `autoIsolationEnabled` ditimpa menjadi `false` saat diaktifkan, query cron isolir `WHERE autoIsolationEnabled = 1` akan mengabaikan pelanggan tersebut selamanya, menyebabkan pelanggan yang sudah expired tidak pernah terisolir.
+- **Hard Invariant: Physical Router Secret Sync Verification (`PPPSecretService`)**:
+  - Saat pelanggan membayar lunas atau un-isolir dijalankan, pastikan perintah un-isolir ke MikroTik (`/ppp secret set profile=<profile_asal> disabled=no` dan `/ppp active remove`) berhasil dieksekusi. Jika koneksi API/VPN ke router sempat timeout, secret di router fisik bisa tertinggal di `profile=isolir`. Script `scripts/fix-auto-isolation-policy.ts` disediakan untuk memverifikasi dan menyinkronkan profil router fisik secara transparan.
+- **Hard Invariant: Notification vs Isolation Disambiguation**:
+  - Notifikasi admin *"User Expiring Today: User X is expiring today"* pada jam 00:00:00 WIB dihasilkan oleh `NotificationService.checkExpiredUsers()` sebagai pengingat jatuh tempo hari H. Notifikasi ini BUKAN berarti pelanggan telah diisolir. Isolir baru dieksekusi oleh cron setelah `expiredAt <= NOW()`.
+
 ### Recent Patch Log (October 05, 2026 — v2.40.100: Fix 7-Hour Timezone Offset in createWibEndOfDay & Align Precise Midnight Auto-Isolation)
 
-- **Hard Invariant: `createWibEndOfDay` Representation (`23, 59, 59, 999` WIB-as-UTC)**:
-  - DILARANG KERAS mengurangi 7 jam (`16, 59, 59, 999`) di dalam fungsi `createWibEndOfDay` (`src/server/services/billing/billing-cycle.service.ts`).
-  - Prisma menyimpan nilai `Date` ke kolom MySQL `DATETIME` secara verbatim. Jika disimpan dengan jam 16:59:59, saat waktu lokal server/MySQL mencapai pukul 17:00:00 (5 sore), query `WHERE expiredAt <= NOW()` mengevaluasi `16:59:59 <= 17:00:00` sebagai TRUE dan cron mengeksekusi isolasi 7 jam terlalu dini.
-  - Nilai jam wajib persis `23, 59, 59, 999` (WIB-as-UTC) sehingga tanggal jatuh tempo $N$ menghasilkan `expiredAt` pada $(N-1)$ pukul 23:59:59 WIB, dan pelanggan baru diisolir tepat saat memasuki tanggal $N$ pukul 00:00:00 WIB (H+0).
-  - Pesan isolasi WhatsApp ditunda (`deferred: true`) sampai hari H+X sesuai setting `isolationDelayDays`.
+- **Hard Invariant: Strict 23:59:59 WIB Representation in Database (`createWibEndOfDay`)**:
+  - `createWibEndOfDay` di `src/server/services/billing/billing-cycle.service.ts` WAJIB mengonfigurasi jam `Date.UTC(year, month, clampedDay, 23, 59, 59, 999)` (WIB-as-UTC).
+  - DILARANG KERAS mengurangi 7 jam ke `16, 59, 59` karena Prisma akan menulis string `16:59:59` ke kolom MySQL `DATETIME`. Di MySQL (yang berjalan pada timezone +07:00 WIB), fungsi `NOW()` pada pukul 17:00:00 sore bernilai `17:00:00`, sehingga perbandingan `WHERE expiredAt <= NOW()` bernilai TRUE dan mengeksekusi isolir prematur 7 jam lebih cepat (jam 5 sore)!
+  - Dengan jam `23, 59, 59, 999`, nilai tersimpan di MySQL adalah `23:59:59`, sehingga pada jam 17:00:00 sore perbandingan bernilai FALSE dan baru bernilai TRUE tepat saat melewati tengah malam (00:00:00 WIB hari H).
+- **Hard Invariant: Business Alignment (Billing Day vs Expiry vs WhatsApp Notification)**:
+  - Pelanggan jatuh tempo tanggal 6 memiliki masa aktif hingga tanggal 5 pukul 23:59:59 WIB. Tepat tengah malam saat berganti ke tanggal 6 (00:00:00 WIB), pelanggan diisolir sebagai **H+0**.
+  - Notifikasi WhatsApp isolir DITUNDA (*deferred*) hingga H+X (`isolationDelayDays`, default 7 hari atau sesuai settingan `whatsapp_reminder_settings`), bukan dikirim di H+0.
+  - Wilayah Kp. Tegal memiliki `billingDay = 10` dan masa aktif berakhir tanggal 9 pukul 23:59:59 WIB (baru diisolir tengah malam tanggal 10). Pelanggan Kp. Tegal TIDAK BOLEH diisolir pada tanggal 6.
+  - Pelanggan yang memang nunggak/terisolir dari bulan September (atau sebelumnya) WAJIB tetap berstatus `isolated` (*stay isolir*).
 
 ### Recent Patch Log (October 05, 2026 — v2.40.98: Payment Webhook Validation Handlers & Health-Check Readiness)
 

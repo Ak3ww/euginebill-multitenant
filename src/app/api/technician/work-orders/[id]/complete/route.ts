@@ -110,40 +110,47 @@ export async function POST(
         const odpLatNum = parseFloat(String(reportData.odpLat || customerLat || '0'));
         const odpLngNum = parseFloat(String(reportData.odpLng || customerLng || '0'));
 
-        // Find existing ODP by case-insensitive name
+        // Find existing ODP strictly by name or id
         let targetOdp = await prisma.networkODP.findFirst({
           where: {
-            name: { equals: odpNameTrimmed }
+            OR: [
+              { name: { equals: odpNameTrimmed } },
+              { id: odpNameTrimmed }
+            ]
           }
         });
 
-        // If not found, create new ODP automatically
+        // Strict: Do not create rogue ODPs from technician SPK; ODP must already exist in master data
         if (!targetOdp) {
-          targetOdp = await prisma.networkODP.create({
-            data: {
-              id: nanoid(),
-              name: odpNameTrimmed,
-              latitude: odpLatNum,
-              longitude: odpLngNum,
-              portCount: 16,
-              status: 'active',
+          console.warn(`[WorkOrder Complete] ODP "${odpNameTrimmed}" not found in master data. Skipping auto-creation.`);
+        } else if (targetUserId) {
+          // Check if the requested port is already occupied by a different active customer
+          const existingPortAssignment = await prisma.odpCustomerAssignment.findUnique({
+            where: {
+              odpId_portNumber: {
+                odpId: targetOdp.id,
+                portNumber: odpPortNum,
+              }
+            },
+            include: {
+              customer: {
+                select: { id: true, name: true, status: true }
+              }
             }
           });
-        }
 
-        // If found, update ODP location if lat/lng are provided
-        if (targetOdp && (odpLatNum !== 0 || odpLngNum !== 0)) {
-          await prisma.networkODP.update({
-            where: { id: targetOdp.id },
-            data: {
-              latitude: odpLatNum,
-              longitude: odpLngNum,
+          if (existingPortAssignment && existingPortAssignment.customerId !== targetUserId) {
+            const occupiedCust = existingPortAssignment.customer;
+            // If the port was occupied by an inactive/cabut user, we can safely overwrite or clear it
+            const isInactive = occupiedCust && ['stop', 'isolated', 'suspended', 'blocked', 'cabut'].includes(occupiedCust.status);
+            if (!isInactive) {
+              console.warn(
+                `[WorkOrder Complete] Port collision: Port ${odpPortNum} in ODP "${targetOdp.name}" is already assigned to active customer ${occupiedCust?.name || existingPortAssignment.customerId}`
+              );
             }
-          }).catch(e => console.error('Failed to update ODP coordinates:', e));
-        }
+          }
 
-        // Link customer to ODP assignment if targetUserId exists
-        if (targetUserId && targetOdp) {
+          // Link customer to ODP assignment
           await prisma.odpCustomerAssignment.upsert({
             where: { customerId: targetUserId },
             create: {
@@ -159,7 +166,7 @@ export async function POST(
           });
         }
       } catch (odpSeedErr) {
-        console.error('Failed to auto-seed ODP / customer assignment:', odpSeedErr);
+        console.error('Failed to link ODP / customer assignment:', odpSeedErr);
       }
     }
 

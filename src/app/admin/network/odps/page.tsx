@@ -140,16 +140,16 @@ export default function ODPsPage() {
   const handleEdit = (odp: ODP) => {
     setEditingOdp(odp);
     setFormData({
-      name: odp.name,
-      latitude: odp.latitude.toString(),
-      longitude: odp.longitude.toString(),
-      oltId: odp.oltId,
-      ponPort: odp.ponPort.toString(),
-      portCount: odp.portCount.toString(),
+      name: odp.name || '',
+      latitude: odp.latitude !== null && odp.latitude !== undefined ? odp.latitude.toString() : '',
+      longitude: odp.longitude !== null && odp.longitude !== undefined ? odp.longitude.toString() : '',
+      oltId: odp.oltId || '',
+      ponPort: odp.ponPort !== null && odp.ponPort !== undefined ? odp.ponPort.toString() : '1',
+      portCount: odp.portCount !== null && odp.portCount !== undefined ? odp.portCount.toString() : '8',
       odcId: odp.odcId || '',
       parentOdpId: odp.parentOdpId || '',
-      status: odp.status,
-      followRoad: odp.followRoad,
+      status: odp.status || 'active',
+      followRoad: !!odp.followRoad,
     });
     setConnectionType(odp.parentOdpId ? 'odp' : 'odc');
     setIsDialogOpen(true);
@@ -631,11 +631,13 @@ export default function ODPsPage() {
                     <ModalSelect value={formData.odcId} onChange={(e) => setFormData({ ...formData, odcId: e.target.value })} required={connectionType === 'odc'}>
                       <option value="" className="dark:bg-[#0a0520]">{t('network.selectOdc')}</option>
                       {filteredOdcs.map(odc => {
-                        const odcCount = odc._count?.odps || 0;
+                        const isCurrentOdc = editingOdp?.odcId === odc.id;
+                        const odpCount = odc._count?.odps || 0;
+                        const odcCount = isCurrentOdc ? Math.max(0, odpCount - 1) : odpCount;
                         const isFull = odcCount >= odc.portCount;
                         const statusText = isFull
-                          ? `${odc.name} (${odcCount}/${odc.portCount} FULL - Over capacity)`
-                          : `${odc.name} (${odcCount}/${odc.portCount} Ports)`;
+                          ? `${odc.name} (${odpCount}/${odc.portCount} FULL - Over capacity)`
+                          : `${odc.name} (${odpCount}/${odc.portCount} Ports)`;
                         return (
                           <option key={odc.id} value={odc.id} className="dark:bg-[#0a0520]">
                             {statusText}
@@ -645,11 +647,14 @@ export default function ODPsPage() {
                     </ModalSelect>
                     {formData.odcId && (() => {
                       const selectedOdc = odcs.find(o => o.id === formData.odcId);
-                      if (selectedOdc && (selectedOdc._count?.odps || 0) >= selectedOdc.portCount) {
+                      const isCurrentOdc = editingOdp?.odcId === formData.odcId;
+                      const currentCount = selectedOdc?._count?.odps || 0;
+                      const effectiveCount = isCurrentOdc ? Math.max(0, currentCount - 1) : currentCount;
+                      if (selectedOdc && effectiveCount >= selectedOdc.portCount) {
                         return (
                           <div className="mt-2 p-2.5 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-                            <span>Warning: Selected ODC &quot;{selectedOdc.name}&quot; is FULL ({selectedOdc._count?.odps || 0}/{selectedOdc.portCount} ODPs). Exceeding capacity will reject creation on server.</span>
+                            <span>Warning: Selected ODC &quot;{selectedOdc.name}&quot; is FULL ({currentCount}/{selectedOdc.portCount} ODPs). Exceeding capacity will reject creation on server.</span>
                           </div>
                         );
                       }

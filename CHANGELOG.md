@@ -4,20 +4,89 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.40.100] — 2026-10-05
+## [2.40.102] — 2026-10-07
 
-### Fix 7-Hour Timezone Offset in createWibEndOfDay & Align Precise Midnight Auto-Isolation
+### ODP Customer Navigation, ODP Edit Fix, and Strict SPK ODP Port Reservation Enforcement
 
 - **Latar Belakang / Kebutuhan (Issue & Context)**:
-  1. **Isolir Prematur Jam 5 Sore (17:00 WIB)**: Siklus tagihan menyimpan Date dengan jam `16:59:59 UTC`. Saat dievaluasi oleh query MySQL `WHERE expiredAt <= NOW()` di timezone WIB, jam 17:00:00 sore bernilai `>= 16:59:59`, memicu eksekusi isolir 7 jam lebih awal sebelum tengah malam.
-  2. **Penyelarasan Siklus Bisnis Strict**: Pelanggan dengan jatuh tempo tanggal $N$ harus aktif hingga tanggal $(N-1)$ pukul 23:59:59 WIB, dan baru masuk status isolir tepat tengah malam (masuk tanggal $N$ pukul 00:00:00 WIB sebagai H+0, notifikasi WA ditunda ke H+X).
+  1. Halaman penautan manual pelanggan ke ODP (`/admin/network/customers`) sebelumnya tidak muncul di menu navigasi sidebar admin sehingga admin harus mengakses via URL langsung.
+  2. Edit ODP di `/admin/network/odps` sempat bermasalah dan terblokir karena perhitungan utilisasi ODC menyertakan ODP yang sedang diedit itu sendiri, sehingga ODC yang sudah penuh menolak penyimpanan pembaruan ODP yang sudah terpasang. Selain itu nilai `oltId` dan `ponPort` membutuhkan penanganan null-safe yang lebih kokoh.
+  3. Teknisi di portal SPK (`/technician/work-orders/[id]`) sebelumnya dapat mengetik nama ODP sembarangan secara manual atau memilih sembarang port tanpa memeriksa ketersediaan port, yang berisiko membuat port ODP tumpang-tindih (collision) atau membuat data ODP bayangan di database.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Sidebar Navigation**: Menambahkan tautan resmi "Pelanggan ODP" (`/admin/network/customers`) di bawah menu Topologi (`Infrastruktur > Topologi`).
+  2. **ODP Editing Modal & API**:
+     - Memperbaiki `handleEdit` pada `/admin/network/odps` agar null-safe untuk field latitude, longitude, oltId, ponPort, odcId, dan parentOdpId.
+     - Memperbaiki kalkulasi kapasitas ODC agar mengecualikan ODP yang sedang diedit (`editingOdp?.odcId === odc.id`), sehingga admin dapat memperbarui ODP yang berada di ODC berkapasitas penuh tanpa false-positive reject.
+  3. **Strict SPK Technician Workflow (`/technician/work-orders/[id]`)**:
+     - Menghapus opsi input manual nama ODP (`+ Ketik ODP Manual`). Teknisi diwajibkan memilih ODP resmi yang sudah terdaftar di master data.
+     - Port ODP yang telah terpakai oleh pelanggan aktif otomatis terkunci (`disabled`) pada grid port dengan indikator status jelas, mencegah pemilihan port yang sama.
+     - Memperketat validasi `validateStep2` agar menolak pengiriman jika port yang dipilih sudah terpakai atau ODP tidak valid.
+     - Pada endpoint penyelesaian SPK (`/api/technician/work-orders/[id]/complete`), menghapus pembuatan ODP baru secara otomatis; ODP dicocokkan langsung ke master data yang sudah terverifikasi.
+
+- **Files**:
+  - Modified: `src/app/admin/AdminClientLayout.tsx`
+  - Modified: `src/app/admin/network/odps/page.tsx`
+  - Modified: `src/app/technician/(portal)/work-orders/[id]/page.tsx`
+  - Modified: `src/app/api/technician/work-orders/[id]/complete/route.ts`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
+## [2.40.101] — 2026-10-06
+
+### Fix Auto-Isolation Policy Overwrite Bug & Un-isolation MikroTik Parity
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Pelanggan Expired Tidak Terisolir di Jam 00:00:00 Masuk Tanggal 6**: Cron `pppoe_auto_isolir` mencatat `Found 10 unisolated user(s) with expiredAt <= NOW(), but skipped by gracePeriod (0d) or autoIso=0`. Investigasi mendalam menemukan bahwa `autoIsolationEnabled` pada pelanggan reguler terkunci bernilai `0` (false) di database.
+  2. **Root Cause Overwrite `autoIsolationEnabled: false`**: Pada `src/app/api/pppoe/users/status/route.ts`, `src/app/api/pppoe/users/bulk-status/route.ts`, dan `src/server/services/pppoe.service.ts`, terdapat logika terdahulu `...(status === 'active' ? { autoIsolationEnabled: false } : {})`. Setiap kali admin mengaktifkan pelanggan atau mengedit akun pelanggan, flag `autoIsolationEnabled` ditimpa menjadi `false` secara permanen, sehingga cron isolir melewati pelanggan tersebut selamanya.
+  3. **Desinkronisasi MikroTik Secret Syaiful Anwar (EMG188)**: Pelanggan telah membayar lunas pada 05 Okt 16:28 WIB dan status di DB telah `ACTIVE` (expired 6 Nov), namun secret profil di router MikroTik Cibinong sempat tertinggal di `profile=isolir` akibat koneksi API sempat terputus/timeout.
+  4. **Notifikasi "User Expiring Today"**: Notifikasi admin pada jam 00:00 WIB bukanlah notifikasi isolir, melainkan reminder terjadwal dari `NotificationService.checkExpiredUsers()` bahwa masa aktif pelanggan jatuh tempo pada hari tersebut.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Pembersihan Logika Overwrite Flag Auto-Isolasi**:
+     - Menghapus pemaksaan `autoIsolationEnabled: false` saat status pelanggan diubah menjadi `active`.
+     - Menggunakan `calculateNextBillingExpiry` secara terpusat pada handler `bulk-status` dan `status` (menghapus perhitungan manual).
+     - Menghubungkan pembuatan tanggal akhir hari WIB dengan fungsi terpusat `createWibEndOfDay` pada `pppoe.service.ts`.
+  2. **Audit & Auto-Sync Script (`scripts/fix-auto-isolation-policy.ts`)**:
+     - Memindai seluruh pelanggan aktif: mengembalikan `autoIsolationEnabled = true` untuk pelanggan reguler di luar Kp. Tegal.
+     - Melindungi pelanggan Kp. Tegal (`billingDay: 10`, `autoIsolationEnabled: false`).
+     - Melakukan auto-heal untuk pelanggan yang telah melunasi invoice agar `expiredAt` dipindahkan ke siklus November.
+     - Menyediakan sinkronisasi langsung secret MikroTik dan pemutusan sesi dial aktif (`/ppp active remove`) untuk Syaiful Anwar (EMG188).
+
+- **Files**:
+  - Modified: `src/app/api/pppoe/users/status/route.ts`
+  - Modified: `src/app/api/pppoe/users/bulk-status/route.ts`
+  - Modified: `src/server/services/pppoe.service.ts`
+  - Removed: `scripts/fix-auto-isolation-policy.ts` (one-time post-migration cleanup)
+  - Removed: `scripts/check-user-history.ts` (one-time diagnostic cleanup)
+  - Removed: `scripts/reset-customers-oct6.ts` (one-time migration cleanup)
+  - Removed: `scripts/register-server-only-mock.js` (one-time mock cleanup)
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
+## [2.40.100] — 2026-10-05
+
+### Fix 7-Hour Timezone Offset in createWibEndOfDay & Align Precise Midnight Auto-Isolation (Regular & Kp. Tegal)
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. **Isolir Prematur Jam 5 Sore (17:00 WIB)**: Pada tanggal 5 Oktober 2026 pukul 17:00 WIB, sistem auto-isolir mengeksekusi isolir pelanggan 7 jam lebih awal sebelum tengah malam.
+  2. **Root Cause Double Offset**: `createWibEndOfDay` di `billing-cycle.service.ts` menyimpan Date dengan jam `16:59:59 UTC`. Saat dievaluasi oleh query MySQL `WHERE expiredAt <= NOW()` di timezone WIB, jam 17:00:00 sore bernilai `>= 16:59:59`, memicu eksekusi isolir tepat jam 5 sore.
+  3. **Penyelarasan Siklus Bisnis & Wilayah**: Pelanggan reguler jatuh tempo tgl 6 harus aktif sampai 5 Oktober 23:59:59 WIB dan baru diisolir tengah malam (masuk tgl 6 Okt 00:00 WIB sebagai H+0, notifikasi WA ditunda ke H+X). Pelanggan Kp. Tegal (billingDay 10) aktif sampai 9 Oktober 23:59:59 WIB. Pelanggan isolir September/lama tetap isolir.
 
 - **Solusi Arsitektural & Perubahan Teknis**:
   1. **Fix `createWibEndOfDay`**: Mengubah jam Date.UTC dari `16, 59, 59, 999` menjadi `23, 59, 59, 999` (WIB-as-UTC) sehingga MySQL menyimpan `YYYY-MM-DD 23:59:59` dan tidak pernah lagi trigger di jam 17:00 sore.
-  2. **Strict Invariant Guarantee**: Memastikan seluruh tenant SaaS terlindungi dari premature auto-isolation tanpa memerlukan script manipulasi manual.
+  2. **Recovery CLI Script (`scripts/reset-customers-oct6.ts`)**:
+     - Membuka isolir pelanggan di MikroTik (set `/ppp secret profile=<paket_asal> disabled=no` dan kick session `/ppp active remove`).
+     - Mengupdate database: Reguler UNPAID ke expiredAt 5 Okt 23:59:59, Kp. Tegal UNPAID ke 9 Okt 23:59:59, sedangkan pelanggan SUDAH PAID dipindahkan ke periode November (5 Nov 23:59:59 untuk Reguler, 9 Nov 23:59:59 untuk Kp. Tegal).
+     - Status dipulihkan ke `active` agar internet aktif dan siap isolir tepat waktu.
+     - Melindungi pelanggan nunggak/isolir September agar tetap isolir.
+     - Menyertakan interceptor `register-server-only-mock.js` agar script CLI dapat dieksekusi mandiri tanpa error Next.js `server-only`.
 
 - **Files**:
   - Modified: `src/server/services/billing/billing-cycle.service.ts`
+  - Added: `scripts/reset-customers-oct6.ts`
+  - Added: `scripts/register-server-only-mock.js`
+  - Modified: `package.json`
   - Modified: `CHANGELOG.md`
   - Modified: `docs/AI_PROJECT_MEMORY.md`
 
