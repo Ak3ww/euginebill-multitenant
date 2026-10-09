@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { BrandLogo } from '@/components/ui/brand-logo';
 
 export interface InvoiceTemplateData {
   company: {
@@ -103,12 +105,14 @@ export default function InvoiceTemplate({ data }: { data: InvoiceTemplateData })
                 <div className="text-[14px] font-bold text-red-600 my-1.5 leading-tight">{data.invoice.number}</div>
                 <div className="mt-2">
                   {isPaid ? (
-                    <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 print:border-emerald-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                      ✓ SUDAH BAYAR
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 print:border-emerald-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                      SUDAH BAYAR
                     </span>
                   ) : isOverdue ? (
-                    <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300 print:border-red-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                      ⚠️ TERLAMBAT
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-300 print:border-red-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-700" />
+                      TERLAMBAT
                     </span>
                   ) : (
                     <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 print:border-amber-500" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
@@ -152,11 +156,24 @@ export default function InvoiceTemplate({ data }: { data: InvoiceTemplateData })
               </div>
               <div className="bg-[#f9fafb] border border-gray-200 rounded-xl p-4.5">
                 <div className="font-bold text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">Status Pembayaran</div>
-                <div className="mb-1 text-gray-700 text-xs"><span className="text-gray-400">Status: </span><strong>{isPaid ? '✓ LUNAS' : isOverdue ? '⚠️ TERLAMBAT' : 'BELUM BAYAR'}</strong></div>
+                <div className="mb-1 text-gray-700 text-xs flex items-center gap-1.5">
+                  <span className="text-gray-400">Status: </span>
+                  <strong>{isPaid ? 'LUNAS' : isOverdue ? 'TERLAMBAT' : 'BELUM BAYAR'}</strong>
+                </div>
                 {data.invoice.paidAt && (
                   <>
                     <div className="mb-1 text-gray-700 text-xs"><span className="text-gray-400">Dibayar pada: </span>{data.invoice.paidAt}</div>
-                    <div className="mb-1 text-gray-700 text-xs"><span className="text-gray-400">Via: </span>{data.paidVia === 'gateway' ? 'Payment Gateway' : `Bank Transfer${data.destinationBank ? ` (${data.destinationBank})` : ''}`}</div>
+                    <div className="mb-1 text-gray-700 text-xs flex items-center gap-1.5">
+                      <span className="text-gray-400">Via: </span>
+                      {data.paidVia === 'gateway' ? (
+                        <span>Payment Gateway</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5">
+                          Bank Transfer {data.destinationBank && `(${data.destinationBank})`}
+                          {data.destinationBank && <BrandLogo name={data.destinationBank} size="xs" variant="raw" />}
+                        </span>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

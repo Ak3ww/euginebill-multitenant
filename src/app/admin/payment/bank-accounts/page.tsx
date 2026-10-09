@@ -1,9 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
-import { Building2, Save, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Building2, Save, Loader2, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/components/cyberpunk/CyberToast';
+import { BrandLogo } from '@/components/ui/brand-logo';
+import { POPULAR_INDONESIAN_BANKS } from '@/lib/finlogos';
 
 interface BankAccount {
   bankName: string;
@@ -110,24 +112,53 @@ export default function BankAccountsPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-3">
+          <form onSubmit={handleSubmit} className="bg-card rounded-lg border border-border p-4 space-y-4">
+            {/* Quick-Pick Popular Banks */}
+            <div className="bg-muted/40 rounded-lg p-3 border border-border">
+              <span className="text-[11px] font-semibold text-muted-foreground block mb-2 uppercase tracking-wider">
+                Pilih Cepat Bank Populer:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_INDONESIAN_BANKS.slice(0, 10).map((bank) => (
+                  <button
+                    key={bank.slug}
+                    type="button"
+                    onClick={() => {
+                      // Check if already exists or add new
+                      setBankAccounts((prev) => [
+                        ...prev,
+                        { bankName: bank.name.split(' (')[0], accountNumber: '', accountName: '' },
+                      ]);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-background hover:bg-muted border border-border rounded-md text-xs font-medium text-foreground transition-all hover:border-primary/50"
+                  >
+                    <BrandLogo name={bank.slug} size="xs" variant="raw" />
+                    <span>{bank.name.split(' (')[0]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-4">
               {bankAccounts.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  Belum ada rekening bank. Klik tombol di bawah untuk menambahkan.
+                  Belum ada rekening bank. Klik bank populer di atas atau tombol Tambah Rekening di bawah.
                 </div>
               )}
 
               {bankAccounts.map((account, index) => (
-                <div key={index} className="p-3 bg-muted rounded-lg border border-border">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-xs font-medium text-foreground">
-                      {t('settings.accountNumber') || 'Rekening'} {index + 1}
-                    </h4>
+                <div key={index} className="p-3.5 bg-muted/50 rounded-lg border border-border">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/60">
+                    <div className="flex items-center gap-2">
+                      <BrandLogo name={account.bankName} size="sm" />
+                      <h4 className="text-xs font-semibold text-foreground">
+                        {account.bankName || `${t('settings.accountNumber') || 'Rekening'} ${index + 1}`}
+                      </h4>
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeAccount(index)}
-                      className="p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-colors"
+                      className="p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-colors text-muted-foreground"
                       title="Hapus rekening"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -140,6 +171,7 @@ export default function BankAccountsPage() {
                       </label>
                       <input
                         type="text"
+                        list="bank-suggestions"
                         value={account.bankName}
                         onChange={(e) => updateAccount(index, 'bankName', e.target.value)}
                         className="w-full px-2 py-1.5 text-xs border border-border rounded bg-card focus:ring-1 focus:ring-ring focus:border-primary"
@@ -208,6 +240,12 @@ export default function BankAccountsPage() {
                   )}
                 </button>
               </div>
+              {/* Datalist for autocomplete */}
+              <datalist id="bank-suggestions">
+                {POPULAR_INDONESIAN_BANKS.map((bank) => (
+                  <option key={bank.slug} value={bank.name.split(' (')[0]} label={bank.name} />
+                ))}
+              </datalist>
             </div>
           </form>
         </div>

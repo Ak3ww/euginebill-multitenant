@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, CreditCard, Upload, Calendar, Building2, User, ArrowLeft, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { FileText, CreditCard, Upload, Calendar, Building2, User, ArrowLeft, CheckCircle, AlertCircle, XCircle, Copy, Check } from 'lucide-react';
 import { showSuccess, showError, showWarning } from '@/lib/sweetalert';
 import { formatWIB, todayWIBStr } from '@/lib/timezone';
 import { compressImage } from '@/lib/utils';
+import { BrandLogo } from '@/components/ui/brand-logo';
 
 interface BankAccount {
   bankName: string;
@@ -41,6 +42,13 @@ export default function PayManualPage({ params }: { params: Promise<{ token: str
     transferDate: '',
     notes: '',
   });
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const handleCopyAccountNumber = (accountNumber: string, index: number) => {
+    navigator.clipboard.writeText(accountNumber);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
 
   const fetchInvoice = useCallback(async (tokenValue: string) => {
     try {
@@ -260,16 +268,43 @@ export default function PayManualPage({ params }: { params: Promise<{ token: str
             </h2>
             <div className="space-y-3">
               {bankAccounts.map((account, index) => (
-                <div key={index} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border-l-4 border-teal-600">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Rekening {index + 1}</p>
-                      <p className="font-bold text-lg text-gray-900 dark:text-white">{account.bankName}</p>
-                      <p className="font-mono text-xl font-semibold text-teal-600 dark:text-teal-400 my-1">
-                        {account.accountNumber}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">a/n {account.accountName}</p>
+                <div key={index} className="bg-gray-50 dark:bg-gray-700/60 rounded-xl p-4 border border-gray-200 dark:border-gray-600 transition-all hover:border-teal-500">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <BrandLogo name={account.bankName} size="lg" className="shrink-0" />
+                      <div>
+                        <p className="font-bold text-base text-gray-900 dark:text-white leading-tight">
+                          {account.bankName}
+                        </p>
+                        <p className="font-mono text-xl font-bold text-teal-600 dark:text-teal-400 tracking-wide my-0.5">
+                          {account.accountNumber}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">
+                          a/n <span className="font-medium text-gray-800 dark:text-gray-200">{account.accountName}</span>
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAccountNumber(account.accountNumber, index)}
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 self-start sm:self-center ${
+                        copiedIndex === index
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {copiedIndex === index ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-white" />
+                          Tersalin!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                          Salin No. Rek
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -286,9 +321,14 @@ export default function PayManualPage({ params }: { params: Promise<{ token: str
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Bank Tujuan Transfer <span className="text-red-600">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium">
+                  Bank Tujuan Transfer <span className="text-red-600">*</span>
+                </label>
+                {formData.bankName && (
+                  <BrandLogo name={formData.bankName} size="xs" />
+                )}
+              </div>
               <select
                 value={formData.bankName}
                 onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
