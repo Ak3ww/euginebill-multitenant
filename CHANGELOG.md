@@ -4,6 +4,79 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.104] — 2026-10-10
+
+### PPPoE Auto-Isolir & WhatsApp Isolation Notification (H+X) Timing Improvement
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pengaturan jeda hari kirim notifikasi isolir WhatsApp (Pesan Ke-3) telah diubah admin dari default H+7 ke H+4 (misal untuk penagihan jatuh tempo tgl 6, isolasi berjalan, dan pesan isolir ditargetkan masuk pada tgl 10).
+  2. Perhitungan H+X sebelumnya membandingkan selisih milidetik secara kaku terhadap jam 23:59:59 di hari jatuh tempo (`msSinceExpired / (24*60*60*1000) < isolationDelayDays`). Akibatnya, pada siang hari tgl 10 (misal jam 10:00 WIB), selisih baru tercatat ~3.42 hari sehingga pesan masih tertahan (*deferred*) dan tidak terkirim sampai jam 23:59:59 malam.
+  3. Pemanggilan script diagnosis langsung via standalone `tsx` di VPS sempat terhenti oleh modul Next.js `server-only`.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Calendar-Day Timing Logic (`src/server/jobs/auto-isolation.ts`)**:
+     - Mengubah komparasi penentuan H+X agar menghitung selisih hari kalender kalender lokal (`calendarDaysSince = Math.round((startOfToday - startOfExpDay) / 86400000)`).
+     - Menjadikan pesan isolir berstatus *eligible* untuk dikirim pada jam operasional kerja di tanggal target H+X (misal tgl 6 + 4 = tgl 10) tanpa harus menunggu pergantian tengah malam.
+  2. **Transisi Penuh ke Sistem 3-Pesan Tanpa Pengecualian Toggle `waNotificationEnabled`**:
+     - Menghapus pembatasan manual `waNotificationEnabled === false` pada antrean penagihan dan notifikasi isolir (`auto-isolation.ts`, `pppoe-sync.ts`, `voucher-sync.ts`, `send-reminder/route.ts`, `broadcast-invoice/route.ts`).
+     - Seluruh pelanggan yang memiliki nomor WhatsApp aktif kini 100% konsisten menerima alur baku 3 pesan per siklus: 2x Reminder Invoice (misal H-7 dan H-1) serta 1x Isolated Reminder (tepat pada H+4).
+  4. **Perbaikan Akar Masalah Duplikasi Tagihan & Perubahan Username Pelanggan**:
+     - **Penyebab**: Saat username pelanggan diubah atau dialihkan (misal dari `EMG160` ke `EMG350`), kolom `customerUsername` pada tabel `invoice` lama tidak otomatis tersinkronisasi. Akibatnya, saat pengguna lama kembali mengaktifkan username aslinya (`EMG160`), pengecekan invoice `existingInvoices` salah menganggap invoice milik pengguna lain sebagai invoice aktif miliknya.
+     - **Solusi 1 (Cascade Update on Rename)**: Menambahkan sinkronisasi otomatis `customerUsername` di `updatePppoeUser` (`src/server/services/pppoe.service.ts`) dan `PATCH /api/pppoe/users/[id]` sehingga setiap kali admin mengubah username, seluruh invoice yang terikat pada user tersebut otomatis ter-update ke username yang baru.
+     - **Solusi 2 (Strict Ownership Matching on Generate)**: Memperbaiki logika deteksi duplikasi pada `src/app/api/invoices/generate/route.ts` agar pemetaan `userInvoiceMap` memprioritaskan kecocokan relasi `userId`. Pengecekan sekunder via `customerUsername` hanya diakui jika invoice tersebut memang terikat pada `user.id` yang sama atau tidak memiliki relasi user (`userId === null`).
+     - **Solusi 3 (Auto-Reconcile Step)**: Menambahkan langkah sinkronisasi otomatis username invoice pada endpoint `/api/admin/invoices/reconcile` untuk mendeteksi dan merapikan invoice lama yang memiliki username lawas.
+
+- **Files**:
+  - Modified: `src/app/api/invoices/generate/route.ts`
+  - Modified: `src/server/services/pppoe.service.ts`
+  - Modified: `src/app/api/pppoe/users/[id]/route.ts`
+  - Modified: `src/app/api/admin/invoices/reconcile/route.ts`
+  - Modified: `src/server/jobs/auto-isolation.ts`
+  - Modified: `src/server/jobs/pppoe-sync.ts`
+  - Modified: `src/server/jobs/voucher-sync.ts`
+  - Modified: `src/app/api/invoices/send-reminder/route.ts`
+  - Modified: `src/app/api/whatsapp/broadcast-invoice/route.ts`
+
+## [2.40.103] — 2026-10-09
+
+### Indonesian Brandmarks Integration via idn-finlogos & Universal BrandLogo System
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Halaman pembayaran transfer manual pelanggan (`/pay-manual/[token]`) sebelumnya hanya menampilkan teks polos nama bank tanpa logo resmi, serta minim interaksi kemudahan salin nomor rekening.
+  2. Pengaturan rekening bank admin (`/admin/payment/bank-accounts`) mengharuskan admin mengetik manual seluruh nama bank tanpa visualisasi, preview logo, atau tombol pilih cepat bank populer.
+  3. Dokumen cetak invoice (`InvoiceTemplate.tsx`) masih memiliki text emoji (misal `⚠️ TERLAMBAT`, `✓ LUNAS`) yang melanggar aturan workspace UI anti-emoji, serta belum menampilkan logo bank resmi untuk rekening tujuan pembayaran.
+  4. Ekosistem membutuhkan library aset vektor SVG resmi berstandar nasional untuk perbankan, e-wallet, payment gateway, dan kurir logistik Indonesia.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Aset Kurasi SVGO Lokal**: Mengintegrasikan aset resmi dari `idn-finlogos` (v2.5.1) dengan menyimpan ~35 logo perbankan, e-wallet, dan payment gateway esensial di `/public/images/finlogos/` untuk rendering instan berlatensi 0ms.
+  2. **Smart Resolver & Normalizer (`src/lib/finlogos.ts`)**:
+     - Menyediakan pencocokan cerdas multi-alias yang otomatis mengenali variasi nama bank Indonesia, singkatan, hingga kode 3-digit transfer ATM (e.g., `"Bank Central Asia"` / `"BCA"` / `"014"` -> `bca`, `"Bank Mandiri"` / `"008"` -> `mandiri`, `"002"` -> `bri`, `"451"` -> `bsi`).
+     - Menyediakan daftar `POPULAR_INDONESIAN_BANKS` untuk quick-pick dan datalist autocomplete.
+     - Menyediakan fallback cerdas ke CDN jsDelivr jika query merupakan brand di luar kurasi lokal.
+  3. **Universal Component `<BrandLogo />` (`src/components/ui/brand-logo.tsx`)**:
+     - Desain ramah dark-mode (`variant="badge"` dengan background kontras bersih dan border hairline) sehingga warna resmi brand tidak rusak.
+     - Fallback graceful ke ikon Lucide `<Building2 />` jika logo tidak ditemukan, mencegah resiko broken image 404.
+  4. **Pembaruan Halaman Pembayaran Manual Pelanggan (`/pay-manual/[token]`)**:
+     - Menampilkan logo resmi bank pada setiap kartu rekening tujuan transfer (`<BrandLogo name={account.bankName} size="lg" />`).
+     - Menambahkan tombol interaktif 1-klik "Salin No. Rek" dengan feedback visual checkmark "Tersalin!".
+     - Menampilkan live mini preview logo bank pada form pilihan bank tujuan transfer.
+  5. **Pembaruan Form Rekening Bank Admin (`/admin/payment/bank-accounts`)**:
+     - Menambahkan pita tombol Quick-Pick 10 Bank Populer (BCA, Mandiri, BRI, BNI, BSI, CIMB, Permata, Danamon, BTN, SeaBank) berlogo resmi.
+     - Setiap item rekening kini menampilkan header berlogo resmi bank serta autocomplete datalist.
+  6. **Pembersihan Invoice Template (`src/components/InvoiceTemplate.tsx`)**:
+     - Mengganti seluruh text emoji status dengan komponen resmi Lucide React (`<CheckCircle2 />`, `<AlertTriangle />`).
+     - Menampilkan logo bank resmi tujuan transfer pada ringkasan pembayaran.
+
+- **Files**:
+  - Added: `src/lib/finlogos.ts`
+  - Added: `src/components/ui/brand-logo.tsx`
+  - Added: `public/images/finlogos/*` (~35 SVG files)
+  - Modified: `src/app/pay-manual/[token]/page.tsx`
+  - Modified: `src/app/admin/payment/bank-accounts/page.tsx`
+  - Modified: `src/components/InvoiceTemplate.tsx`
+  - Modified: `CHANGELOG.md`
+  - Modified: `docs/AI_PROJECT_MEMORY.md`
+
 ## [2.40.102] — 2026-10-07
 
 ### ODP Customer Navigation, ODP Edit Fix, and Strict SPK ODP Port Reservation Enforcement

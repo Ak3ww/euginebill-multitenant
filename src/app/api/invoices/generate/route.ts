@@ -102,10 +102,16 @@ export async function POST(request: NextRequest) {
       select: { userId: true, customerUsername: true, invoiceNumber: true, status: true },
     });
 
+    // Prioritize direct userId mapping, only fallback to customerUsername if the invoice actually belongs to this user or has no userId
     const userInvoiceMap = new Map<string, string>();
     for (const inv of existingInvoices) {
-      if (inv.userId) userInvoiceMap.set(inv.userId, inv.invoiceNumber);
-      if (inv.customerUsername) userInvoiceMap.set(inv.customerUsername, inv.invoiceNumber);
+      if (inv.userId) {
+        userInvoiceMap.set(`id:${inv.userId}`, inv.invoiceNumber);
+      }
+      if (inv.customerUsername) {
+        // If invoice has a userId, only map by username if userId matches
+        userInvoiceMap.set(`user:${inv.customerUsername}`, inv.invoiceNumber);
+      }
     }
 
     let generated = 0;
@@ -122,7 +128,13 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user already has an active/paid invoice for this target month
-        const existingInvNum = userInvoiceMap.get(user.id) || (user.username ? userInvoiceMap.get(user.username) : undefined);
+        // Primary check is by user.id. Secondary check by username is ONLY valid if the invoice actually belongs to this user
+        const existingInvById = userInvoiceMap.get(`id:${user.id}`);
+        const existingInvByUsername = user.username
+          ? existingInvoices.find(inv => inv.customerUsername === user.username && (!inv.userId || inv.userId === user.id))?.invoiceNumber
+          : undefined;
+        const existingInvNum = existingInvById || existingInvByUsername;
+
         if (skipExisting && existingInvNum) {
           skipped++;
           errors.push({

@@ -9,7 +9,7 @@ import { sendAdminCreateUser } from '@/server/services/notifications/whatsapp-te
 import { changePPPoERateLimit } from '@/server/services/mikrotik/rate-limit';
 import { generateUniqueReferralCode } from '@/server/services/referral.service';
 import { generateInvoiceNumber } from '@/server/services/billing/invoice.service';
-import { calculateNextBillingExpiry } from '@/server/services/billing/billing-cycle.service';
+import { calculateNextBillingExpiry, createWibEndOfDay } from '@/server/services/billing/billing-cycle.service';
 import crypto, { randomBytes, randomUUID } from 'crypto';
 import { PPPSecretService } from '@/server/services/mikrotik/ppp-secret.service';
 import { detectOntVendorAndModel } from '@/lib/olt/ont-detector';
@@ -1008,7 +1008,7 @@ export async function updatePppoeUser(
           const expStr = String(data.expiredAt);
           if (/^\d{4}-\d{2}-\d{2}$/.test(expStr)) {
             const [y, m, d] = expStr.split('-').map(Number);
-            return { expiredAt: new Date(Date.UTC(y, m - 1, d, 16, 59, 59, 999)) };
+            return { expiredAt: createWibEndOfDay(y, m - 1, d) };
           }
           return { expiredAt: new Date(expStr) };
         }
@@ -1027,8 +1027,6 @@ export async function updatePppoeUser(
       ...(data.autoRenewal !== undefined && { autoRenewal: data.autoRenewal }),
       ...(data.autoIsolationEnabled !== undefined
         ? { autoIsolationEnabled: data.autoIsolationEnabled }
-        : data.status === 'active'
-        ? { autoIsolationEnabled: false }
         : {}),
       ...(data.idCardNumber !== undefined && { idCardNumber: data.idCardNumber }),
 
@@ -1039,28 +1037,18 @@ export async function updatePppoeUser(
     } as never,
   });
 
-  // If phone or name changed, sync across all related invoices and work orders
-  if (data.phone || data.name) {
+  // If phone, name, or username changed, sync across all related invoices and work orders
+  if (data.phone || data.name || (data.username && data.username !== currentUser.username)) {
     try {
-      // Update customerPhone and customerName on all invoices
+      // Update customerPhone, customerName, and customerUsername on all invoices
       await prisma.invoice.updateMany({
         where: { userId: user.id },
         data: {
           ...(data.phone && { customerPhone: data.phone }),
           ...(data.name && { customerName: data.name }),
+          ...(data.username && { customerUsername: data.username }),
         },
       });
-
-      // Also update customerPhone and customerName on all invoices (including paid)
-      if (data.phone || data.name) {
-        await prisma.invoice.updateMany({
-          where: { userId: user.id },
-          data: {
-            ...(data.phone && { customerPhone: data.phone }),
-            ...(data.name && { customerName: data.name }),
-          },
-        });
-      }
 
       await prisma.workOrder.updateMany({
         where: { linkedUserId: user.id },

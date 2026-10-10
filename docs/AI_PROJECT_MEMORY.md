@@ -37,6 +37,10 @@
   - Guard anti-duplikasi pesan isolir WAJIB membatasi rentang pencarian ke siklus aktif bulan berjalan (`cycleStart = user.expiredAt - 2 hari`), DILARANG mencari 30 hari ke belakang agar riwayat isolir bulan sebelumnya (misal September) tidak memblokir pengiriman bulan ini (Oktober).
 - **Hard Invariant: Standalone Runner Execution (`runner-wrapper.cjs` / `preload.cjs`)**:
   - Menjalankan skrip database standalone di VPS WAJIB menyertakan mock `server-only`: `node --require ./src/cron/preload.cjs --require tsx/cjs ./scripts/<script-name>.ts`.
+- **Hard Invariant: Invoice Username Cascade & Strict Ownership Matching**:
+  - Saat username pelanggan PPPoE diubah (misal pemindahan username antar pelanggan atau aktivasi ulang akun), seluruh tagihan (`prisma.invoice`) yang terikat pada `userId` tersebut WAJIB ikut di-cascade memperbarui `customerUsername = newUsername` (`src/server/services/pppoe.service.ts` dan `PATCH /api/pppoe/users/[id]`).
+  - Pengecekan invoice aktif duplikat bulanan (`src/app/api/invoices/generate/route.ts`) WAJIB memprioritaskan relasi `userId`. Pengecekan sekunder dengan `customerUsername` DILARANG mengklaim invoice milik orang lain jika invoice tersebut memiliki `userId` berbeda.
+  - Endpoint `/api/admin/invoices/reconcile` menyertakan langkah otomatis untuk menyelaraskan `customerUsername` pada seluruh invoice lama yang berbeda dengan username akun aslinya saat ini.
 
 ### Recent Patch Log (October 09, 2026 — v2.40.103: Indonesian Brandmarks Integration via idn-finlogos & Universal BrandLogo System)
 

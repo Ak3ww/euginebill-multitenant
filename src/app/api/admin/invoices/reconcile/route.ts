@@ -47,8 +47,30 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-    }
     logs.push(`Re-linked ${reLinkedInvoicesCount} unlinked invoices to PPPoE users`);
+
+    // ── 1b. Re-sync customerUsername on Invoices where User was renamed ───────
+    const mismatchedInvoices = await prisma.invoice.findMany({
+      where: {
+        userId: { not: null },
+      },
+      include: {
+        user: { select: { id: true, username: true } },
+      },
+    });
+
+    let reSyncedUsernamesCount = 0;
+    for (const inv of mismatchedInvoices) {
+      if (inv.user && inv.user.username && inv.customerUsername !== inv.user.username) {
+        await prisma.invoice.update({
+          where: { id: inv.id },
+          data: { customerUsername: inv.user.username },
+        });
+        reSyncedUsernamesCount++;
+        logs.push(`Updated invoice ${inv.invoiceNumber} username from "${inv.customerUsername}" to "${inv.user.username}"`);
+      }
+    }
+    logs.push(`Re-synced ${reSyncedUsernamesCount} invoices with updated customer usernames`);
 
     // ── 2. Re-link PPPoE Users with missing routerId ─────────────────────────
     const defaultRouter = await prisma.router.findFirst({
