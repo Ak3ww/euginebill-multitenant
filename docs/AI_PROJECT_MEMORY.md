@@ -20,6 +20,33 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 10, 2026 — v2.40.104: 3-Message Notification Architecture & VPS Multi-Repository Deployment Paths)
+
+- **Hard Invariant: VPS Deployment Directories Across Ecosystem**:
+  - **Single-Tenant Billing (Client)**: `/var/www/EugineBill-radius` (PM2: `EugineBill-radius`, `EugineBill-wa`, `EugineBill-cron`).
+  - **Multi-Tenant Billing (SaaS Platform)**: `/var/www/EugineBill-multitenant` (PM2: `EugineBill-multitenant`).
+  - **Store Platform (E-Commerce)**: `/var/www/store-euginemedia` (PM2: `store-euginemedia`).
+- **Hard Invariant: Standard 3-Message Cycle (No `waNotificationEnabled` Blocker)**:
+  - Ekosistem menggunakan baku 3 pesan per siklus penagihan:
+    1. **Pesan 1**: Pengingat Invoice Pertama (H-7).
+    2. **Pesan 2**: Pengingat Invoice Kedua (H-1 / sisa masa aktif 1 hari).
+    3. **Pesan 3**: Pemberitahuan Isolir (H+X, default H+4 atau H+7).
+  - Pengecekan manual `waNotificationEnabled === false` telah dicabut dari antrean otomatis agar seluruh pelanggan ber-nomor WA valid menerima pemberitahuan resmi. Hanya pelanggan dengan `autoIsolationEnabled: false` (seperti Kp. Tegal) yang dikecualikan dari isolir.
+- **Hard Invariant: Calendar-Day Timing & Idempotency Scope (`sendPendingIsolationNotifications`)**:
+  - Penentuan kelayakan H+X WA isolir WAJIB menggunakan selisih hari kalender (`calendarDaysSince = Math.round((startOfToday - startOfExpDay) / 86400000)`) agar terkirim pada jam operasional kerja hari target, bukan tertahan milidetik hingga tengah malam.
+  - Guard anti-duplikasi pesan isolir WAJIB membatasi rentang pencarian ke siklus aktif bulan berjalan (`cycleStart = user.expiredAt - 2 hari`), DILARANG mencari 30 hari ke belakang agar riwayat isolir bulan sebelumnya (misal September) tidak memblokir pengiriman bulan ini (Oktober).
+- **Hard Invariant: Standalone Runner Execution (`runner-wrapper.cjs` / `preload.cjs`)**:
+  - Menjalankan skrip database standalone di VPS WAJIB menyertakan mock `server-only`: `node --require ./src/cron/preload.cjs --require tsx/cjs ./scripts/<script-name>.ts`.
+
+### Recent Patch Log (October 09, 2026 — v2.40.103: Indonesian Brandmarks Integration via idn-finlogos & Universal BrandLogo System)
+
+- **Hard Invariant: Brand Marks & Identity Normalization (`idn-finlogos`)**:
+  - Semua logo perbankan, e-wallet, payment gateway, dan kurir logistik Indonesia distandarkan menggunakan asset SVG resmi dari `idn-finlogos` (v2.5.1).
+  - Folder publik `/public/images/finlogos/` menyimpan ~35 logo perbankan dan fintech esensial (BCA, Mandiri, BRI, BNI, BSI, CIMB Niaga, Permata, Danamon, BTN, SeaBank, Jago, blu, Jenius, NeoBank, QRIS, GoPay, OVO, DANA, ShopeePay, LinkAja, AstraPay, Indomaret, Alfamart, dll.) untuk akses lokal latensi 0ms.
+  - Komponen `<BrandLogo name={...} />` (`src/components/ui/brand-logo.tsx`) WAJIB digunakan untuk merender logo institusi finansial di portal admin, pembayaran manual pelanggan (`/pay-manual/[token]`), dan invoice template.
+  - Modul resolver `src/lib/finlogos.ts` menyertakan normalizer multi-alias (mengenali singkatan, nama PT panjang, dan kode 3-digit kliring ATM seperti `014` -> `bca`, `008` -> `mandiri`, `002` -> `bri`, `451` -> `bsi`) serta fallback otomatis ke CDN jsDelivr jika slug berada di luar kurasi lokal.
+  - **Zero Text Emoji Strict Compliance**: Seluruh text emoji pada status invoice atau kartu pembayaran (seperti `⚠️` atau `✓`) WAJIB digantikan komponen Lucide React (`<AlertTriangle />`, `<CheckCircle2 />`).
+
 ### Recent Patch Log (October 07, 2026 — v2.40.102: ODP Customer Navigation, ODP Edit Fix, and Strict SPK ODP Port Reservation Enforcement)
 
 - **Hard Invariant: Strict ODP Master Selection in Technician SPK**:

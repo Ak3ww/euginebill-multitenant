@@ -21,13 +21,17 @@ For ALL customer-facing UI development (customer portal, payment pages, public l
 3. **Dark Mode Disabled**: Dark mode is disabled for the customer portal (light background).
 
 ## VPS Deployment & PM2 Standard
-1. **VPS Project Directory**: `/var/www/EugineBill-radius`
+1. **VPS Project Directories**:
+   - **Single-Tenant Billing (Client)**: `/var/www/EugineBill-radius`
+   - **Multi-Tenant Billing (SaaS)**: `/var/www/EugineBill-multitenant`
+   - **Store Platform (E-Commerce)**: `/var/www/store-euginemedia`
 2. **PM2 Process Names**:
-   - `EugineBill-radius` (Next.js Web App)
+   - `EugineBill-radius` (Single-Tenant Next.js Web App)
+   - `EugineBill-multitenant` (Multi-Tenant SaaS Next.js Web App)
+   - `store-euginemedia` (Eugine Store Next.js Web App)
    - `EugineBill-wa` (WhatsApp Baileys Service)
-   - `EugineBill-cron` (Cron Jobs)
-4. **VPS Build Optimization**: VPS hardware resources are limited and `npm run build` takes noticeable CPU/RAM. ALWAYS batch multiple updates, test thoroughly, and verify code syntax locally BEFORE asking the user to build on the VPS. Never ask the user to run `npm run build` repeatedly for small incremental changes.
-```
+   - `EugineBill-cron` (Cron Jobs Service)
+3. **VPS Build Optimization**: VPS hardware resources are limited and `npm run build` takes noticeable CPU/RAM. ALWAYS batch multiple updates, test thoroughly, and verify code syntax locally BEFORE asking the user to build on the VPS. Never ask the user to run `npm run build` repeatedly for small incremental changes.
 
 ## Persistent Upload & Zero-Data-Loss Standard
 1. **Mandatory Persistent Storage**: ALL file uploads across ALL modules (manual payment proofs, receipts, topup proofs, PSB/SPK photos, customer KTPs, logos) MUST strictly write to persistent storage using `getUploadDir(...)` from `@/lib/upload-dir` (`/var/data/EugineBill/uploads/`).
