@@ -1,4 +1,4 @@
-import 'server-only'
+// Server-side safety is guaranteed by Prisma/Node.js imports that can't run in browser bundles
 import { prisma } from '@/server/db/client';
 import { WhatsAppService } from '@/server/services/notifications/whatsapp.service';
 import { EmailService } from '@/server/services/notifications/email.service';
@@ -242,10 +242,8 @@ export async function autoIsolateExpiredUsers() {
         isolatedCount++;
         console.log(`[AUTO-ISOLATE] [SUCCESS] Successfully isolated ${user.username}`);
 
-        // 8. Send notification (strictly respect waNotificationEnabled & autoIsolationEnabled)
-        if (freshUser.waNotificationEnabled === false) {
-          console.log(`[AUTO-ISOLATE] [NOTICE] Skipping notification for ${user.username} (waNotificationEnabled = false)`);
-        } else if ((freshUser.autoIsolationEnabled as boolean) === false) {
+        // 8. Send notification (strictly respect autoIsolationEnabled)
+        if ((freshUser.autoIsolationEnabled as boolean) === false) {
           console.log(`[AUTO-ISOLATE] [BLOCKED] DILARANG mengirimkan WA notifikasi isolir untuk ${user.username} (autoIsolationEnabled = false)`);
         } else {
           try {
@@ -374,10 +372,9 @@ export async function sendIsolationNotification(
     };
 
     // -- WhatsApp ------------------------------------------------------------
-    const isWaEnabled = dbUser ? dbUser.waNotificationEnabled !== false : true;
     let waResult: { success: boolean; deferred?: boolean; skipped?: boolean; error?: string } = { success: true };
 
-    if (company.isolationNotifyWhatsapp && user.phone && isWaEnabled) {
+    if (company.isolationNotifyWhatsapp && user.phone) {
       try {
         const reminderSettings = await prisma.whatsapp_reminder_settings.findFirst();
         const isolationDelayDays = (reminderSettings as any)?.isolationDelayDays ?? 7;
@@ -387,13 +384,23 @@ export async function sendIsolationNotification(
         // Customer is isolated on day 0, but isolation WA is sent on H+X (default: H+7)
         if (!options?.force && user.expiredAt && isolationDelayDays > 0) {
           const expDate = new Date(user.expiredAt);
+          // Calculate calendar day difference in Asia/Jakarta timezone
+          const startOfExpDay = new Date(expDate.getFullYear(), expDate.getMonth(), expDate.getDate()).getTime();
+          const now = new Date();
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          const calendarDaysSince = Math.round((startOfToday - startOfExpDay) / (24 * 60 * 60 * 1000));
+
+          // Also calculate exact fractional days based on end-of-expiry
           const expEnd = new Date(expDate);
-          expEnd.setUTCHours(23, 59, 59, 999);
+          expEnd.setHours(23, 59, 59, 999);
           const msSinceExpired = Date.now() - expEnd.getTime();
           const daysSinceExpired = msSinceExpired / (24 * 60 * 60 * 1000);
 
-          if (daysSinceExpired < isolationDelayDays) {
-            console.log(`[sendIsolationNotification] [DEFERRED] for ${user.username}: At H+${Math.max(0, Math.floor(daysSinceExpired))}, waiting for H+${isolationDelayDays}.`);
+          // Allow sending if either calendar day has reached H+X (during the day) OR exact 24h count reached H+X
+          const isEligible = calendarDaysSince >= isolationDelayDays || daysSinceExpired >= isolationDelayDays;
+
+          if (!isEligible) {
+            console.log(`[sendIsolationNotification] [DEFERRED] for ${user.username}: At H+${Math.max(0, calendarDaysSince)}, waiting for H+${isolationDelayDays}.`);
             waResult = { success: true, deferred: true };
           }
         }
@@ -408,9 +415,11 @@ export async function sendIsolationNotification(
           const phoneCandidates = Array.from(new Set([rawPhone, digitsOnly, phone62, phone08, phonePlus62, `+${digitsOnly}`]));
 
           // [IDEMPOTENCY GUARD] Guarantee isolation WhatsApp is sent at most 1X across current billing cycle
-          const cycleStart = unpaidInvoice?.createdAt
-            ? new Date(unpaidInvoice.createdAt)
-            : (user.expiredAt ? new Date(new Date(user.expiredAt).getTime() - 15 * 24 * 60 * 60 * 1000) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+          // Look back only to the current expiry period (e.g. from 2 days before expiredAt) or at most 7 days ago.
+          // Never look back into the previous month's cycle!
+          const cycleStart = user.expiredAt
+            ? new Date(new Date(user.expiredAt).getTime() - 2 * 24 * 60 * 60 * 1000)
+            : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
           const recentMessages = await prisma.whatsapp_history.findMany({
             where: {
@@ -525,13 +534,17 @@ export async function sendIsolationNotification(
           `;
         }
 
-        await EmailService.send({
+        const emailRes = await EmailService.send({
           to: user.email,
           toName: user.name,
           subject,
           html: htmlBody,
         });
-        console.log(`[Isolation] [SUCCESS] Email sent to ${user.username} (${user.email})`);
+        if (emailRes.success) {
+          console.log(`[Isolation] [SUCCESS] Email sent to ${user.username} (${user.email})`);
+        } else {
+          console.log(`[Isolation] [SKIPPED] Email skipped/failed for ${user.username}: ${emailRes.error}`);
+        }
       } catch (emailErr: any) {
         console.error(`[Isolation] [ERROR] Email failed for ${user.username}:`, emailErr.message);
       }
@@ -575,7 +588,6 @@ export async function sendPendingIsolationNotifications(): Promise<{
     const isolatedUsers = await prisma.pppoeUser.findMany({
       where: {
         status: 'isolated',
-        waNotificationEnabled: true,
         autoIsolationEnabled: true,
         phone: { not: '' },
       },

@@ -1,4 +1,4 @@
-import 'server-only'
+// Server-side safety is guaranteed by Prisma/Node.js imports that can't run in browser bundles
 import { prisma } from '@/server/db/client'
 import { nanoid } from 'nanoid'
 import { RouterOSAPI } from 'node-routeros'
@@ -499,12 +499,9 @@ export async function autoIsolatePPPoEUsers(): Promise<{
           console.error(`[PPPoE Auto-Isolir] Failed to create notification for ${user.username}:`, notifError.message)
         }
 
-        // Send customer notification via WhatsApp, Email, and Push (respect waNotificationEnabled)
-        if (freshUser.waNotificationEnabled === false) {
-          console.log(`[PPPoE Auto-Isolir] Skipping customer WA notification for ${user.username} (waNotificationEnabled = false)`);
-        } else {
-          try {
-            await sendIsolationNotification({
+        // Send customer notification via WhatsApp, Email, and Push
+        try {
+          await sendIsolationNotification({
               id: user.id,
               username: user.username,
               customerId: (user as any).customerId || (user as any).pppoeCustomerId,

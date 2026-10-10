@@ -929,13 +929,6 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
           continue
         }
 
-        // Skip if user has disabled WA notifications (Toggle WA OFF)
-        if (invoice.user && invoice.user.waNotificationEnabled === false) {
-          console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: WA notification toggle is OFF for user (${invoice.user.username})`)
-          skippedCount++
-          continue
-        }
-
         // Check if this reminder day already sent
         // Cron Protection: Skip if this specific reminder schedule (H-7 / H-1) was already sent
         const invoiceSentReminders: number[] = invoice.sentReminders
@@ -1112,19 +1105,6 @@ export async function sendInvoiceReminders(force: boolean = false): Promise<{ su
               profileName,
               areaName,
             } = msg.data;
-
-            // [SAFETY GUARD] Verify fresh user waNotificationEnabled toggle
-            if (invoice.user?.id) {
-              const freshUser = await prisma.pppoeUser.findUnique({
-                where: { id: invoice.user.id },
-                select: { waNotificationEnabled: true },
-              });
-              if (freshUser?.waNotificationEnabled === false) {
-                console.log(`[Invoice Reminder] [SKIPPED] ${invoice.invoiceNumber}: waNotificationEnabled is false for ${invoice.user.username}`);
-                skippedCount++;
-                return;
-              }
-            }
 
             // [CONCURRENCY CHECK] Re-verify DB & Pre-mark sentReminders BEFORE sending WA message
             const freshInvoice = await prisma.invoice.findUnique({
