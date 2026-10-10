@@ -4,6 +4,31 @@ All notable changes to EugineBill RADIUS are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).  
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.40.105] — 2026-10-10
+
+### Technician Portal ODP Selection & GPS Master Data Auto-Lock Streamlining
+
+- **Latar Belakang / Kebutuhan (Issue & Context)**:
+  1. Pada form Surat Perintah Kerja (SPK) di Portal Teknisi (`/technician/work-orders/[id]`), opsi pemilihan ODP (`-- Pilih ODP Terdaftar --`) kosong atau tidak memuat data. Investigasi menemukan endpoint `/api/technician/odps` sebelumnya hanya memeriksa permission NextAuth admin (`requirePermission('technician.access')`) sehingga request dari portal teknisi yang mengandalkan autentikasi cookie JWT `technician-token` menerima respon `401 Unauthorized`.
+  2. Komponen Tikor GPS Tiang ODP masih menampilkan tombol "Aktifkan GPS" dan prompt manual, padahal master data ODP sudah memiliki koordinat latitude & longitude yang valid dari admin. Teknisi tidak perlu lagi dipaksa mengaktifkan sensor GPS handphone jika ODP master sudah memiliki titik koordinat presisi.
+
+- **Solusi Arsitektural & Perubahan Teknis**:
+  1. **Dual-Authentication Handler pada `/api/technician/odps`**:
+     - Mendukung autentikasi ganda: NextAuth session (untuk admin web) dan verifikasi token JWT jose `technician-token` dari cookie browser (untuk portal teknisi).
+     - Menghilangkan kegagalan 401 dan memastikan dropdown ODP terdaftar (`existingOdps`) memuat seluruh data master ODP aktif beserta port dan status keterisian secara instan.
+  2. **Auto-Lock GPS Tiang ODP dari Master Data**:
+     - Saat ODP master dipilih (atau terpilih dari saran ODP terdekat), koordinat `lockedOdpGps` otomatis terkunci dari `latitude` & `longitude` master ODP tersebut.
+     - Tampilan UI diubah: jika ODP master memiliki koordinat, ditampilkan badge hijau `<CheckCircle2 /> Terkunci dari Master ODP` beserta koordinat presisi, menyembunyikan tombol "Aktifkan GPS", sehingga teknisi tidak perlu repot menyalakan GPS tiang secara manual. Tombol manual GPS hanya muncul sebagai fallback cadangan jika data master ODP belum memiliki koordinat.
+  3. **Universal Parity & Compile Verification**:
+     - Diterapkan secara identik pada kedua repositori (`euginebillv2` Single-Tenant dan `euginebill-multitenant` Multi-Tenant).
+     - Memperbaiki komparabilitas sintaks pada job background (`pppoe-sync.ts` dan reconcile `route.ts`), dengan hasil verifikasi `tsc --noEmit` lolos 100% tanpa error.
+
+- **Files**:
+  - Modified: `src/app/api/technician/odps/route.ts`
+  - Modified: `src/app/technician/(portal)/work-orders/[id]/page.tsx`
+  - Modified: `src/server/jobs/pppoe-sync.ts`
+  - Modified: `src/app/api/admin/invoices/reconcile/route.ts`
+
 ## [2.40.104] — 2026-10-10
 
 ### PPPoE Auto-Isolir & WhatsApp Isolation Notification (H+X) Timing Improvement

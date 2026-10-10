@@ -674,13 +674,13 @@ export default function TechnicianWorkOrderWizardPage() {
     const found = existingOdps.find(o => o.name.toLowerCase() === reportData.odpName.toLowerCase());
     if (found) {
       setSelectedOdp(found);
-      if (found.latitude && found.longitude && !lockedOdpGps) {
+      if (found.latitude && found.longitude) {
         setLockedOdpGps({ lat: Number(found.latitude), lng: Number(found.longitude) });
       }
     } else {
       setSelectedOdp(null);
     }
-  }, [reportData.odpName, existingOdps, lockedOdpGps]);
+  }, [reportData.odpName, existingOdps]);
 
   // ─── ODP GPS suggestion ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1358,15 +1358,19 @@ export default function TechnicianWorkOrderWizardPage() {
               <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-bold text-foreground">Tikor GPS Tiang ODP *</span>
-                {!lockedOdpGps && (
+                {(!lockedOdpGps && !(selectedOdp?.latitude && selectedOdp?.longitude)) && (
                   <GpsAccuracyBadge accuracy={odpGps.gps.accuracy} watching={odpGps.gps.watching} />
                 )}
               </div>
-              {!lockedOdpGps ? (
+              {selectedOdp?.latitude && selectedOdp?.longitude ? (
+                <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 rounded-lg font-mono text-[10px] font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Terkunci dari Master ODP
+                </span>
+              ) : !lockedOdpGps ? (
                 !odpGps.gps.watching ? (
                   <button onClick={() => odpGps.startWatch()}
                     className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg font-mono text-[10px] font-bold flex items-center gap-1.5">
-                    <Navigation className="w-3.5 h-3.5" /> Aktifkan GPS
+                    <Navigation className="w-3.5 h-3.5" /> Aktifkan GPS Manual
                   </button>
                 ) : (
                   <button onClick={lockOdpGps}
@@ -1385,19 +1389,23 @@ export default function TechnicianWorkOrderWizardPage() {
               )}
             </div>
 
-            {lockedOdpGps && (
+            {lockedOdpGps ? (
               <div className="space-y-1.5">
                 <div className="font-mono text-xs text-emerald-600 font-bold bg-background p-2.5 rounded-lg border border-emerald-500/30 flex items-center justify-between">
                   <span>Terkunci — Lat: {lockedOdpGps.lat.toFixed(6)}, Lng: {lockedOdpGps.lng.toFixed(6)}</span>
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 </div>
-                {selectedOdp?.latitude && selectedOdp?.longitude && Math.abs(lockedOdpGps.lat - Number(selectedOdp.latitude)) < 0.0001 ? (
+                {selectedOdp?.latitude && selectedOdp?.longitude ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Tikor diambil otomatis dari master data ODP. Teknisi tidak perlu mengunci GPS tiang secara manual.
+                    Tikor diambil otomatis dari master data ODP ({selectedOdp.name}). Teknisi tidak perlu mengaktifkan GPS tiang secara manual.
                   </p>
                 ) : null}
               </div>
-            )}
+            ) : !selectedOdp ? (
+              <p className="text-[11px] text-muted-foreground">
+                Pilih ODP di atas terlebih dahulu. Tikor GPS tiang akan terisi otomatis dari master data ODP.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">

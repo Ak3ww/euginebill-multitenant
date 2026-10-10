@@ -502,17 +502,16 @@ export async function autoIsolatePPPoEUsers(): Promise<{
         // Send customer notification via WhatsApp, Email, and Push
         try {
           await sendIsolationNotification({
-              id: user.id,
-              username: user.username,
-              customerId: (user as any).customerId || (user as any).pppoeCustomerId,
-              name: user.name || user.username,
-              phone: user.phone,
-              email: user.email,
-              expiredAt: user.expiredAt,
-            })
-          } catch (customerNotifError: any) {
-            console.error(`[PPPoE Auto-Isolir] Customer notification failed for ${user.username}:`, customerNotifError.message)
-          }
+            id: user.id,
+            username: user.username,
+            customerId: (user as any).customerId || (user as any).pppoeCustomerId,
+            name: user.name || user.username,
+            phone: user.phone,
+            email: user.email,
+            expiredAt: user.expiredAt,
+          })
+        } catch (customerNotifError: any) {
+          console.error(`[PPPoE Auto-Isolir] Customer notification failed for ${user.username}:`, customerNotifError.message)
         }
       } catch (error: any) {
         console.error(`[PPPoE Auto-Isolir] [ERROR] Failed to isolate ${user.username}:`, error.message)

@@ -1,14 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/db/client';
-import { requirePermission } from '@/server/middleware/api-auth';
+import { jwtVerify } from 'jose';
+import { TECH_JWT_SECRET } from '@/server/auth/technician-secret';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth/config';
 
 export const dynamic = 'force-dynamic';
 
 // GET - Fetch ODPs for technician autocomplete and GPS matching
 // Includes usedPorts: array of port numbers currently occupied by active customers
-export async function GET() {
-  const auth = await requirePermission('technician.access');
-  if (!auth.authorized) return auth.response;
+export async function GET(req: NextRequest) {
+  // Support both NextAuth session (admin user) and technician JWT cookie (portal teknisi)
+  let authenticated = false;
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    authenticated = true;
+  } else {
+    const token = req.cookies.get('technician-token')?.value;
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(token, TECH_JWT_SECRET);
+        if (payload?.id) authenticated = true;
+      } catch {
+        authenticated = false;
+      }
+    }
+  }
+
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const odps = await prisma.networkODP.findMany({
       select: {

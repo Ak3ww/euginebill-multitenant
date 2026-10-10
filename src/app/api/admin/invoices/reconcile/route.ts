@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
     logs.push(`Re-linked ${reLinkedInvoicesCount} unlinked invoices to PPPoE users`);
 
     // ── 1b. Re-sync customerUsername on Invoices where User was renamed ───────

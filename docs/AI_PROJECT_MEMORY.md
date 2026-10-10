@@ -20,6 +20,16 @@
 
 ## Master Patch Log & Hard Architecture Lessons (v2.40.x)
 
+### Recent Patch Log (October 10, 2026 — v2.40.105: Technician Portal ODP Dual-Auth & GPS Auto-Lock Streamlining)
+
+- **Hard Invariant: Dual-Authentication on Technician Master Data Endpoints (`/api/technician/odps`)**:
+  - Endpoint yang diakses oleh portal teknisi mobile/PWA WAJIB mendukung autentikasi token JWT cookie `technician-token` di samping NextAuth session admin.
+  - Jangan gunakan `requirePermission('technician.access')` secara sepihak jika endpoint tersebut dipanggil dari antarmuka portal teknisi lapangan, karena teknisi login menggunakan token JWT `technician-token`. Selalu sediakan fallback verifikasi JWT payload `payload.id` agar tidak mengembalikan `401 Unauthorized` yang menyebabkan daftar ODP kosong di UI.
+- **Hard Invariant: ODP Master Coordinates Auto-Lock (Zero Manual GPS Forced Prompt)**:
+  - Setiap kali ODP terdaftar dipilih pada form SPK (`/technician/work-orders/[id]`), jika ODP master memiliki `latitude` dan `longitude`, koordinat `lockedOdpGps` WAJIB otomatis diset dan dikunci dari data master ODP tersebut.
+  - Komponen UI Tikor GPS Tiang ODP WAJIB menampilkan status `<CheckCircle2 /> Terkunci dari Master ODP` dan menyembunyikan tombol "Aktifkan GPS" saat koordinat master ODP tersedia.
+  - Tombol aktivasi GPS manual tiang hanya dimunculkan sebagai opsi cadangan jika data master ODP sama sekali belum memiliki koordinat (null/0).
+
 ### Recent Patch Log (October 10, 2026 — v2.40.104: 3-Message Notification Architecture & VPS Multi-Repository Deployment Paths)
 
 - **Hard Invariant: VPS Deployment Directories Across Ecosystem**:
