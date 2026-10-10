@@ -1613,8 +1613,8 @@ export default function TechnicianWorkOrderWizardPage() {
               {([
                 ['Foto Rumah', 'Foto Depan Rumah'],
                 ['Foto OPM / Redaman', 'Foto OPM / Redaman (RX Signal)'],
-                ['Foto ONT Depan', 'Foto ONT Depan (SN terlihat)'],
-                ['Foto ONT Belakang', 'Foto ONT Belakang'],
+                ['Foto ONT Depan', 'Foto ONT Depan (Lampu Indikator)'],
+                ['Foto ONT Belakang', 'Foto ONT Belakang (SN terlihat)'],
                 ['Foto Speedtest', 'Foto Speedtest'],
               ] as [string, string][]).map(([key, label]) => (
                 <PhotoSlot key={key} label={label} photoKey={key} required photoUrl={photos[key]}

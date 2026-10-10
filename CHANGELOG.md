@@ -19,7 +19,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   2. **Auto-Lock GPS Tiang ODP dari Master Data**:
      - Saat ODP master dipilih (atau terpilih dari saran ODP terdekat), koordinat `lockedOdpGps` otomatis terkunci dari `latitude` & `longitude` master ODP tersebut.
      - Tampilan UI diubah: jika ODP master memiliki koordinat, ditampilkan badge hijau `<CheckCircle2 /> Terkunci dari Master ODP` beserta koordinat presisi, menyembunyikan tombol "Aktifkan GPS", sehingga teknisi tidak perlu repot menyalakan GPS tiang secara manual. Tombol manual GPS hanya muncul sebagai fallback cadangan jika data master ODP belum memiliki koordinat.
-  3. **Universal Parity & Compile Verification**:
+  3. **Koreksi Label Foto ONT (Belakang = SN Terlihat, Depan = Lampu Indikator)**:
+     - Memperbaiki penamaan label slot foto pada SPK instalasi (`Foto ONT Depan (Lampu Indikator)` dan `Foto ONT Belakang (SN terlihat)`), sehingga stiker label Serial Number dan MAC barcode yang berada di belakang perangkat difoto pada slot yang tepat.
+  4. **Universal Parity & Compile Verification**:
      - Diterapkan secara identik pada kedua repositori (`euginebillv2` Single-Tenant dan `euginebill-multitenant` Multi-Tenant).
      - Memperbaiki komparabilitas sintaks pada job background (`pppoe-sync.ts` dan reconcile `route.ts`), dengan hasil verifikasi `tsc --noEmit` lolos 100% tanpa error.
 
